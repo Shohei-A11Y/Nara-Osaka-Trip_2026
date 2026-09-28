@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><pattern id="p" width="60" height="60" patternUnits="userSpaceOnUse"><g fill="#e9b9b2" fill-opacity=".5">
+<rect x="6" y="6" width="5.2" height="18" rx="1.2"/><rect x="14.8" y="6" width="5.2" height="18" rx="1.2"/><rect x="34" y="8" width="18" height="5.2" rx="1.2"/><rect x="34" y="16.8" width="18" height="5.2" rx="1.2"/><rect x="4" y="38" width="18" height="5.2" rx="1.2"/><rect x="4" y="46.8" width="18" height="5.2" rx="1.2"/><rect x="36" y="36" width="5.2" height="18" rx="1.2"/><rect x="44.8" y="36" width="5.2" height="18" rx="1.2"/></g></pattern></defs><rect width="512" height="512" fill="#fbe9e6"/><rect width="512" height="512" fill="url(#p)"/>
+  <g fill="none" stroke="#d6504c" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+    <!-- antlers -->
+    <path d="M214 176 L186 110 M200 142 L150 128 M192 124 L200 76"/>
+    <path d="M298 176 L326 110 M312 142 L362 128 M320 124 L312 76"/>
+    <!-- ears -->
+    <path d="M196 204 C170 196 146 204 128 222 C150 236 176 236 200 226"/>
+    <path d="M316 204 C342 196 366 204 384 222 C362 236 336 236 312 226"/>
+    <!-- head -->
+    <path d="M196 196 C196 176 224 166 256 166 C288 166 316 176 316 196 L304 300 C298 340 280 366 256 366 C232 366 214 340 208 300 Z"/>
+    <!-- muzzle -->
+    
+    <!-- wave -->
+    <path d="M116 418 C166 404 212 404 256 418 C300 432 346 432 396 418" stroke-opacity=".75"/>
+  </g>
+  <g fill="#d6504c">
+    <circle cx="232" cy="256" r="9"/><circle cx="280" cy="256" r="9"/>
+    <ellipse cx="256" cy="334" rx="15" ry="11"/>
+    <circle cx="244" cy="206" r="6"/><circle cx="256" cy="192" r="5.5"/><circle cx="268" cy="206" r="6"/>
+  </g></svg>
