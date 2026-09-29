@@ -1,0 +1,2055 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>駅の乗り換え（3D）｜旅のしおり</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<!-- LINE などでURLを送ったときの見え方（画像は tools/make-og.js で作る。家族の名前・予約番号・QR・合言葉は写さない） -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="旅のしおり">
+<meta property="og:title" content="駅の乗り換え（3D）｜旅のしおり">
+<meta property="og:description" content="博多・新大阪の乗り換えを、立体の図で確かめられます（旅のしおり 奈良・大阪 2026）。">
+<meta property="og:url" content="https://shohei-a11y.github.io/Nara-Osaka-Trip_2026/transfer.html">
+<meta property="og:image" content="https://shohei-a11y.github.io/Nara-Osaka-Trip_2026/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="旅のしおり　家族旅行 奈良・大阪 2026.10.17〜10.20">
+<meta property="og:locale" content="ja_JP">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#d6504c">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Klee+One:wght@600&family=Shippori+Mincho+B1:wght@700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+  /* しおりWeb版（assets/style.css）の色と書体。明るい紙の模型に固定（テーマ切り替えなし） */
+  :root {
+    color-scheme: light;
+    --paper: #fdfcf9;
+    --paper-2: #f4f2ec;
+    --paper-3: #ebe7de;
+    --sumi: #2b2926;
+    --sumi-2: #67625b;
+    --sumi-3: #a39d94;
+    --rule: #e4dfd5;
+    --shu: #d6504c;
+    --shu-ink: #b8403d;
+    --shu-tint: #fbe9e6;
+    --ai: #2d4f6e;
+    --ai-tint: #e7eef4;
+    --moegi: #5d8a4b;
+    --moegi-tint: #ebf2e5;
+    --yamabuki: #c98d1e;
+    --yamabuki-tint: #faf0da;
+    --jrk: #d7282f;
+    --card: #ffffff;
+    --shade: 0 1px 0 rgba(43, 41, 38, .04), 0 8px 24px -12px rgba(43, 41, 38, .18);
+    --f-min: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
+    --f-got: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    --f-hand: "Klee One", "Zen Kaku Gothic New", cursive;
+  }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--paper-2); color: var(--sumi); font-family: var(--f-got); overflow: hidden; -webkit-tap-highlight-color: transparent; letter-spacing: .03em; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  button:focus-visible, select:focus-visible { outline: 2px solid var(--shu); outline-offset: 2px; border-radius: 6px; }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; touch-action: none; }
+  .labels { position: absolute; inset: 0; pointer-events: none; }
+  .hud { position: fixed; z-index: 5; }
+  .card { background: var(--card); border: 1px solid var(--rule); border-radius: 12px; box-shadow: var(--shade); }
+  .num { font-variant-numeric: tabular-nums; }
+  .kari.sm { font-size: 8.5px; font-weight: 500; border-color: var(--sumi-3); color: var(--sumi-2); padding: 0 3px; vertical-align: 2px; }
+  .kari { display: inline-block; font-size: 10px; font-weight: 700; line-height: 1.5; padding: 0 4px; border-radius: 3px; border: 1px solid var(--shu); color: var(--shu-ink); background: #fff; vertical-align: 1px; margin-left: 4px; letter-spacing: 0; }
+
+  /* ---- 上部：乗る列車 ---- */
+  .train { top: calc(env(safe-area-inset-top, 0px) + 12px); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 18px; padding: 9px 16px; max-width: calc(100% - 32px); box-sizing: border-box; }
+  .train .kind { font-size: 11px; color: var(--sumi-3); letter-spacing: .12em; }
+  .train .name { font-family: var(--f-min); font-size: 19px; font-weight: 800; white-space: nowrap; letter-spacing: .04em; }
+  .train .sub { font-size: 12px; color: var(--sumi-2); white-space: nowrap; }
+  .train .sub b { color: var(--ai); font-weight: 700; }
+  .count { text-align: right; border-left: 1px solid var(--rule); padding-left: 16px; min-width: 92px; }
+  .count .lbl { font-size: 11px; color: var(--sumi-3); letter-spacing: .08em; }
+  .count .big { font-family: var(--f-min); font-size: 30px; line-height: 1.05; font-weight: 800; color: var(--shu); }
+  .count .clock { font-size: 11px; color: var(--sumi-2); white-space: nowrap; }
+  .tline { position: relative; height: 3px; margin-top: 5px; background: var(--paper-3); border-radius: 2px; }
+  .tline i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--shu); border-radius: 2px; width: 0; }
+
+  /* ---- 左上：選択と再生 ---- */
+  .ctrl { top: calc(env(safe-area-inset-top, 0px) + 68px); left: 16px; width: 308px; padding: 12px; display: grid; gap: 10px; box-sizing: border-box; }
+  .scenes { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .scenes button { font-size: 12px; text-align: left; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); line-height: 1.3; white-space: nowrap; }
+  .scenes button b { font-family: var(--f-min); font-weight: 800; color: var(--shu); margin-right: 3px; }
+  .scenes button[aria-current="true"] { background: var(--sumi); border-color: var(--sumi); color: var(--paper); font-weight: 700; }
+  .scenes button[aria-current="true"] b { color: #f3b3ad; }
+  .fromto { margin: 0; font-size: 12px; line-height: 1.5; color: var(--sumi-2); }
+  .fromto b { color: var(--sumi); font-weight: 700; }
+  .dnote { margin: 5px 0 0; font-size: 10.5px; line-height: 1.45; color: var(--sumi-2); }
+  .dnote::before { content: "!"; display: inline-block; width: 13px; height: 13px; margin-right: 4px; border-radius: 50%; background: var(--sumi-3); color: #fff; font-size: 9.5px; font-weight: 700; text-align: center; line-height: 13px; vertical-align: 1px; }
+  .h { font-size: 11px; color: var(--sumi-3); letter-spacing: .06em; margin-bottom: -4px; }
+  .route { display: grid; border: 1px solid var(--sumi); border-radius: 8px; overflow: hidden; }
+  .route button { padding: 7px 10px; text-align: left; line-height: 1.35; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .route button + button { border-top: 1px solid var(--sumi); }
+  .route button .rn { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+  .route button .rm { font-size: 11px; color: var(--sumi-2); white-space: nowrap; }
+  .route button[aria-pressed="true"] { background: var(--sumi); color: var(--paper); }
+  .route button[aria-pressed="true"] .rm { color: var(--paper-3); }
+  .bnote { font-size: 11.5px; line-height: 1.55; color: var(--sumi); background: var(--moegi-tint); border-radius: 8px; padding: 7px 9px; margin: 0; }
+  .bnote b { color: var(--moegi); margin-right: 4px; }
+  .acts { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  .go { font-weight: 700; font-size: 15px; letter-spacing: .1em; color: #fff; background: var(--shu); border-radius: 8px; padding: 10px 10px; min-height: 42px; white-space: nowrap; }
+  .go:active { transform: translateY(1px); }
+  .quiet { font-size: 12.5px; border: 1px solid var(--rule); background: var(--paper); border-radius: 8px; padding: 0 12px; white-space: nowrap; min-height: 36px; }
+  .speed { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+  .speed button { font-size: 12px; padding: 6px 0; color: var(--sumi-2); white-space: nowrap; }
+  .speed button + button { border-left: 1px solid var(--rule); }
+  .speed button[aria-pressed="true"] { background: var(--shu-tint); color: var(--shu-ink); font-weight: 700; }
+  .more { display: none; }
+  .perf { font-size: 11px; color: var(--sumi-3); display: flex; justify-content: space-between; align-items: center; }
+  .perf button { font-size: 11px; border: 1px solid var(--rule); border-radius: 999px; padding: 1px 9px; color: var(--sumi-2); }
+
+  /* ---- 右：距離と区間 ---- */
+  .legs { top: calc(env(safe-area-inset-top, 0px) + 12px); right: 16px; width: 304px; max-height: calc(100% - 64px); display: flex; flex-direction: column; overflow: hidden; }
+  .sum { padding: 12px 16px 10px; border-bottom: 1px solid var(--rule); }
+  .sum .eyebrow { font-size: 11px; color: var(--sumi-3); letter-spacing: .1em; }
+  .sum .dist { display: flex; align-items: baseline; gap: 10px; margin-top: 1px; }
+  .sum .dist .m { font-family: var(--f-min); font-size: 34px; font-weight: 800; line-height: 1.1; white-space: nowrap; }
+  .sum .dist .m small { font-size: 16px; margin-left: 2px; }
+  .sum .dist .walk { font-size: 14px; font-weight: 700; color: var(--shu-ink); white-space: nowrap; }
+  .sum p { margin: 4px 0 0; font-size: 12px; color: var(--sumi-2); line-height: 1.6; }
+  .sum p b { color: var(--sumi); }
+  .sheetbtns { display: none; }
+  .cmp { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-top: 8px; }
+  .cmp th, .cmp td { padding: 3px 6px; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  .cmp th:first-child, .cmp td:first-child { text-align: left; color: var(--sumi-3); font-weight: 400; padding-left: 0; }
+  .cmp thead th { font-weight: 700; color: var(--sumi-2); cursor: pointer; }
+  .cmp .on { background: var(--shu-tint); color: var(--shu-ink); font-weight: 700; }
+  .cmp tr:last-child td { border-bottom: 0; }
+  .cmp th, .cmp td { padding: 3px 4px; }
+  .cmp tr.sub th { font-size: 10px; font-weight: 500; color: var(--sumi-3); cursor: default; }
+  .cmp tr.sub th.on { color: var(--shu-ink); }
+  .cmp td small { font-size: 9.5px; margin-left: 2px; color: var(--sumi-3); }
+  .cmp tr.meet td { font-weight: 700; border-top: 1px solid var(--sumi-3); }
+  ol.list { list-style: none; margin: 0; padding: 6px 0; overflow-y: auto; min-height: 0; }
+  ol.list li { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: start; padding: 6px 16px 6px 12px; cursor: pointer; font-size: 13px; line-height: 1.45; }
+  ol.list li .i { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--sumi-3); color: var(--sumi-2); font-size: 11px; font-weight: 700; display: grid; place-items: center; margin-top: 1px; box-sizing: border-box; }
+  ol.list li .t small { display: block; font-size: 11px; color: var(--sumi-3); }
+  ol.list li .d { font-size: 13px; color: var(--sumi-2); white-space: nowrap; margin-top: 1px; }
+  ol.list li.done .t, ol.list li.done .d { color: var(--sumi-3); }
+  ol.list li.done .i { border-color: var(--rule); color: var(--sumi-3); }
+  ol.list li.grp { display: block; cursor: default; font-size: 11.5px; font-weight: 700; padding: 8px 16px 3px 12px; color: var(--shu-ink); }
+  ol.list li.grp::before { content: ""; display: inline-block; width: 16px; height: 5px; border-radius: 3px; background: var(--shu); margin-right: 6px; vertical-align: 2px; }
+  ol.list li.grp.g2 { color: #2d5f9a; border-top: 1px solid var(--rule); margin-top: 4px; }
+  ol.list li.grp.g2::before { background: #2d5f9a; }
+  ol.list li.now { background: var(--shu-tint); }
+  ol.list li.now .i { background: var(--shu); border-color: var(--shu); color: #fff; }
+  ol.list li.now .t { color: var(--shu-ink); font-weight: 700; }
+  .kt { display: inline-block; font-size: 10px; line-height: 1.5; padding: 0 5px; margin-left: 4px; border-radius: 3px; color: #fff; vertical-align: 1px; font-weight: 700; letter-spacing: 0; }
+  .kt.stair { background: #8d8a84; } .kt.esc { background: var(--yamabuki); } .kt.ev { background: var(--moegi); }
+  .kt.gate { background: var(--ai); } .kt.shop { background: var(--shu); }
+  .foot { font-size: 11px; color: var(--sumi-3); padding: 8px 16px 11px; border-top: 1px solid var(--rule); line-height: 1.55; }
+
+  /* ---- 凡例 ---- */
+  .legend { left: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); width: 290px; padding: 10px 12px; box-sizing: border-box; }
+  .legend h2 { font-family: var(--f-min); font-size: 13px; letter-spacing: .08em; margin: 0 0 6px; }
+  .legend ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; font-size: 11.5px; }
+  .legend li { display: flex; align-items: center; gap: 7px; min-width: 0; line-height: 1.3; }
+  .sw { flex: none; width: 26px; height: 12px; border-radius: 2px; position: relative; box-sizing: border-box; }
+  .sw.rt2 { height: 7px; border-radius: 4px; background: linear-gradient(90deg, #2d5f9a 55%, #aec3d8 55%); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--rule); }
+  .sw.rt { height: 7px; border-radius: 4px; background: linear-gradient(90deg, var(--shu) 55%, #efb0a8 55%); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--rule); }
+  .sw.hid { height: 0; border-top: 4px dashed #c8403b; border-radius: 0; }
+  .sw.zai { background: #d24b45; border: 1px solid #8f2f2b; }
+  .sw.shin { background: #f8f7f3; border: 1px solid #9aa3ad; }
+  .sw.shin::after { content: ""; position: absolute; left: 0; right: 0; top: 6px; height: 3px; background: #2b5ea7; }
+  .sw.plat { background: #dcdbd6; border: 1px solid #b9b6af; }
+  .sw.plat::after { content: ""; position: absolute; left: 0; right: 0; top: 2px; height: 2px; background: #efc53f; }
+  .sw.conc { background: #f3e7cf; border: 1px solid #d8c6a4; }
+  .sw.stair { background: repeating-linear-gradient(90deg, #c4c1ba 0 4px, #8f8b84 4px 5px); border: 1px solid #8f8b84; }
+  .sw.esc { background: #d9a441; border: 1px solid #a8781c; }
+  .sw.esc::after { content: "›››"; position: absolute; inset: -3px 0 0; font-size: 12px; line-height: 12px; color: #fff; text-align: center; font-weight: 700; letter-spacing: -1px; }
+  .sw.ev { width: 14px; height: 16px; margin: 0 6px; background: #86b46f; border: 1px solid #4f7a3e; border-radius: 2px; }
+  .sw.gate { background: linear-gradient(90deg, #d8d4cb 0 3px, transparent 3px 7px, #d8d4cb 7px 10px, transparent 10px 14px, #d8d4cb 14px 17px, transparent 17px 21px, #d8d4cb 21px 24px); border-top: 3px solid var(--ai); height: 12px; }
+  .sw.shop { width: 18px; height: 14px; margin: 0 4px; background: #fff8ec; border: 1px solid #c9b996; border-top: 5px solid var(--shu); }
+  .legend .close { display: none; }
+  .legend li[hidden] { display: none; }
+
+  .note { left: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); margin: 0; font-size: 11px; color: var(--sumi-2); background: rgba(253, 252, 249, .92); border: 1px solid var(--rule); padding: 3px 9px; border-radius: 999px; }
+  .toast { left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 44px); transform: translateX(-50%); padding: 9px 16px; font-size: 14px; font-weight: 700; color: var(--shu-ink); max-width: min(520px, calc(100% - 32px)); box-sizing: border-box; text-align: center; transition: opacity .4s; }
+
+  /* ---- 模型のラベル（重なりはJSでずらし、引き出し線を出す） ---- */
+  .lw { position: absolute; width: 0; height: 0; }
+  .lw .lb { position: absolute; left: 0; bottom: 0; transform: translate(-50%, calc(-7px + var(--dy, 0px))); translate: var(--dx, 0px) 0; transition: transform .25s ease, opacity .25s; font-size: 11.5px; line-height: 1.35; color: var(--sumi); background: #fff; border: 1px solid var(--rule); padding: 2px 7px; border-radius: 5px; white-space: nowrap; box-shadow: 0 2px 6px -3px rgba(43, 41, 38, .35); }
+  .lw .ld { position: absolute; left: -.5px; bottom: 0; width: 1px; height: calc(7px - var(--dy, 0px)); background: var(--sumi-3); transition: height .25s ease, opacity .25s; }
+  .lw::after { content: ""; position: absolute; left: -2.5px; top: -2.5px; width: 5px; height: 5px; border-radius: 50%; background: var(--sumi-2); transition: opacity .25s; }
+  .lw.off .lb, .lw.off .ld, .lw.off::after { opacity: 0; }
+  .lw.out .ld, .lw.out::after, .lw.below .ld { opacity: 0; }
+  .lb.zai { border-color: #e8b3ae; } .lb.zai::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 2px; background: #d24b45; margin-right: 5px; }
+  .lb.shin { border-color: #b9c9da; } .lb.shin::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 2px; background: #2b5ea7; margin-right: 5px; }
+  .lb.key { font-weight: 700; font-size: 12px; }
+  .lb.gate { border-color: #b9c9da; color: var(--ai); font-weight: 700; }
+  .lb.shop { border-color: #f0c3bf; color: var(--shu-ink); font-weight: 700; }
+  .lb.ev { border-color: #bfd6b3; color: var(--moegi); font-weight: 700; }
+  .lb.esc { border-color: #ecd49f; color: #9a6a12; font-weight: 700; }
+  .lb.stair { color: var(--sumi-2); font-weight: 700; }
+  .lb.hand.buy { color: #2d5f9a; }
+  .lb.dim { background: rgba(255, 255, 255, .85); border-color: transparent; box-shadow: none; color: var(--sumi-2); font-size: 11px; padding: 0 5px; }
+  .lb.floor { background: none; border: 0; box-shadow: none; color: #9a8a6c; font-size: 10.5px; letter-spacing: .14em; }
+  .lb.dir { background: none; border: 0; box-shadow: none; color: var(--sumi-3); font-size: 11px; }
+  .lb.hand { background: none; border: 0; box-shadow: none; font-family: var(--f-hand); font-weight: 600; font-size: 13px; color: var(--shu-ink); padding: 0; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 2px #fff; }
+  .lw.plain::after, .lw.plain .ld { display: none; }
+  .walker { position: absolute; left: -16px; bottom: 5px; width: 32px; height: 32px; border-radius: 50%; background: #fff; border: 2px solid var(--shu); display: grid; place-items: center; box-shadow: 0 3px 8px -2px rgba(43, 41, 38, .45); box-sizing: border-box; }
+  .walker.b { border-color: #2d5f9a; left: -4px; bottom: 12px; width: 28px; height: 28px; }
+  .walker.b svg { width: 17px; height: 17px; }
+  .walker svg { width: 20px; height: 20px; }
+
+  /* ---- スマホ ---- */
+  @media (max-width: 760px) {
+    .train { top: calc(env(safe-area-inset-top, 0px) + 64px); left: 12px; right: 12px; transform: none; max-width: none; justify-content: space-between; padding: 7px 12px; gap: 10px; }
+    .train .name { font-size: 16px; }
+    .count { padding-left: 10px; min-width: 0; }
+    .count .big { font-size: 25px; }
+    .ctrl { top: calc(env(safe-area-inset-top, 0px) + 150px); left: 12px; right: 12px; width: auto; padding: 8px; gap: 7px; }
+    .scenes { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; }
+    .scenes button { font-size: 10.5px; padding: 3px 2px; text-align: center; letter-spacing: 0; }
+    .scenes button b { display: block; margin: 0; font-size: 12px; }
+    .fromto { font-size: 11px; }
+    .h { display: none; }
+    .route button { padding: 5px 10px; }
+    .route button .rn { font-size: 12px; }
+    .bnote { font-size: 11px; padding: 5px 8px; }
+    .acts { grid-template-columns: auto auto 1fr; }
+    .go { font-size: 14px; padding: 7px 14px; min-height: 38px; }
+    .speed { grid-column: auto; }
+    .perf { display: none; }
+    /* 再生中は1行に畳む */
+    body.compact .ctrl .scenes, body.compact .ctrl .fromto, body.compact .ctrl .dnote, body.compact .ctrl .route, body.compact .ctrl .bnote { display: none; }
+    body.compact .ctrl { padding: 6px; }
+    body.compact .acts { grid-template-columns: auto auto 1fr auto; gap: 6px; }
+    body.compact .go { min-height: 34px; padding: 5px 10px; font-size: 13px; letter-spacing: .04em; }
+    body.compact .quiet { min-height: 34px; padding: 0 9px; }
+    body.compact .more { display: block; }
+    .legs { top: auto; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 36px); width: auto; max-height: 46%; }
+    .sum { padding: 8px 12px; }
+    .sum .eyebrow { display: none; }
+    .sum .top { display: flex; align-items: center; gap: 10px; }
+    .sum .dist { gap: 8px; }
+    .sum .dist .m { font-size: 23px; }
+    .sum .dist .walk { font-size: 12.5px; }
+    .sheetbtns { display: flex; gap: 6px; margin-left: auto; }
+    .sheetbtns button { font-size: 12px; border: 1px solid var(--rule); border-radius: 999px; padding: 3px 10px; background: var(--paper); white-space: nowrap; }
+    .legs.closed ol.list, .legs.closed .foot, .legs.closed .sum p, .legs.closed .cmp { display: none; }
+    ol.list li { padding: 5px 12px 5px 8px; }
+    .legend { left: 12px; right: 12px; width: auto; bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 150px); z-index: 7; }
+    .legend[data-open="false"] { display: none; }
+    .legend .close { display: block; position: absolute; right: 8px; top: 7px; font-size: 12px; border: 1px solid var(--rule); border-radius: 999px; padding: 1px 10px; }
+    .note { left: 12px; }
+    .lw .lb { font-size: 10.5px; padding: 1px 6px; }
+    .lb.hand { font-size: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .toast, .lw .lb, .lw .ld { transition: none; } }
+  /* しおりに戻る（左上。図を回しても同じ所に出す）と、予定より遅く着くときの書き方 */
+  /* 上の1列：しおりに戻る（左上）・？（この画面の案内）・…（そのほかの操作。スマホだけ） */
+  .topbar { top: calc(env(safe-area-inset-top, 0px) + 12px); left: 16px; z-index: 8; display: flex; align-items: center; gap: 8px; pointer-events: none; }
+  .topbar > * { pointer-events: auto; }
+  .tb-sp { flex: 1; pointer-events: none; }
+  .tb { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; font-weight: 700; color: var(--sumi); background: rgba(253, 252, 249, .88); border: 1px solid var(--rule); box-shadow: 0 4px 12px -6px rgba(43, 41, 38, .45); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+  .tb[aria-expanded="true"] { background: var(--sumi); color: var(--paper); border-color: var(--sumi); }
+  #xhelp span { color: var(--shu-ink); font-family: var(--f-min); font-weight: 800; }
+  #xmenu { display: none; }
+  .xmenu { top: calc(env(safe-area-inset-top, 0px) + 64px); right: 12px; width: min(300px, calc(100% - 24px)); padding: 10px 12px 12px; box-sizing: border-box; z-index: 9; display: grid; gap: 10px; }
+  .xmenu[hidden] { display: none; }
+  .xm-h { display: flex; align-items: center; justify-content: space-between; }
+  .xm-h h2 { font-family: var(--f-min); font-size: 14px; margin: 0; letter-spacing: .06em; }
+  .xmenu .close { min-height: 44px; padding: 0 14px; font-size: 13px; border: 1px solid var(--rule); border-radius: 999px; }
+  #xmSlot { display: grid; gap: 10px; }
+  #xmSlot .speed { grid-column: auto; }
+  #xmSlot .speed button, #xmSlot .quiet, .xm-lg { min-height: 44px; font-size: 13px; }
+  #xmSlot .fromto, #xmSlot .dnote { font-size: 12px; }
+  .sc-sm { display: none; }
+  .scenes .sm, .route .rs { display: none; }
+  .back { top: calc(env(safe-area-inset-top, 0px) + 12px); left: 16px; z-index: 8; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; box-sizing: border-box; padding: 0 16px 0 12px; font-size: 15px; font-weight: 700; letter-spacing: .06em; color: var(--shu-ink); text-decoration: none; background: var(--paper); border: 1.5px solid var(--shu); border-radius: 999px; box-shadow: 0 4px 12px -6px rgba(43, 41, 38, .45); white-space: nowrap; }
+  .back .ar { font-size: 17px; line-height: 1; }
+  .back:active { background: var(--shu-tint); }
+  .cmp .late { display: inline-block; white-space: normal; max-width: 8em; line-height: 1.35; color: var(--shu-ink); font-weight: 700; text-align: right; }
+  @media (max-width: 760px) { .back { left: 12px; } .sum .dist { flex-wrap: wrap; row-gap: 0; min-width: 0; } }
+
+  /* ---- 初回ガイド（しおりのトップと同じ見た目。assets/guide.js を使う） ---- */
+  :root { --fs: 1; --f-lat: "Cormorant Garamond", "Shippori Mincho B1", serif; }
+  .gd { position: fixed; inset: 0; z-index: 120; }
+  .gd-dim { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .gd-dim path { fill: rgba(20, 16, 12, .55); }
+  .gd-hole { position: fixed; border-radius: 12px; outline: 2px solid rgba(255, 255, 255, .9); outline-offset: 0; pointer-events: none; }
+  .gd-hole[hidden] { display: none; }
+  .gd-tip { position: fixed; background: var(--paper); color: var(--sumi); border-radius: 12px; padding: 12px 14px 10px; box-shadow: 0 12px 30px -8px rgba(0, 0, 0, .5); border-top: 4px solid var(--shu); box-sizing: border-box; }
+  .gd-tip p { margin: 0; }
+  .gd-count { font-size: 11px; color: var(--sumi-3); letter-spacing: .1em; }
+  .gd-title { font-family: var(--f-min); font-weight: 800; font-size: 16.5px; line-height: 1.45; }
+  .gd-title[hidden] { display: none; }
+  .gd-text { font-size: 13.5px; line-height: 1.7; margin-top: 2px; }
+  .gd-link { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 40px; margin-top: 10px; border: 1.5px solid var(--shu); border-radius: 999px; color: var(--shu-ink); font-weight: 700; font-size: 14px; background: var(--paper); }
+  .gd-link[hidden] { display: none; }
+  .gd-btns { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; }
+  .gd-skip { font-size: 13px; color: var(--sumi-2); padding: 8px 4px; min-height: 44px; text-decoration: underline; text-underline-offset: 3px; }
+  .gd-next { background: var(--shu); color: #fff; font-weight: 700; font-size: 14px; padding: 8px 20px; border-radius: 999px; min-height: 44px; }
+
+  /* ---- スマホ：図を広く見せる並べ方 ----
+     上：しおりに戻る・？・…の1列と、乗る列車の細い札。右の端：場面の4つのボタンを縦1列（半透明）。
+     下：出発進行とルートの切り替えを1列（半透明）、その下に距離の札。使う回数の少ないもの（再生速度・もう一度・凡例・経路の説明）は「…」にしまう */
+  @media (max-width: 760px) {
+    .topbar { left: 12px; right: 12px; }
+    #xmenu { display: grid; }
+    .train { top: calc(env(safe-area-inset-top, 0px) + 64px); padding: 5px 12px; background: rgba(255, 255, 255, .9); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+    .train .kind { font-size: 10.5px; letter-spacing: .06em; }
+    .ctrl { display: contents; }
+    .scenes { position: fixed; z-index: 5; right: 10px; top: calc(env(safe-area-inset-top, 0px) + 134px); display: flex; flex-direction: column; gap: 6px; }
+    .scenes button { width: 54px; min-height: 48px; padding: 3px 0; border-radius: 12px; background: rgba(253, 252, 249, .84); border-color: rgba(43, 41, 38, .16); box-shadow: 0 3px 10px -6px rgba(43, 41, 38, .5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); line-height: 1.2; }
+    .scenes button b { font-size: 15px; }
+    .scenes .lg { display: none; }
+    .scenes .sm { display: block; font-size: 9.5px; letter-spacing: 0; white-space: nowrap; }
+    .scenes button[aria-current="true"] { background: rgba(43, 41, 38, .9); }
+    .fromto, .dnote, .bnote { display: none; }
+    #xmSlot .fromto, #xmSlot .dnote:not([hidden]) { display: block; }
+    #xmSlot .bnote:not([hidden]) { display: block; }
+    .route { position: fixed; z-index: 5; right: 12px; bottom: var(--bar-b, 120px); left: calc(12px + 118px); display: grid; grid-template-columns: 1fr 1fr; border-color: rgba(43, 41, 38, .75); background: rgba(253, 252, 249, .86); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); box-shadow: 0 3px 10px -6px rgba(43, 41, 38, .5); }
+    .route button { min-height: 44px; padding: 0 6px; justify-content: center; align-items: center; }
+    .route button + button { border-top: 0; border-left: 1px solid rgba(43, 41, 38, .75); }
+    .route button .rn, .route button .rm { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .route button .rs { display: block; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+    .route button[aria-pressed="true"] { background: rgba(43, 41, 38, .9); }
+    .acts { position: fixed; z-index: 5; left: 12px; bottom: var(--bar-b, 120px); display: block; }
+    .acts > :not(.go) { display: none; }
+    .go { width: 110px; min-height: 46px; padding: 0 8px; font-size: 14px; letter-spacing: .06em; box-shadow: 0 4px 12px -6px rgba(43, 41, 38, .6); }
+    body.compact .ctrl .scenes, body.compact .ctrl .route { display: none; }
+    body.compact .acts { grid-template-columns: none; }
+    body.compact .go { min-height: 46px; padding: 0 8px; font-size: 14px; }
+    body.compact .more { display: none; }
+    .more { display: none !important; }
+    .sheetbtns button { min-height: 44px; padding: 0 14px; font-size: 12.5px; }
+    .legs .sum { padding: 6px 10px 6px 12px; }
+    .legs:not(.closed) { z-index: 6; }
+    ol.list li { min-height: 44px; box-sizing: border-box; padding-top: 11px; padding-bottom: 9px; }
+    .legend { top: calc(env(safe-area-inset-top, 0px) + 64px); }
+    .legend .close { min-height: 44px; padding: 0 14px; top: 4px; }
+    .legend ul { margin-top: 20px; }
+    .note { bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); }
+    .legs { bottom: calc(env(safe-area-inset-bottom, 0px) + 36px); }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+
+<header class="hud card train" aria-live="polite">
+  <div>
+    <div class="kind" id="hKind">乗り換え先</div>
+    <div class="name" id="hName">のぞみ28号 新大阪行</div>
+    <div class="sub" id="hSub"><b class="num">12:15</b>発 · <b>12</b>番のりば · <b>13</b>号車</div>
+  </div>
+  <div class="count">
+    <div class="lbl" id="cdLbl">発車まで</div>
+    <div class="big num" id="cd">33:00</div>
+    <div class="clock"><span id="clkLbl">模擬時刻</span> <span class="num" id="clk">11:42</span></div>
+    <div class="tline"><i id="tbar"></i></div>
+  </div>
+</header>
+
+<section class="hud card ctrl" id="ctrl" aria-label="ルートの選択と再生">
+  <div class="scenes" id="scenes" role="group" aria-label="場面">
+    <button type="button" data-s="1" aria-label="①往路・博多"><b>①</b><span class="lg">往路・博多</span><span class="sm" aria-hidden="true">往・博多</span></button>
+    <button type="button" data-s="2" aria-label="②往路・新大阪"><b>②</b><span class="lg">往路・新大阪</span><span class="sm" aria-hidden="true">往・新大阪</span></button>
+    <button type="button" data-s="3" aria-label="③復路・新大阪"><b>③</b><span class="lg">復路・新大阪</span><span class="sm" aria-hidden="true">復・新大阪</span></button>
+    <button type="button" data-s="4" aria-label="④復路・博多"><b>④</b><span class="lg">復路・博多</span><span class="sm" aria-hidden="true">復・博多</span></button>
+  </div>
+  <p class="fromto" id="fromto"></p>
+  <p class="dnote" id="dnote"></p>
+  <div class="h">ルート</div>
+  <div class="route" role="group" aria-label="ルート">
+    <button type="button" id="rA" data-r="stairs" aria-pressed="true"><span class="rn">階段・エスカレーター</span><span class="rs" aria-hidden="true">階段・エスカ</span><span class="rm num" id="rmA"></span></button>
+    <button type="button" id="rB" data-r="ev" aria-pressed="false"><span class="rn">エレベーター（ベビーカー）</span><span class="rs" aria-hidden="true">エレベーター</span><span class="rm num" id="rmB"></span></button>
+  </div>
+  <p class="bnote" id="bnote" hidden><b>ベビーカーのかたへ</b>エスカレーターでのベビーカー利用はご遠慮ください（駅の案内に従ってください）。</p>
+  <div class="acts">
+    <button class="go" id="play" type="button">出発進行</button>
+    <button class="quiet" id="again" type="button">もう一度</button>
+    <div class="speed" role="group" aria-label="再生速度">
+      <button type="button" data-sp="1" aria-pressed="true">標準</button>
+      <button type="button" data-sp="2" aria-pressed="false">高速</button>
+      <button type="button" data-sp="4" aria-pressed="false">超高速</button>
+    </div>
+    <button class="quiet more" id="more" type="button">設定</button>
+  </div>
+  <div class="perf"><span class="num" id="perf"></span><button type="button" id="shadowBtn" aria-pressed="true">影 ON</button></div>
+</section>
+
+<aside class="hud card legs" id="legs" aria-label="区間ごとの距離">
+  <div class="sum">
+    <div class="eyebrow" id="eyebrow"></div>
+    <div class="top">
+      <div class="dist"><span class="m num" id="total">—</span><span class="walk" id="walk"></span></div>
+      <div class="sheetbtns">
+        <button type="button" id="legendBtn" aria-expanded="false">凡例</button>
+        <button type="button" id="tgl" aria-expanded="false">区間・比較</button>
+      </div>
+    </div>
+    <p id="sumNote"></p>
+    <table class="cmp num" id="cmp" aria-label="2つのルートの比較"></table>
+  </div>
+  <ol class="list" id="list"></ol>
+  <div class="foot">距離は模型上の概算です。<span class="kari">仮</span> は位置を確かめられていないもの、<span class="kari sm">仮</span> は図はあるが細部（向き・停止位置など）を推定したものです。</div>
+</aside>
+
+<section class="hud card legend" id="legend" data-open="true" aria-label="凡例">
+  <h2>凡例</h2>
+  <button type="button" class="close" id="legendClose">閉じる</button>
+  <ul>
+    <li><span class="sw rt"></span>ルート</li>
+    <li data-s="1"><span class="sw rt2"></span>駅弁の買い出し組</li>
+    <li><span class="sw hid"></span>かげを通る所</li>
+    <li data-s="14"><span class="sw zai"></span>リレーかもめ</li>
+    <li><span class="sw shin"></span>のぞみ</li>
+    <li><span class="sw plat"></span>ホーム</li>
+    <li><span class="sw conc"></span>コンコース</li>
+    <li><span class="sw stair"></span>階段</li>
+    <li><span class="sw esc"></span>エスカレーター</li>
+    <li><span class="sw ev"></span>エレベーター</li>
+    <li><span class="sw gate"></span>改札</li>
+    <li data-s="13"><span class="sw shop"></span>売り場</li>
+    <li><span class="kari" style="margin:0 6px 0 3px">仮</span>位置は未確認</li>
+    <li><span class="kari sm" style="margin:0 8px 0 5px">仮</span>細部は推定</li>
+  </ul>
+</section>
+
+<p class="hud note">図は目安です。現地の案内を優先してください</p>
+<div class="hud topbar" id="topbar">
+  <a class="back" id="back" href="./#/ride/transfer"><span class="ar" aria-hidden="true">←</span>しおりに戻る</a>
+  <span class="tb-sp"></span>
+  <button type="button" class="tb" id="xhelp" aria-label="この画面の使い方（案内をもう一度見る）"><span aria-hidden="true">？</span></button>
+  <button type="button" class="tb" id="xmenu" aria-label="そのほかの操作" aria-haspopup="true" aria-expanded="false" aria-controls="xmenuBox"><span aria-hidden="true">…</span></button>
+</div>
+<section class="hud card xmenu" id="xmenuBox" hidden aria-label="そのほかの操作">
+  <div class="xm-h"><h2>そのほかの操作</h2><button type="button" class="close" id="xmClose">閉じる</button></div>
+  <div id="xmSlot"></div>
+  <button type="button" class="quiet xm-lg" id="xmLegend">凡例を表示</button>
+</section>
+<div class="hud card toast" id="toast" style="opacity:0" aria-live="polite"></div>
+
+<script src="assets/guide.js?v=15"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "./assets/vendor/three/three.module.min.js?v=15",
+  "three/addons/": "./assets/vendor/three/addons/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+
+/* ================================================================
+   4つの場面：① 往路・博多 ② 往路・新大阪 ③ 復路・新大阪 ④ 復路・博多
+   高さ：コンコース 0m、ホーム +6m（実寸・推定）。模型では上下を広げて
+   見せるため、表示の高さだけ VY 倍にする（距離は実寸で計算）。単位 m。
+   ================================================================ */
+const PL = 6, VY = 3, TOP = PL * VY;           // ホームの表示の高さ = 18
+const P = (x, y, z) => new THREE.Vector3(x, y * VY, z);
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+
+const ADULT_M_PER_MIN = 80;   // 大人の歩く速さ（不動産表示の目安）
+const KID_FACTOR = 1.5;       // 子ども連れは大人の1.5倍の時間
+const SHOP_MIN = 10;          // 売り場で選ぶ時間の目安
+const EV_WAIT_MIN = 2;        // エレベーター待ち（1回あたりの目安）
+const HOTEL_MIN = Math.ceil(410 / ADULT_M_PER_MIN * KID_FACTOR);   // 新大阪駅→ホテル 410m（しおりのデータ）を子ども連れで
+const hm = (h, m) => h * 60 + m;
+const hhmm = min => { const h = Math.floor(min / 60), mm = Math.floor(min % 60); return `${h}:${String(mm).padStart(2, '0')}`; };
+function lenOf(pts) { let s = 0; for (let i = 1; i < pts.length; i++) s += V(...pts[i]).distanceTo(V(...pts[i - 1])); return s; }
+const KARI = '<span class="kari">仮</span>';
+const KARI_S = '<span class="kari sm">仮</span>';   // 図はあるが、細部を推定したもの
+
+/* ================================================================
+   博多駅（①・④）
+   座標：x＝東（筑紫口側）、z＝南（熊本・佐賀方面）。
+   確かめたこと：787系8両は1号車が南（武雄温泉側）。在来線の設備は「1・2番線」「3・4番線」の乗車位置、
+   新幹線の設備は「12番線の停止位置」（JR西日本）と「13〜16番線の乗車位置」の号車から置く。
+   まだ仮のもの：中2F・2F の通路とコンコースの形と長さ、階段・エスカレーターの向き、売り場、幅の広い改札の場所
+   ================================================================ */
+const ZAI = [{ x: -82, a: 1, b: 2 }, { x: -62, a: 3, b: 4 }, { x: -42, a: 5, b: 6 }, { x: -22, a: 7, b: 8 }];
+const SHIN = [{ x: 22, a: 11, b: 12 }, { x: 44, a: 13, b: 14 }, { x: 66, a: 15, b: 16 }];
+const ZW = 9, SW = 11;
+const ZZ = [-150, 130], SZ = [-180, 250];
+const KAMOME = { zFront: 70, carLen: 20, cars: 8 };     // 1号車の南端が z=70。北へ 2・3…8号車
+const NOZOMI = { zFront: 238, carLen: 25, cars: 16 };   // 12号車と13号車の境（z=-62）が北乗換口の設備の前
+// k号車の中で、南端から f（0＝南端、1＝北端）の位置
+const carZ = (T, k, f = .5) => T.zFront - (k - 1 + f) * T.carLen;
+// ① 1番の階段・エスカレーター（1・2番線の乗車位置から。st＝[上, 下]、es＝[下, 上] の z。向きは仮）
+const Z_FAC = [
+  { id: '中央', car: 4, st: [10, 22] },                    // 4号車の後ろ側のドアのすぐ前
+  { id: '2号車', car: 2, st: [46, 34], es: [34, 46] },
+  { id: '北', car: 6, st: [-37, -49] },
+  { id: '北8', car: 8, st: [-83, -71] }
+];
+const Z_EVS = [{ id: '7号車', z: -60, dx: 0 }];          // 7号車付近（北寄りの1か所だけ）
+const Z_EV = Z_EVS[0].z;
+// ① 12番（12番線の停止位置の図から。16両の号車の位置）
+const S_FAC = [
+  { id: '6号車', car: 6, st: [95, 106] },
+  { id: '7号車', car: 7, es: [81, 70] },
+  { id: '10号車', car: 10, es: [6, -5] },
+  { id: '北', car: 12, es: [-49, -60] }                   // 12号車の先（北乗換口側）
+];
+const S_EVS = [{ id: '8号車', z: carZ(NOZOMI, 8), dx: 0 }, { id: '北', z: -67, dx: -1.5 }];
+// ④ 4番（3・4番線の乗車位置。8両のときは号車から1を引いて読む）
+const Z4_FAC = [
+  { id: '中央3', car: 3, st: [14, 26], es: [26, 14] },    // 中央口・新幹線中央乗換口方面の階段・エスカレーター
+  { id: '中央5', car: 5, st: [-26, -14] },                // 中央口・新幹線中央乗換口方面の階段
+  { id: '北7', car: 7, st: [-64, -52] },                  // 北口・新幹線北乗換口方面の階段
+  { id: '北8', car: 8, st: [-80, -68] }                   // 同じく階段（エレベーターも8号車付近）
+];
+const Z4_EVS = [{ id: '8号車', z: -88, dx: 0 }];
+// ④ 16番（13〜16番線の乗車位置）
+const S16_FAC = [
+  { id: '5号車', car: 5, st: [104, 116] },
+  { id: '7号車', car: 7, es: [79, 67] },
+  { id: '9号車', car: 9, es: [15, 3] },
+  { id: '11号車', car: 11, es: [-13, -25] }               // 12号車にいちばん近い
+];
+const S16_EVS = [{ id: '8号車', z: 53, dx: 0 }];
+const zStairX = c => c + 1.3, zEscX = c => c - 1.5;
+const sStairX = c => c - 1.5, sEscX = c => c + 1.4;
+const zTrackX = (p, s) => p.x + (s === 'a' ? -1 : 1) * (ZW / 2 + 2.75);
+const sTrackX = (p, s) => p.x + (s === 'a' ? -1 : 1) * (SW / 2 + 2.75);
+const zi = ZAI[0], si = SHIN[0];                        // ①：1・2番（1番を使う）と 11・12番（12番を使う）
+const zi4 = ZAI[1], si4 = SHIN[2];                      // ④：3・4番（4番を使う）と 15・16番（16番を使う）
+// 787系の4号車はドアが博多寄りの端だけ。席は武雄温泉寄りなので、業務室をはさんだすぐ後ろの
+// 3号車の博多寄りのドアがいちばん近い（編成席番表より）
+const DOOR_A = [zi.x - ZW / 2 + 0.6, PL, carZ(KAMOME, 3, 1) + 1.2];
+// のぞみ13号車の席は1〜3列目。N700系は1列目が博多寄りとされるので、博多寄りのドア（公式の座席図は未確認）
+const DOOR_B = [si.x + SW / 2 - 0.6, PL, carZ(NOZOMI, 13, 0) - 1.2];
+// ④：のぞみ17号12号車の17〜20列目は東京寄り（北）の端。リレーかもめ33号は4番（ホームの東側）で3号車の博多寄りのドア
+const DOOR4_S = [si4.x + SW / 2 - 0.6, PL, carZ(NOZOMI, 12, 1) + 1.2];
+const DOOR4_Z = [zi4.x + ZW / 2 - 0.6, PL, carZ(KAMOME, 3, 1) + 1.2];
+// 乗換口の改札機の並び（z）。lane＝ふつうの通路、wide＝幅の広い通路（仮）
+const C_GATE = { z: [18.4, 21.6, 23.4, 25.2, 27.0, 28.8, 30.6, 32.4], lane: 24.3 };
+const N_GATE = { z: [-68.4, -65.2, -63.4, -61.6, -59.8, -58.0, -56.2, -54.4], lane: -60.7, wide: -66.8 };
+const SHOP = { x: 40, z: 14 };
+const SHOP_AT = [34, 0, 20];                            // 売り場の前で選ぶ位置
+const WALK_X = zi.x - ZW / 2 + 1.6;                     // 1番ホームの線路側を歩く線（階段の穴をよける）
+const S_WALK_X = si.x + SW / 2 - 1.3;                   // 12番ホームの線路側を歩く線
+const Z4_WALK_X = zi4.x + ZW / 2 - 1.2;                 // 4番ホームの線路側を歩く線
+const S16_WALK_X = si4.x + SW / 2 - 1.3;                // 16番ホームの線路側を歩く線
+
+/* ---- ① のルート ---- */
+// 駅弁の売り場から12番のりばのエスカレーターを通って13号車まで（いちばん短いものを選ぶ）
+function toCar13ByEsc() {
+  const ex = sEscX(si.x);
+  const opts = S_FAC.filter(f => f.es).map(f => {
+    const [bot, top] = f.es, dir = Math.sign(top - bot);
+    const appr = [ex, 0, bot - dir * 4];
+    const conc = [SHOP_AT, [33, 0, appr[2] + (appr[2] < SHOP_AT[2] ? 4 : -4)], appr, [ex, 0, bot]];
+    const plat = Math.abs(top - DOOR_B[2]) < 8
+      ? [[ex, PL, top], [ex, PL, top + dir * 2.5], DOOR_B]
+      : [[ex, PL, top], [ex, PL, top + dir * 2.5], [S_WALK_X, PL, top + dir * 5], [S_WALK_X, PL, DOOR_B[2] + 1.5], DOOR_B];
+    return { f, conc, plat, len: lenOf(conc) + lenOf([[ex, 0, bot], [ex, PL, top]]) + lenOf(plat) };
+  });
+  return opts.sort((a, b) => a.len - b.len)[0];
+}
+function stairsVia(which) {
+  const c = zi.x, sx = zStairX(c), d = DOOR_A;
+  const g = Z_FAC.find(f => f.id === which), [top, bot] = g.st;
+  const s = toCar13ByEsc();
+  const north = which !== '中央';
+  const gate = north ? N_GATE : C_GATE, gName = north ? '新幹線北乗換口' : '新幹線中央乗換口';
+  const legs = [
+    north
+      ? { name: '4号車の席から降りて、ホームを北へ', sub: '1番のりば · 3号車の博多寄りのドアから降り、6号車付近の階段まで', kind: 'walk',
+          pts: [d, [WALK_X, PL, d[2] - 4], [WALK_X, PL, top + 4], [sx, PL, top + 2], [sx, PL, top]] }
+      : { name: '4号車の席から降りて、中央の階段へ', sub: '1番のりば · 席（2・3列目）のすぐ後ろ、3号車の博多寄りのドアから降りる', kind: 'walk',
+          pts: [d, [WALK_X, PL, d[2]], [WALK_X, PL, top - 1.4], [sx, PL, top - 1.4], [sx, PL, top]] },
+    { name: '階段で中2Fへ下りる', sub: '1番のりば → 中2F の通路（階段の向きは推定）', kind: 'stair', warn: 2,
+      pts: [[sx, PL, top], [sx, 0, bot]] },
+    { name: '通路を東へ', sub: `${gName}に向かう（通路の形は推定）`, kind: 'walk', warn: 1,
+      pts: [[sx, 0, bot], [sx, 0, gate.lane], [-4, 0, gate.lane]] },
+    { name: `${gName}を通る`, sub: 'きっぷ2枚を重ねて入れる', kind: 'gate',
+      pts: [[-4, 0, gate.lane], [4, 0, gate.lane]] },
+    { name: '駅弁の売り場へ', sub: north ? '2F 新幹線改札内 · 中央乗換口の近くまで戻る' : '2F 新幹線改札内コンコース', kind: 'walk', warn: 1,
+      pts: north ? [[4, 0, gate.lane], [12, 0, gate.lane + 6], [12, 0, 14], SHOP_AT] : [[4, 0, gate.lane], [26, 0, gate.lane], SHOP_AT] },
+    { stop: 1, name: '駅弁を選んで買う', sub: `目安 ${SHOP_MIN}分（混雑で前後します）`, kind: 'shop', waitMin: SHOP_MIN, waitSec: 2.6, at: SHOP_AT },
+    { name: '12番のりばのエスカレーターへ', sub: `11・12番のりば · ${s.f.car}号車${s.f.id === '北' ? 'の先（北乗換口側）' : '付近'}`, kind: 'walk', warn: 1,
+      pts: s.conc },
+    { name: 'エスカレーターでホームへ', sub: '2F → 新幹線ホーム', kind: 'esc', warn: 2,
+      pts: [s.conc.at(-1), s.plat[0]] },
+    { name: 'ホームを北へ、13号車の乗車口まで', sub: '13号車の博多寄りのドア（1〜3列目の側）', kind: 'walk', warn: 2,
+      pts: s.plat }
+  ];
+  return Object.assign(legs, { use: [`zst:${which}`, `ses:${s.f.id}`], stairName: which, escId: s.f.id });
+}
+// 候補を両方計算して、短いほうを使う（最初の区間に比べた結果を書き添える）
+function shorter(ids, via, nm) {
+  const cand = ids.map(id => { const legs = via(id); return { id, legs, len: legs.reduce((s, L) => s + (L.pts ? lenOf(L.pts) : 0), 0) }; });
+  cand.sort((a, b) => a.len - b.len);
+  const [best, other] = cand;
+  best.legs[0].sub += ` · ${nm(best.id)} 約${Math.round(best.len / 10) * 10}m／${nm(other.id)} 約${Math.round(other.len / 10) * 10}m で短いほう`;
+  return best.legs;
+}
+const route1Stairs = () => shorter(['中央', '北'], stairsVia, id => id === '中央' ? '中央の階段' : '北の階段');
+// ベビーカー組：北回りでそのまま12番ホームへ（北乗換口の近くに駅弁の店が見つからないため、B案）
+function route1EV() {
+  const d = DOOR_A, c = zi.x, s = si.x, ev = S_EVS.find(e => e.id === '北'), ex = s + ev.dx;
+  return Object.assign([
+    { name: '4号車の席から降りて、ホームを北へ', sub: '1番のりば · 3号車の博多寄りのドアから降りる。エレベーターは7号車付近（6両のときは少し歩きます）', kind: 'walk',
+      pts: [d, [WALK_X, PL, d[2] - 4], [WALK_X, PL, Z_EV + 5], [c, PL, Z_EV + 3], [c, PL, Z_EV]] },
+    { name: 'エレベーターで中2Fへ', sub: `待ち時間 目安${EV_WAIT_MIN}分`, kind: 'ev', ride: 1, waitMin: EV_WAIT_MIN,
+      pts: [[c, PL, Z_EV], [c, 0, Z_EV]] },
+    { name: '通路を東へ', sub: '新幹線北乗換口に向かう（通路の形は推定）', kind: 'walk', warn: 1,
+      pts: [[c, 0, Z_EV], [c, 0, Z_EV - 3], [-10, 0, Z_EV - 3], [-4, 0, N_GATE.wide]] },
+    { name: '幅の広い改札を通る', sub: '新幹線北乗換口 · ベビーカー・車いす用', kind: 'gate', warn: 1,
+      pts: [[-4, 0, N_GATE.wide], [4, 0, N_GATE.wide]] },
+    { name: 'そのまま12番のりばの北のエレベーターへ', sub: '12号車の先 · 駅弁は買い出し組にまかせる', kind: 'walk', warn: 2,
+      pts: [[4, 0, N_GATE.wide], [12, 0, ev.z + 3], [ex, 0, ev.z + 3], [ex, 0, ev.z]] },
+    { name: 'エレベーターでホームへ', sub: `待ち時間 目安${EV_WAIT_MIN}分`, kind: 'ev', ride: 1, waitMin: EV_WAIT_MIN,
+      pts: [[ex, 0, ev.z], [ex, PL, ev.z]] },
+    { name: 'すぐ先の13号車の乗車口で待つ', sub: '13号車の博多寄りのドア（1〜3列目の側）', kind: 'walk', warn: 2,
+      pts: [[ex, PL, ev.z], [ex, PL, ev.z + 2.3], DOOR_B] }
+  ], { use: ['zev:7号車', 'sev:北'] });
+}
+// 駅弁の買い出し組（大人1人）：階段ルートで中央の売り場に寄り、13号車の乗車口で合流
+function route1Buyer() {
+  const legs = route1Stairs();
+  legs[0].name = '大人1人は中央の階段へ';
+  legs.at(-1).name = '13号車の乗車口でベビーカー組と合流';
+  return legs;
+}
+
+/* ---- ④ のルート（寄り道なし） ---- */
+function route4Via(which) {
+  const d = DOOR4_S, t = DOOR4_Z, ex = sEscX(si4.x), e = S16_FAC.find(f => f.id === '11号車'), [ebot, etop] = e.es;
+  const north = which === '北';
+  const gate = north ? N_GATE : C_GATE, gName = north ? '新幹線北乗換口' : '新幹線中央乗換口';
+  const legs = [
+    { name: '12号車から降りて、ホームを南へ', sub: `16番のりば · 12号車の北の端のドア（17〜20列目の側）から降り、${e.car}号車付近のエスカレーターへ`, kind: 'walk',
+      pts: [d, [S16_WALK_X, PL, d[2] + 2], [S16_WALK_X, PL, etop - 3.5], [ex, PL, etop - 2.5], [ex, PL, etop]] },
+    { name: 'エスカレーターで2Fへ下りる', sub: '16番のりば → 2F 新幹線改札内コンコース（向きは推定）', kind: 'esc', warn: 2,
+      pts: [[ex, PL, etop], [ex, 0, ebot]] },
+    { name: `${gName}へ`, sub: '2F 新幹線改札内コンコース', kind: 'walk', warn: 1,
+      pts: [[ex, 0, ebot], [ex, 0, ebot + 4], [12, 0, gate.lane], [4, 0, gate.lane]] },
+    { name: `${gName}を通る`, sub: '新幹線から在来線へ', kind: 'gate',
+      pts: [[4, 0, gate.lane], [-4, 0, gate.lane]] }
+  ];
+  if (north) {
+    const g = Z4_FAC.find(f => f.id === '北7'), [top, bot] = g.st, sx = zStairX(zi4.x);
+    legs.push(
+      { name: '通路を西へ、7号車付近の階段へ', sub: '中2F の通路（通路の形は推定）', kind: 'walk', warn: 1,
+        pts: [[-4, 0, gate.lane], [-54, 0, bot + 4], [sx, 0, bot + 4], [sx, 0, bot]] },
+      { name: '階段で4番のりばへ', sub: '中2F → 3・4番のりば（階段の向きは推定）', kind: 'stair', warn: 2,
+        pts: [[sx, 0, bot], [sx, PL, top]] },
+      { name: 'ホームを南へ、4号車の方へ', sub: '3号車の博多寄りのドア（4号車の5・6列目の側）', kind: 'walk', warn: 2,
+        pts: [[sx, PL, top], [sx, PL, top - 2.5], [Z4_WALK_X, PL, top - 4], [Z4_WALK_X, PL, t[2] - 2.5], t] });
+    return Object.assign(legs, { use: [`ses:${e.id}`, `zst:${g.id}`], stairName: g.id });
+  }
+  const g = Z4_FAC.find(f => f.id === '中央3'), [bot, top] = g.es, zx = zEscX(zi4.x);
+  legs.push(
+    { name: '通路を西へ、3号車付近のエスカレーターへ', sub: '中2F の通路（通路の形は推定）', kind: 'walk', warn: 1,
+      pts: [[-4, 0, gate.lane], [-54, 0, bot + 4], [zx, 0, bot + 4], [zx, 0, bot]] },
+    { name: 'エスカレーターで4番のりばへ', sub: '中2F → 3・4番のりば（向きは推定）', kind: 'esc', warn: 2,
+      pts: [[zx, 0, bot], [zx, PL, top]] },
+    { name: 'すぐ先の3号車の博多寄りのドアへ', sub: '4号車の5・6列目の側。4号車のドアは博多寄りの端だけなので、3号車のドアから乗る', kind: 'walk', warn: 2,
+      pts: [[zx, PL, top], [zx, PL, t[2] + .6], [t[0] - .8, PL, t[2]], t] });
+  return Object.assign(legs, { use: [`ses:${e.id}`, `zes:${g.id}`], stairName: g.id });
+}
+const route4Stairs = () => shorter(['中央', '北'], route4Via, id => id === '中央' ? '中央乗換口' : '北乗換口');
+function route4EV() {
+  const d = DOOR4_S, t = DOOR4_Z, e1 = S16_EVS[0], x1 = si4.x + e1.dx, e2 = Z4_EVS[0], x2 = zi4.x + e2.dx;
+  return Object.assign([
+    { name: '12号車から降りて、ホームを南へ', sub: '16番のりば · エレベーターは8号車付近（12号車から約110m）', kind: 'walk',
+      pts: [d, [S16_WALK_X, PL, d[2] + 2], [S16_WALK_X, PL, e1.z - 3.5], [x1, PL, e1.z - 3.5], [x1, PL, e1.z]] },
+    { name: 'エレベーターで2Fへ', sub: `待ち時間 目安${EV_WAIT_MIN}分`, kind: 'ev', ride: 1, waitMin: EV_WAIT_MIN,
+      pts: [[x1, PL, e1.z], [x1, 0, e1.z]] },
+    { name: '新幹線北乗換口へ', sub: '2F 新幹線改札内コンコース', kind: 'walk', warn: 1,
+      pts: [[x1, 0, e1.z], [x1, 0, e1.z - 4], [12, 0, N_GATE.wide], [4, 0, N_GATE.wide]] },
+    { name: '幅の広い改札を通る', sub: '新幹線北乗換口 · ベビーカー・車いす用', kind: 'gate', warn: 1,
+      pts: [[4, 0, N_GATE.wide], [-4, 0, N_GATE.wide]] },
+    { name: '通路を西へ、4番のりばのエレベーターへ', sub: '中2F の通路 · 8号車付近（通路の形は推定）', kind: 'walk', warn: 1,
+      pts: [[-4, 0, N_GATE.wide], [-54, 0, e2.z + 4], [x2, 0, e2.z + 4], [x2, 0, e2.z]] },
+    { name: 'エレベーターで4番のりばへ', sub: `待ち時間 目安${EV_WAIT_MIN}分`, kind: 'ev', ride: 1, waitMin: EV_WAIT_MIN,
+      pts: [[x2, 0, e2.z], [x2, PL, e2.z]] },
+    { name: 'ホームを南へ、4号車の方へ', sub: '3号車の博多寄りのドア（4号車の5・6列目の側）', kind: 'walk', warn: 2,
+      pts: [[x2, PL, e2.z], [x2, PL, e2.z + 3.5], [Z4_WALK_X, PL, e2.z + 6], [Z4_WALK_X, PL, t[2] - 2.5], t] }
+  ], { use: [`sev:${e1.id}`, `zev:${e2.id}`] });
+}
+
+/* ================================================================
+   新大阪駅（②・③）
+   座標：x＝北（27番側）、z＝西（岡山・博多方面）。4F が新幹線ホーム、3F が新幹線コンコース。
+   確かめたこと：ホームは 20・21〜22・23〜24・25〜26・27番、16両の号車ごとの階段・エスカレーター・
+   エレベーターの位置（乗車位置の図）、3F の改札口の並び（構内図）。
+   4番口は御堂筋線の地上の出入口（新御堂筋を渡った西側）。
+   まだ仮のもの：コンコースと改札の外の通路の形と長さ、階段の向き、幅の広い改札、西の端から地上へ下りる階段とエレベーター、売り場
+   ================================================================ */
+const OS = { zFront: 200, carLen: 25, cars: 16 };      // 1号車の西の端が z=200。東へ 2・3…16号車
+const oz = p => OS.zFront - p * OS.carLen;              // 1号車の端から p 両分の位置
+// 設備（p＝1号車の端からの位置。st＝階段、es＝エスカレーター）
+const OPL = [
+  { x: 0, w: 8, side: -1, tracks: [20], fac: [{ car: 8, p: 7.65, st: 1 }, { car: 9, p: 8.9, es: 1 }, { car: 12, p: 11.9, st: 1 }], evs: [10.9] },
+  { x: 19.5, w: 10, tracks: [21, 22], fac: [{ car: 8, p: 7.2, st: 1, es: 1 }, { car: 9, p: 8.3, es: 1 }, { car: 10, p: 9.1, es: 1 }, { car: 12, p: 11.9, st: 1 }], evs: [10.9] },
+  { x: 40, w: 10, tracks: [23, 24], fac: [{ car: 8, p: 7.4, st: 1, es: 1 }, { car: 9, p: 8.5, es: 1 }, { car: 12, p: 11.9, st: 1 }], evs: [9.3] },
+  { x: 60.5, w: 10, tracks: [25, 26], fac: [{ car: 8, p: 7.3, st: 1, es: 1 }, { car: 10, p: 9.3, es: 1 }, { car: 12, p: 11.9, st: 1, es: 1 }], evs: [10.9] },
+  { x: 80, w: 8, side: 1, tracks: [27], fac: [{ car: 7, p: 6.15, st: 1 }, { car: 8, p: 7.3, es: 1 }, { car: 10, p: 9.0, es: 1 }, { car: 12, p: 11.2, st: 1 }], evs: [12.2] }
+];
+for (const q of OPL) {
+  // 島式は階段が南寄り・エスカレーターが北寄り。片面のホームは線路と反対の側に寄せる
+  q.stX = q.side ? q.x + q.side * 1.4 : q.x - 1.5;
+  q.esX = q.side ? q.x + q.side * 1.4 : q.x + 1.4;
+  q.holeX = q.side === 1 ? [q.x - .2, q.x + 3] : q.side === -1 ? [q.x - 3, q.x + .2] : [q.x - 3.2, q.x + 2.3];
+  q.evX = q.side ? q.x + q.side * 2.2 : q.x;
+  q.fac.forEach(f => {
+    const c = oz(f.p);
+    f.id = `${f.car}号車`;
+    if (f.st) f.st = [c - 6, c + 6];         // 西へ下りる（向きは推定）
+    if (f.es) f.es = [c + 6, c - 6];
+  });
+  q.evs = q.evs.map(p => ({ id: `${Math.floor(p) + 1}号車`, z: oz(p), dx: 0 }));
+  q.trackX = q.tracks.map(n => {
+    if (q.side) return q.x - q.side * (q.w / 2 + 2.75);
+    return q.x + (n % 2 ? -1 : 1) * (q.w / 2 + 2.75);   // 島式：奇数番が南、偶数番が北
+  });
+}
+const O27 = OPL[4], O22 = OPL[1];
+const O_CONC = { x: [-6, 86], z: [-125, 110] };         // 3F 新幹線改札内コンコース（形は推定）
+const O_PASS = { x: [-26, -6.5], z: [-232, 200] };      // 改札の外の通路。西の端が御堂筋線・北口側（形は推定）
+const mkGate = (lane, x) => ({ x, lane, wide: lane - 6.1, z: [-7.7, -4.5, -2.7, -.9, .9, 2.7, 4.5, 6.3].map(d => lane + d) });
+const O_GATES = {
+  南口: mkGate(oz(9.3), -6),
+  中央口: mkGate(oz(5.65), -6),
+  乗換口: mkGate(oz(11.9), -6),
+  北口: mkGate(oz(5.5), 86)
+};
+const O_S = O_GATES.南口;
+const OG = -4;                                           // 地上（地面の表示にそろえる）
+const EXIT4 = [-16, OG, 252];                            // 4番口：御堂筋線の地上の出入口（新御堂筋を渡った西側）
+const O_DN = { x: -16, top: 200, bot: 216 };             // 西の端から地上へ下りる階段（仮）
+const O_DEV = { x: -23, z: 196 };                        // 地上へのエレベーター（仮）
+const DOOR2 = [O27.x - O27.w / 2 + .6, PL, oz(12.05)];   // 27番 13号車の博多寄りのドア（1〜3列目の側）
+const DOOR3 = [O22.x + O22.w / 2 - .6, PL, oz(11.95)];   // 22番 12号車の東京寄りのドア（17〜20列目の側）
+const O27_WALK = O27.x - O27.w / 2 + 1.3, O22_WALK = O22.x + O22.w / 2 - 1.3;
+const O_SHOP = { x: 4, z: -60 }, O_SHOP_AT = [4, 0, -51.5];
+
+function outside(dir, ev, lane) {   // 改札の外：新幹線 南口 ⇄ 西の端 ⇄ 地上の4番口
+  const e = O_DEV, d = O_DN, x = ev ? e.x + 3 : d.x;
+  const pass = [[-10, 0, lane], [x, 0, lane], ...(ev ? [[x, 0, e.z], [e.x, 0, e.z]] : [[x, 0, d.top]])];
+  const vert = ev ? [[e.x, 0, e.z], [e.x, OG, e.z]] : [[d.x, 0, d.top], [d.x, OG, d.bot]];
+  const road = ev ? [[e.x, OG, e.z], [e.x, OG, 222], [EXIT4[0], OG, 228], EXIT4] : [[d.x, OG, d.bot], EXIT4];
+  const rv = a => a.slice().reverse();
+  if (dir === 'out') return [
+    { name: '改札の外の通路を西へ', sub: '御堂筋線・北口側の西の端へ（通路の形は推定）', kind: 'walk', warn: 1, pts: pass },
+    ev ? { name: 'エレベーターで地上へ', sub: `西の端のエレベーター（場所は推定） · 待ち時間 目安${EV_WAIT_MIN}分`, kind: 'ev', ride: 1, waitMin: EV_WAIT_MIN, warn: 1, pts: vert }
+       : { name: '階段で地上へ下りる', sub: '西の端 → 地上（階段の場所と向きは推定）', kind: 'stair', warn: 1, pts: vert },
+    { name: '新御堂筋を渡って、4番口へ', sub: '御堂筋線の地上の出入口。道路と駅の外は描いていません', kind: 'walk', warn: 1, pts: road }];
+  return [
+    { name: '4番口から新御堂筋を渡って駅へ', sub: '御堂筋線の地上の出入口から JR 新大阪駅の西の端へ。道路は描いていません', kind: 'walk', warn: 1, pts: rv(road) },
+    ev ? { name: 'エレベーターで3Fへ', sub: `西の端のエレベーター（場所は推定） · 待ち時間 目安${EV_WAIT_MIN}分`, kind: 'ev', ride: 1, waitMin: EV_WAIT_MIN, warn: 1, pts: rv(vert) }
+       : { name: '階段で3Fへ上がる', sub: '地上 → 御堂筋線・北口側の西の端（階段の場所と向きは推定）', kind: 'stair', warn: 1, pts: rv(vert) },
+    { name: '改札の外の通路を東へ', sub: '新幹線 南口の方へ（通路の形は推定）', kind: 'walk', warn: 1, pts: rv(pass) }];
+}
+function route2(ev) {
+  const lane = ev ? O_S.wide : O_S.lane, d = DOOR2;
+  const g = O27.fac.find(f => f.car === 12), [top, bot] = g.st, sx = O27.stX, e = O27.evs[0], exv = O27.evX;
+  const legs = ev ? [
+    { name: '13号車から降りて、すぐ先のエレベーターへ', sub: '27番のりば · 13号車の博多寄りのドア（1〜3列目の側）から降りる', kind: 'walk',
+      pts: [d, [O27_WALK, PL, d[2] - 1], [O27_WALK, PL, e.z], [exv, PL, e.z]] },
+    { name: 'エレベーターで3Fへ', sub: `待ち時間 目安${EV_WAIT_MIN}分`, kind: 'ev', ride: 1, waitMin: EV_WAIT_MIN,
+      pts: [[exv, PL, e.z], [exv, 0, e.z]] }
+  ] : [
+    { name: '13号車から降りて、12号車付近の階段へ', sub: '27番のりば · 13号車の博多寄りのドア（1〜3列目の側）から降りる', kind: 'walk',
+      pts: [d, [O27_WALK, PL, d[2] + 1.5], [O27_WALK, PL, top - 2.5], [sx, PL, top - 2.5], [sx, PL, top]] },
+    { name: '階段で3Fへ下りる', sub: '27番のりば → 3F 新幹線コンコース（階段の向きは推定）', kind: 'stair', warn: 2,
+      pts: [[sx, PL, top], [sx, 0, bot]] }
+  ];
+  const from = legs.at(-1).pts.at(-1);
+  legs.push(
+    { name: '改札内のコンコースを南口へ', sub: '3F 新幹線改札内（コンコースの形は推定）', kind: 'walk', warn: 1,
+      pts: [from, [from[0], 0, from[2] + 4], [2, 0, lane], [-2, 0, lane]] },
+    ev ? { name: '幅の広い改札を出る', sub: '新幹線 南口 · ベビーカー・車いす用', kind: 'gate', warn: 1, pts: [[-2, 0, lane], [-10, 0, lane]] }
+       : { name: '新幹線 南口の改札を出る', sub: '3F', kind: 'gate', pts: [[-2, 0, lane], [-10, 0, lane]] });
+  legs.push(...outside('out', ev, lane));
+  return Object.assign(legs, { use: ev ? [`sev:${e.id}`, 'gate:南口', 'odn:ev'] : [`sst:${g.id}`, 'gate:南口', 'odn:st'] });
+}
+function route3(ev) {
+  const lane = ev ? O_S.wide : O_S.lane, t = DOOR3, A = O_SHOP_AT;
+  const legs = outside('in', ev, lane);
+  legs.push(
+    ev ? { name: '幅の広い改札を通る', sub: '新幹線 南口 · ベビーカー・車いす用', kind: 'gate', warn: 1, pts: [[-10, 0, lane], [-2, 0, lane]] }
+       : { name: '新幹線 南口の改札を通る', sub: '3F', kind: 'gate', pts: [[-10, 0, lane], [-2, 0, lane]] },
+    { name: '売り場へ', sub: '3F 新幹線改札内 · ルート上の店（お弁当・おみやげ）', kind: 'walk', warn: 1,
+      pts: [[-2, 0, lane], [2, 0, lane - 5], A] },
+    { stop: 1, name: 'お弁当・おみやげを選んで買う', sub: `目安 ${SHOP_MIN}分（混雑で前後します）`, kind: 'shop', waitMin: SHOP_MIN, waitSec: 2.6, at: A });
+  const g = O22.fac.find(f => f.car === 12), [top, bot] = g.st, sx = O22.stX, e = O22.evs[0], exv = O22.evX;
+  if (ev) legs.push(
+    { name: '22番のりばのエレベーターへ', sub: '21・22番のりば · 11号車付近', kind: 'walk', warn: 2,
+      pts: [A, [15, 0, -56], [15, 0, e.z], [exv, 0, e.z]] },
+    { name: 'エレベーターで22番のりばへ', sub: `待ち時間 目安${EV_WAIT_MIN}分`, kind: 'ev', ride: 1, waitMin: EV_WAIT_MIN,
+      pts: [[exv, 0, e.z], [exv, PL, e.z]] },
+    { name: 'ホームを東へ、12号車の乗車口へ', sub: '12号車の東京寄りのドア（17〜20列目の側）', kind: 'walk', warn: 2,
+      pts: [[exv, PL, e.z], [O22_WALK, PL, e.z - 1], [O22_WALK, PL, t[2] + 1.5], t] });
+  else legs.push(
+    { name: '22番のりばの階段へ', sub: '21・22番のりば · 12号車付近', kind: 'walk', warn: 2,
+      pts: [A, [15, 0, -56], [15, 0, bot + 4], [sx, 0, bot + 4], [sx, 0, bot]] },
+    { name: '階段で22番のりばへ', sub: '3F → 21・22番のりば（階段の向きは推定）', kind: 'stair', warn: 2,
+      pts: [[sx, 0, bot], [sx, PL, top]] },
+    { name: 'ホームを戻って、12号車の乗車口へ', sub: '12号車の東京寄りのドア（17〜20列目の側）', kind: 'walk', warn: 2,
+      pts: [[sx, PL, top], [sx, PL, top - 2.5], [O22_WALK, PL, top - 2.5], [O22_WALK, PL, t[2] - 1.5], t] });
+  return Object.assign(legs, { use: ev ? [`sev:${e.id}`, 'gate:南口', 'odn:ev'] : [`sst:${g.id}`, 'gate:南口', 'odn:st'] });
+}
+
+/* ================================================================
+   場面ごとの設定
+   ================================================================ */
+const SCN = {
+  1: {
+    station: 'hakata', mode: 'transfer', trip: { arr: hm(11, 42), dep: hm(12, 15), day: '2026-10-17' },
+    head: ['乗り換え先', 'のぞみ28号 新大阪行', '<b class="num">12:15</b>発 · <b>12</b>番のりば · <b>13</b>号車'],
+    fromto: '<b>リレーかもめ92号</b> 4号車（1番 11:42着）<br>→ <b>のぞみ28号</b> 13号車（12番 12:15発）',
+    dnote: '運転日注意：リレーかもめ92号は運転日が決まった列車です。出発前に時刻と運転日を確認してください',
+    goal: '13号車の乗車口', legs: () => ({ stairs: route1Stairs(), ev: route1EV(), buyer: route1Buyer() }),
+    home: { land: { dir: V(183, 150, 143), dist: 290, target: V(-26, 6, -22), fov: 38 }, port: { dir: V(-95, 215, 185), dist: 350, target: V(-38, 4, -24), fov: 46 } },
+    sun: V(-10, 0, -30), legend: '1'
+  },
+  2: {
+    station: 'osaka', mode: 'hotel', trip: { arr: hm(14, 43), dep: null, plan: hm(15, 0), day: '2026-10-17' },
+    head: ['降りる列車', 'のぞみ28号 新大阪着', '<b class="num">14:43</b>着 · <b>27</b>番のりば · <b>13</b>号車'],
+    fromto: '<b>のぞみ28号</b> 13号車（27番 14:43着）<br>→ <b>4番口</b>（御堂筋線・地上の出入口）',
+    goal: '4番口', legs: () => ({ stairs: route2(false), ev: route2(true) }),
+    home: { land: { dir: V(-170, 200, -20), dist: 615, target: V(6, 0, 84), fov: 38 }, port: { dir: V(-90, 300, -170), dist: 615, target: V(22, 0, 22), fov: 46 } },
+    sun: V(20, 0, -60), legend: '2'
+  },
+  3: {
+    station: 'osaka', mode: 'board', trip: { arr: hm(10, 30), dep: hm(11, 2), day: '2026-10-20' },
+    head: ['乗る列車', 'のぞみ17号 博多行', '<b class="num">11:02</b>発 · <b>22</b>番のりば · <b>12</b>号車'],
+    fromto: '<b>4番口</b>（地上 · 10:30ごろ）<br>→ <b>のぞみ17号</b> 12号車（22番 11:02発）',
+    goal: '12号車の乗車口', legs: () => ({ stairs: route3(false), ev: route3(true) }),
+    home: { land: { dir: V(-170, 200, -20), dist: 615, target: V(6, 0, 84), fov: 38 }, port: { dir: V(-90, 300, -170), dist: 615, target: V(22, 0, 22), fov: 46 } },
+    sun: V(20, 0, -60), legend: '3'
+  },
+  4: {
+    station: 'hakata', mode: 'transfer', trip: { arr: hm(13, 30), dep: hm(13, 54), day: '2026-10-20' },
+    head: ['乗り換え先', 'リレーかもめ33号 武雄温泉行', '<b class="num">13:54</b>発 · 在来線<b>4</b>番のりば · <b>4</b>号車'],
+    fromto: '<b>のぞみ17号</b> 12号車（16番 13:30着）<br>→ <b>リレーかもめ33号</b> 4号車（4番 13:54発）',
+    goal: '4号車の乗車口（3号車のドア）', legs: () => ({ stairs: route4Stairs(), ev: route4EV() }),
+    home: { land: { dir: V(183, 150, 143), dist: 330, target: V(10, 6, -18), fov: 38 }, port: { dir: V(-95, 215, 185), dist: 400, target: V(4, 4, -20), fov: 46 } },
+    sun: V(-10, 0, -30), legend: '4'
+  }
+};
+let SID = 1, CFG = SCN[1], TRIP = CFG.trip;
+
+/* ---- ルートの長さと時間 ---- */
+const STD_SPEED = 7;           // 標準：実寸 7m/秒 で進む（エレベーターは 4m/秒）
+const SEC_PER_MIN = 1;         // 2組で動くルートは、模擬時刻 1分＝標準で1秒（2組の到着の前後が正しく見える）
+function prepare(legs, opt = {}) {
+  const wmin = m => m / ADULT_M_PER_MIN * (opt.adult ? 1 : KID_FACTOR);
+  const K = opt.K;
+  let r = 0, d = 0, t = 0, walk = 0, waits = 0, stops = 0;
+  const pathPts = [];
+  for (const L of legs) {
+    L.r0 = r; L.d0 = d; L.t0 = t; L.len = 0; L.dlen = 0; L.edges = [];
+    L.waitMin ||= 0; L.waitSec ||= 0;
+    if (K) L.waitSec = L.waitMin * K;
+    if (!L.stop) {
+      const v = L.pts.map(p => V(...p));
+      for (let i = 1; i < v.length; i++) {
+        const a = v[i - 1], b = v[i], rl = a.distanceTo(b), dl = P(a.x, a.y, a.z).distanceTo(P(b.x, b.y, b.z));
+        L.edges.push({ a, b, rl, dl });
+        L.len += rl; L.dlen += dl;
+      }
+      v.forEach((p, i) => { if (i || !pathPts.length) pathPts.push(P(p.x, p.y, p.z)); });
+    }
+    L.walk = L.ride ? 0 : L.len;
+    L.moveSec = L.stop ? 0 : K ? (L.ride ? .3 : wmin(L.len) * K) : L.len / (L.ride ? 4 : STD_SPEED);
+    L.dur = L.waitSec + L.moveSec;
+    r += L.len; d += L.dlen; t += L.dur; walk += L.walk;
+    if (L.kind === 'ev') waits += L.waitMin;
+    if (L.stop) stops += L.waitMin;
+  }
+  const kid = wmin(walk);   // 歩く時間（子ども連れは1.5倍、大人1人はそのまま）
+  const arrive = TRIP.arr + kid + waits + stops;
+  return { legs, use: new Set(legs.use), pathPts, T: t, walk, waits, stops, kid, wmin, K, adult: walk / ADULT_M_PER_MIN, arrive, slack: TRIP.dep - arrive };
+}
+let ROUTES;
+function makeRoutes() {
+  const L = CFG.legs();
+  const R = { stairs: prepare(L.stairs), ev: prepare(L.ev, L.buyer ? { K: SEC_PER_MIN } : {}) };
+  if (L.buyer) {
+    R.ev.buyer = prepare(L.buyer, { K: SEC_PER_MIN, adult: true });
+    R.ev.use = new Set([...R.ev.use, ...R.ev.buyer.use]);
+  }
+  R.stairs.label = '階段・エスカレーター'; R.ev.label = 'エレベーター';
+  for (const X of Object.values(R)) {
+    X.TT = Math.max(X.T, X.buyer?.T || 0);                      // 全員が着くまでの再生時間
+    X.meet = Math.max(X.arrive, X.buyer?.arrive || 0);          // 全員そろう時刻
+    X.hotel = X.meet + HOTEL_MIN;                               // ②：ホテル着の目安
+    X.end = CFG.mode === 'hotel' ? X.meet : TRIP.dep;           // 時間の帯の終わり
+  }
+  return R;
+}
+
+/* ================= three.js の準備 ================= */
+const stage = document.getElementById('stage');
+const isSmall = Math.min(innerWidth, innerHeight) < 600;
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+let pixelRatio = Math.min(devicePixelRatio || 1, isSmall ? 1.75 : 2);
+renderer.setPixelRatio(pixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(innerWidth, innerHeight);
+labelRenderer.domElement.className = 'labels';
+stage.appendChild(labelRenderer.domElement);
+
+const BG = 0xf4f2ec;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(BG);
+scene.fog = new THREE.Fog(BG, 460, 950);
+
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 1, 2000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 30;
+controls.maxDistance = 620;
+controls.maxPolarAngle = Math.PI * 0.46;
+controls.screenSpacePanning = false;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0xd9ccb4, 1.9));
+const sun = new THREE.DirectionalLight(0xfff4e6, 1.5);
+sun.position.set(-90, 260, 150);
+sun.target.position.set(-10, 0, -30);
+sun.castShadow = true;
+sun.shadow.mapSize.set(isSmall ? 1024 : 2048, isSmall ? 1024 : 2048);
+Object.assign(sun.shadow.camera, { left: -250, right: 250, top: 250, bottom: -250, near: 10, far: 700 });
+sun.shadow.bias = -0.0008;
+sun.shadow.radius = 3;
+scene.add(sun, sun.target);
+
+/* ---- 模様（キャンバスで作る小さな絵） ---- */
+function canvasTex(w, h, draw) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+const FONT = '"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",sans-serif';
+const plateTex = (n, hit) => canvasTex(96, 96, (g, w) => {
+  g.fillStyle = hit ? '#d6504c' : '#ffffff';
+  g.strokeStyle = hit ? '#ffffff' : '#2b2926';
+  g.lineWidth = 6;
+  g.beginPath(); g.arc(w / 2, w / 2, 42, 0, 7); g.fill(); g.stroke();
+  g.fillStyle = hit ? '#ffffff' : '#2b2926';
+  g.font = `700 ${n > 9 ? 44 : 52}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(String(n), w / 2, w / 2 + 3);
+});
+const escTex = canvasTex(64, 64, (g, w, h) => {
+  g.fillStyle = '#d9a441'; g.fillRect(0, 0, w, h);
+  g.strokeStyle = '#fff6df'; g.lineWidth = 7; g.lineCap = 'round'; g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(14, 18); g.lineTo(32, 42); g.lineTo(50, 18); g.stroke();
+});
+escTex.wrapS = escTex.wrapT = THREE.RepeatWrapping;
+escTex.repeat.set(1, 4);
+const evTex = canvasTex(128, 128, (g, w) => {
+  g.fillStyle = '#5d8a4b'; g.fillRect(0, 0, w, w);
+  g.strokeStyle = '#fff'; g.lineWidth = 7; g.strokeRect(14, 14, 100, 100);
+  g.fillStyle = '#fff';
+  g.beginPath(); g.arc(50, 42, 10, 0, 7); g.fill();
+  g.fillRect(40, 56, 20, 42);
+  g.beginPath(); g.moveTo(84, 30); g.lineTo(100, 52); g.lineTo(68, 52); g.fill();
+  g.beginPath(); g.moveTo(84, 98); g.lineTo(100, 76); g.lineTo(68, 76); g.fill();
+});
+const awningTex = canvasTex(16, 64, (g, w, h) => {
+  for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#fff8ec' : '#d6504c'; g.fillRect(0, i * 8, w, 8); }
+});
+awningTex.wrapT = THREE.RepeatWrapping; awningTex.repeat.set(1, 1.5);
+const signTex = txt => canvasTex(128, 96, (g, w, h) => {
+  g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
+  g.strokeStyle = '#d6504c'; g.lineWidth = 6; g.strokeRect(5, 5, w - 10, h - 10);
+  g.fillStyle = '#d6504c'; g.fillRect(28, 34, 72, 42);                 // 弁当箱
+  g.fillStyle = '#fff'; g.fillRect(33, 39, 30, 32); g.fillRect(67, 39, 28, 14); g.fillRect(67, 57, 28, 14);
+  g.fillStyle = '#d6504c'; g.beginPath(); g.arc(48, 55, 5, 0, 7); g.fill();
+  g.fillStyle = '#2b2926'; g.font = `700 17px ${FONT}`; g.textAlign = 'center'; g.fillText(txt, w / 2, 27);
+});
+const SHARED_TEX = new Set([escTex, evTex, awningTex]);
+
+/* ---- 静的な部品は材質ごとにまとめて描く（描画回数を減らす） ---- */
+const MAT = {
+  ground: { c: 0xebe6dc, rec: 1 },
+  conc: { c: 0xf3e7cf, rec: 1 },
+  conc2: { c: 0xf1e8d8, rec: 1 },
+  wall: { c: 0xe2d2b5, cast: 1 },
+  plat: { c: 0xdcdbd6, cast: 1, rec: 1 },
+  white: { c: 0xffffff, rec: 1 },
+  tactile: { c: 0xefc53f, rec: 1 },
+  rail: { c: 0x8e939a },
+  pillar: { c: 0xd9d4ca },
+  stair: { c: 0xc4c1ba, cast: 1, rec: 1 },
+  stringer: { c: 0x9f9b93, cast: 1 },
+  esc: { c: 0xd9a441, cast: 1 },
+  escSide: { c: 0xf3efe6, cast: 1 },
+  ev: { c: 0x86b46f, cast: 1 },
+  evTop: { c: 0x5d8a4b, cast: 1 },
+  gate: { c: 0xf6f4ef, cast: 1 },
+  gateTop: { c: 0x2d4f6e },
+  shopBody: { c: 0xfff8ec, cast: 1, rec: 1 },
+  shopBody2: { c: 0xf2ebdf, cast: 1, rec: 1 },
+  roof2: { c: 0xb8c7d4, cast: 1 },
+  zBody: { c: 0xd24b45, cast: 1 },
+  zWin: { c: 0x7b2f2b },
+  zRoof: { c: 0xefe9e1, cast: 1 },
+  sBody: { c: 0xf8f7f3, cast: 1 },
+  sStripe: { c: 0x2b5ea7 },
+  sWin: { c: 0x5b6a7d },
+  sRoof: { c: 0xe4e3de, cast: 1 },
+  pole: { c: 0xd6504c, cast: 1 },
+  escArrow: { map: escTex, rec: 1 },
+  evMark: { map: evTex, basic: 1 }
+};
+/* 部品には「使いみち」の札（TAG）を付ける。
+   base＝いつも濃く、off＝いつも薄く、それ以外＝そのルートで使うときだけ濃く */
+let TAG = 'base', root = null;
+let BUCK = {}, EDGES = {};
+const edgeMat = new THREE.LineBasicMaterial({ color: 0x5e574d, transparent: true, opacity: .38, depthWrite: false });
+const edgeDim = new THREE.LineBasicMaterial({ color: 0x5e574d, transparent: true, opacity: .06, depthWrite: false });
+const dummy = new THREE.Object3D();
+const add = (...o) => root.add(...o);
+function blk(key, geo, m, edge = true) {
+  if (m) geo.applyMatrix4(m);
+  (BUCK[key + '|' + TAG] ||= []).push(geo);
+  if (edge) (EDGES[TAG] ||= []).push(new THREE.EdgesGeometry(geo, 30));
+}
+const at = (x, y, z) => new THREE.Matrix4().makeTranslation(x, y, z);
+const bx = (key, w, h, d, x, y, z, edge = true) => blk(key, new THREE.BoxGeometry(w, h, d), at(x, y, z), edge);
+// a→b の向きに沿った置き方（階段の側板やエスカレーターの帯）
+function along(a, b, off = V(0, 0, 0)) {
+  dummy.position.copy(a).add(b).multiplyScalar(.5).add(off);
+  dummy.lookAt(b.clone().add(off));
+  dummy.updateMatrix();
+  return dummy.matrix.clone();
+}
+
+/* ---- ラベル（CSS）と重なりの回避 ---- */
+let LBL = [];
+let FREE = { x0: 0, x1: innerWidth, y0: 0, y1: innerHeight };   // パネルに隠れない所（layout() で決める）
+function label(html, cls, pos, pri = 5, plain = false) {
+  const wrap = document.createElement('div');
+  wrap.className = 'lw' + (plain ? ' plain' : '');
+  const ld = document.createElement('i'); ld.className = 'ld';
+  const el = document.createElement('div'); el.className = 'lb ' + cls; el.innerHTML = html;
+  wrap.append(ld, el);
+  const o = new CSS2DObject(wrap);
+  o.position.copy(pos);
+  add(o);
+  const L = { o, wrap, el, pri, dy: 0, dx: 0 };
+  LBL.push(L);
+  return L;
+}
+// 大事なラベルから順に置き、重なるものは上へずらして引き出し線を出す。置けない小さなラベルは消す
+function declutter() {
+  const placed = [];
+  const items = LBL.filter(L => L.o.visible && L.wrap.style.display !== 'none').sort((a, b) => a.pri - b.pri);
+  for (const L of items) {
+    const a = L.wrap.getBoundingClientRect();
+    const w = L.el.offsetWidth, h = L.el.offsetHeight;
+    // 画面の端やパネルで切れないよう、左右は見える所の内側へ寄せる（寄せた分だけ --dx でずらす）
+    const M = 6, left = a.left - w / 2, fx0 = FREE.x0 + M, fx1 = Math.max(FREE.x1 - M, fx0 + w);
+    const dx = Math.round(Math.max(fx0 - left, Math.min(0, fx1 - (left + w))));
+    const base = { x: left + dx, y: a.top - 7 - h, w, h };
+    // 重ならず、上のパネルにも隠れない高さを探す（パネルの下に入るものは、重ならない所で妥協）
+    let pick = null, loose = null;
+    for (const dy of [0, -18, -34, -50, -68, -86, 20 + h, 38 + h]) {   // 最後の2つは目印の下に置く
+      const r = { x: base.x - 3, y: base.y + dy - 2, w: base.w + 6, h: base.h + 4 };
+      if (placed.some(p => r.x < p.x + p.w && p.x < r.x + r.w && r.y < p.y + p.h && p.y < r.y + r.h)) continue;
+      if (r.y >= FREE.y0) { pick = { dy, r }; break; }
+      loose ||= { dy, r };
+    }
+    pick ||= loose;
+    const outside = a.left < FREE.x0 || a.left > FREE.x1 || a.top < FREE.y0 || a.top > FREE.y1;
+    const far = a.left < FREE.x0 - 40 || a.left > FREE.x1 + 40;           // 指す物が画面の外にある
+    const hide = far || (L.pri >= 5 && (!pick || outside));   // 小さなラベルは、見える所の外なら出さない
+    if (!pick) pick = { dy: -86, r: { x: base.x, y: base.y - 86, w: base.w, h: base.h } };
+    L.wrap.classList.toggle('off', hide);
+    if (!hide) placed.push(pick.r);
+    if (pick.dy !== L.dy) { L.dy = pick.dy; L.wrap.style.setProperty('--dy', pick.dy + 'px'); }
+    L.wrap.classList.toggle('below', pick.dy > 0);
+    if (dx !== L.dx) { L.dx = dx; L.wrap.style.setProperty('--dx', dx + 'px'); }
+    // 目印の点が画面の外なら、引き出し線は出さない
+    L.wrap.classList.toggle('out', a.left < FREE.x0 || a.left > FREE.x1);
+  }
+}
+
+/* ================= 共通の部品 ================= */
+function wall(x0, z0, x1, z1) {
+  bx('wall', Math.abs(x1 - x0) || .4, 1.4, Math.abs(z1 - z0) || .4, (x0 + x1) / 2, .7, (z0 + z1) / 2);
+}
+// 改札機の列（x の向きに通る）
+function gateRow(g, x = 0) {
+  for (const z of g.z) {
+    bx('gate', 1.8, 1.1, .38, x, .55, z);
+    bx('gateTop', .7, .06, .3, x - .5, 1.13, z, false);
+  }
+  bx('gateTop', .5, .5, g.z.at(-1) - g.z[0] + 2, x, 5.2, (g.z[0] + g.z.at(-1)) / 2);   // 改札上の案内の梁
+}
+// 屋根付きの小さな店
+function shop(x, z, w, d, body, roofMat, sign) {
+  bx(body, w, 3, d, x, 1.5, z);
+  const r = (w + .8) / 1.732;
+  const roof = new THREE.CylinderGeometry(r, r, d + 1, 3, 1);
+  const m = new THREE.Matrix4().makeRotationX(-Math.PI / 2)
+    .premultiply(new THREE.Matrix4().makeScale(1, .5, 1)).premultiply(at(x, 3 + .25 * r, z));
+  if (roofMat) {
+    roof.applyMatrix4(m);
+    const mesh = new THREE.Mesh(roof, roofMat); mesh.castShadow = true; add(mesh);
+    add(new THREE.LineSegments(new THREE.EdgesGeometry(roof, 30), edgeMat));
+  } else blk('roof2', roof, m);
+  if (sign) {
+    const s = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 3.1), new THREE.MeshBasicMaterial({ map: signTex(sign) }));
+    s.position.set(x, 1.6, z + d / 2 + .05); add(s);
+  }
+}
+let sleeperPos = [], pillarPos = [];
+// ホームの板（階段・エスカレーターの穴をあける）・白線・柱・線路・設備。
+// use＝今回使うホーム。それ以外のホーム・線路・設備は薄くする
+function platform(o) {
+  const { x, w, zr, fac = [], evs = [], tracks = [], use, pre } = o;
+  TAG = use ? 'base' : 'off';
+  const len = zr[1] - zr[0], cz = (zr[0] + zr[1]) / 2;
+  const x0 = x - w / 2, x1 = x + w / 2;
+  const holes = fac.map(g => { const zs = [...(g.st || []), ...(g.es || [])]; return { z0: Math.min(...zs), z1: Math.max(...zs) }; })
+    .sort((a, b) => a.z0 - b.z0);
+  const [hx0, hx1] = o.holeX;
+  const slab = (za, zb, xa, xb) => bx('plat', xb - xa, 1.2, zb - za, (xa + xb) / 2, TOP - .6, (za + zb) / 2);
+  let z = zr[0];
+  for (const h of holes) {
+    slab(z, h.z0, x0, x1);
+    slab(h.z0, h.z1, x0, hx0); slab(h.z0, h.z1, hx1, x1);
+    z = h.z1;
+  }
+  slab(z, zr[1], x0, x1);
+  // 白線と黄色い点字ブロックの線
+  for (const s of [-1, 1]) {
+    bx('white', .22, .06, len - 1, x + s * (w / 2 - .35), TOP + .03, cz, false);
+    bx('tactile', .45, .07, len - 3, x + s * (w / 2 - 1.05), TOP + .035, cz, false);
+  }
+  for (let zz = zr[0] + 20; zz < zr[1]; zz += 45) if (!holes.some(h => zz > h.z0 - 2 && zz < h.z1 + 2) && !(SID !== 1 && evs.some(e => Math.abs(zz - e.z) < 4))) pillarPos.push([o.pillarX ?? x, zz, TAG]);
+  // 線路：レールと枕木だけ（下のコンコースが見えるように床は張らない）
+  for (const t of tracks) {
+    TAG = t.on ? 'base' : 'off';
+    for (const r of [-.72, .72]) bx('rail', .14, .18, len + 30, t.x + r, TOP - 1.25, cz, false);
+    for (let zz = zr[0] - 14; zz < zr[1] + 14; zz += 3) sleeperPos.push([t.x, zz, TAG]);
+  }
+  for (const g of fac) {
+    TAG = use ? `${pre}st:${g.id}` : 'off';
+    if (g.st) stairs(o.stX, g.st[0], g.st[1]);
+    TAG = use ? `${pre}es:${g.id}` : 'off';
+    if (g.es) escalator(o.esX, g.es[0], g.es[1]);
+  }
+  for (const e of evs) { TAG = use ? `${pre}ev:${e.id}` : 'off'; elevator(o.evX + (e.dx || 0), e.z); }
+  TAG = 'base';
+}
+function stairs(x, zTop, zBot, h = TOP, y0 = 0) {
+  const n = 16, dz = (zBot - zTop) / n, w = 2.6, rise = h / n;
+  for (let i = 1; i <= n; i++) {
+    const y = y0 + h - i * rise;           // 段の奥の端での斜面の高さ
+    bx('stair', w, rise + .35, Math.abs(dz), x, y + .3 - (rise + .35) / 2, zTop + (i - .5) * dz, i % 2 === 0 || i === n);
+  }
+  for (const s of [-1, 1]) {
+    const a = V(x + s * (w / 2 + .15), y0 + h + .5, zTop), b = V(x + s * (w / 2 + .15), y0 + .5, zBot);
+    blk('stringer', new THREE.BoxGeometry(.3, 1.2, a.distanceTo(b)), along(a, b));
+  }
+}
+function escalator(x, zBot, zTop) {
+  const a = V(x, .25, zBot), b = V(x, TOP + .25, zTop), L = a.distanceTo(b);
+  blk('esc', new THREE.BoxGeometry(1.3, .5, L), along(a, b));
+  for (const s of [-1, 1]) blk('escSide', new THREE.BoxGeometry(.18, 1.1, L), along(a, b, V(s * .75, .55, 0)));
+  // 進む向きの矢印（流れて見える）
+  const pg = new THREE.PlaneGeometry(1.05, L);
+  pg.rotateX(-Math.PI / 2);
+  pg.applyMatrix4(along(a, b, V(0, .27, 0)));
+  blk('escArrow', pg, null, false);
+}
+function elevator(x, z, h = TOP, y0 = 0) {
+  bx('ev', 2.6, h + 3, 2.6, x, y0 + (h + 3) / 2, z);
+  bx('evTop', 2.9, .35, 2.9, x, y0 + h + 3.1, z);
+  // エレベーターのマーク（南と東の面、上の階と下の階）
+  for (const y of [y0 + h + 1.5, y0 + 1.6]) {
+    const s = new THREE.PlaneGeometry(1.7, 1.7); s.translate(0, 0, 1.31); blk('evMark', s, at(x, y, z), false);
+    const e = new THREE.PlaneGeometry(1.7, 1.7); e.translate(0, 0, 1.31); e.rotateY(Math.PI / 2); blk('evMark', e, at(x, y, z), false);
+  }
+}
+/* 列車（1号車が z の大きい側） */
+function train({ trackX, zFront, cars, carLen, width, height, zai, target, nose }) {
+  const cy = TOP - 1.1 + height / 2 + .3;
+  for (let k = 1; k <= cars; k++) {
+    const zc = zFront - (k - .5) * carLen, L = carLen - .7;
+    bx(zai ? 'zBody' : 'sBody', width, height, L, trackX, cy, zc);
+    bx(zai ? 'zRoof' : 'sRoof', width - .5, .3, L - .6, trackX, cy + height / 2 + .15, zc, false);
+    for (const s of [-1, 1]) {
+      bx(zai ? 'zWin' : 'sWin', .06, .7, L - 3, trackX + s * (width / 2 + .02), cy + .55, zc, false);
+      if (!zai) bx('sStripe', .06, .32, L, trackX + s * (width / 2 + .03), cy - .35, zc, false);
+    }
+    // 号車の番号札（屋根の上）
+    const pm = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6), new THREE.MeshBasicMaterial({ map: plateTex(k, k === target), transparent: true }));
+    pm.rotation.x = -Math.PI / 2; pm.position.set(trackX, cy + height / 2 + .35, zc);
+    add(pm);
+    if (k === 1 || k === cars) {   // 先頭の丸い鼻
+      const g = new THREE.SphereGeometry(1, 18, 10);
+      g.applyMatrix4(new THREE.Matrix4().makeScale(width / 2, height / 2, nose));
+      blk(zai ? 'zBody' : 'sBody', g, at(trackX, cy, k === 1 ? zc + L / 2 : zc - L / 2), false);
+    }
+  }
+}
+// 乗車口などの目印（小さな旗）。side＝旗を出す向き（x）
+function flag(p, side = 1) {
+  const v = P(...p);
+  bx('pole', .25, 7, .25, v.x + .3 * side, v.y + 3.5, v.z);
+  bx('pole', .12, 1.6, 2.2, v.x + .3 * side, v.y + 6.2, v.z - 1.1, false);
+}
+
+/* ================= 博多駅の模型（①・④） ================= */
+function buildHakata(sid) {
+  const one = sid === 1;
+  // 1F の地面（模型の台）
+  bx('ground', 460, 1, 640, -5, -12.5, 10, false);
+  // 中2F の通路（南＝中央乗換口へ、北＝北乗換口へ）と 2F の新幹線コンコース。形と長さは推定
+  const PS = one ? [17, 35] : [-30, 35], PN = one ? [-74, -46] : [-94, -46];
+  bx('conc', 90, .6, PS[1] - PS[0], -49, -.3, (PS[0] + PS[1]) / 2);
+  bx('conc', 90, .6, PN[1] - PN[0], -49, -.3, (PN[0] + PN[1]) / 2);
+  bx('conc', 8, .6, 17, 0, -.3, 25.5);
+  bx('conc', 8, .6, 18, 0, -.3, -61);
+  bx('conc2', 74, .6, 192, 41, -.3, 16);
+  for (const [[a, b], [g0, g1]] of [[PS, [17, 34]], [PN, [-70, -52]]]) {
+    wall(-94, a, -4, a); wall(-94, b, -4, b); wall(-94, a, -94, b);
+    if (g0 > a) wall(-4, a, -4, g0);
+    if (b > g1) wall(-4, g1, -4, b);
+  }
+  wall(-4, 17, 4, 17); wall(-4, 34, 4, 34); wall(-4, -70, 4, -70); wall(-4, -52, 4, -52);
+  wall(4, -80, 78, -80); wall(4, 112, 78, 112); wall(78, -80, 78, 112);
+  wall(4, -80, 4, -70); wall(4, -52, 4, 17); wall(4, 34, 4, 112);
+  label('中2F 通路（中央乗換口へ）', 'floor', P(-66, 0, 33), 6, true);
+  label('中2F 通路（北乗換口へ）', 'floor', P(-66, 0, -48), 6, true);
+  label('新幹線 改札内コンコース（2F）', 'floor', P(58, 0, 60), 6, true);
+  label('↑ 北九州・東京方面', 'dir', P(0, PL + 1, -200), 8, true);
+  label('熊本・佐賀方面 ↓', 'dir', P(0, PL + 1, 272), 8, true);
+  label('博多口（西）', 'dir', P(-112, 0, -20), 8, true);
+  label('筑紫口（東）', 'dir', P(96, 0, 40), 8, true);
+
+  // 新幹線中央乗換口と新幹線北乗換口：改札機の列（北乗換口の北寄りの広い通路が幅の広い改札・仮）
+  gateRow(C_GATE); gateRow(N_GATE);
+  label('新幹線中央乗換口', 'gate key', P(0, 2.2, 25.4), 2);
+  label('新幹線北乗換口', 'gate key', P(0, 2.2, -59), 2);
+
+  // ①だけ：駅弁の売り場（屋根付きの小さな店）と、ほかの売店
+  if (one) {
+    shop(SHOP.x, SHOP.z, 9, 8, 'shopBody', new THREE.MeshLambertMaterial({ map: awningTex }), '駅弁');
+    label('駅弁の売り場' + KARI, 'shop key', P(SHOP.x, 2.6, SHOP.z), 2);
+    TAG = 'off';
+    shop(60, -30, 8, 7, 'shopBody2', null, false);
+    shop(60, 40, 8, 7, 'shopBody2', null, false);
+    shop(14, 60, 7, 6, 'shopBody2', null, false);
+    TAG = 'base';
+  }
+
+  // ホーム：①は1・2番（1番）と11・12番（12番）、④は3・4番（4番）と15・16番（16番）を使う
+  const zu = one ? 0 : 1, su = one ? 0 : 2, zt = one ? 'a' : 'b', st = 'b';
+  ZAI.forEach((p, i) => {
+    const use = i === zu, f4 = !one && use;
+    platform({ x: p.x, w: ZW, zr: ZZ, fac: f4 ? Z4_FAC : Z_FAC, evs: f4 ? Z4_EVS : Z_EVS, use, pre: 'z',
+      tracks: ['a', 'b'].map(s => ({ x: zTrackX(p, s), on: use && s === zt })),
+      stX: zStairX(p.x), esX: zEscX(p.x), holeX: [p.x - 2.4, p.x + 3.0], evX: p.x });
+    if (use) label(`在来線 ${p.a}・${p.b}番のりば`, 'zai', P(p.x, PL + .3, one ? 62 : 44), 3);
+    else label(`${p.a}・${p.b}`, 'dim', P(p.x, PL + .3, 70), 7);
+  });
+  SHIN.forEach((p, i) => {
+    const use = i === su, f4 = !one && use;
+    platform({ x: p.x, w: SW, zr: SZ, fac: f4 ? S16_FAC : S_FAC, evs: f4 ? S16_EVS : S_EVS, use, pre: 's',
+      tracks: ['a', 'b'].map(s => ({ x: sTrackX(p, s), on: use && s === st })),
+      stX: sStairX(p.x), esX: sEscX(p.x), holeX: [p.x - 3.2, p.x + 2.3], evX: p.x });
+    if (use) label(`新幹線 ${p.a}・${p.b}番のりば`, 'shin', P(p.x, PL + .3, 125), 3);
+    else label(`${p.a}・${p.b}`, 'dim', P(p.x, PL + .3, 90), 7);
+  });
+
+  if (one) {
+    // リレーかもめ92号：1番のりば、787系8両（1号車が武雄温泉＝南側）
+    train({ trackX: zTrackX(zi, 'a'), ...KAMOME, width: 2.9, height: 3.5, zai: true, target: 4, nose: 2.2 });
+    // のぞみ28号：12番のりば、16両（1号車が博多南＝南側）。停止位置は博多止まりの図と同じと考える
+    train({ trackX: sTrackX(si, 'b'), ...NOZOMI, width: 3.4, height: 3.6, zai: false, target: 13, nose: 8 });
+    label(`リレーかもめ92号 4号車 <span class="num">11:42</span>着 · 1番`, 'zai key', P(zTrackX(zi, 'a'), PL + 1.9, carZ(KAMOME, 4)), 1);
+    label(`のぞみ28号 13号車 <span class="num">12:15</span>発${KARI_S}`, 'shin key', P(sTrackX(si, 'b'), PL + 1.9, carZ(NOZOMI, 13)), 1);
+    flag(DOOR_B);
+    label('乗車口はここ（1〜3列目の側）', 'hand', P(DOOR_B[0] - 3.5, PL + 2.6, DOOR_B[2]), 2, true);
+  } else {
+    // のぞみ17号：16番のりばに着く16両（1号車が南）。リレーかもめ33号：4番のりば、787系8両（1号車が南＝武雄温泉側）
+    train({ trackX: sTrackX(si4, 'b'), ...NOZOMI, width: 3.4, height: 3.6, zai: false, target: 12, nose: 8 });
+    train({ trackX: zTrackX(zi4, 'b'), ...KAMOME, width: 2.9, height: 3.5, zai: true, target: 4, nose: 2.2 });
+    label(`のぞみ17号 12号車 <span class="num">13:30</span>着 · 16番${KARI_S}`, 'shin key', P(sTrackX(si4, 'b'), PL + 1.9, carZ(NOZOMI, 12)), 1);
+    label(`リレーかもめ33号 4号車 <span class="num">13:54</span>発 · 4番`, 'zai key', P(zTrackX(zi4, 'b'), PL + 1.9, carZ(KAMOME, 4)), 1);
+    flag(DOOR4_Z);
+    label('乗車口はここ（4号車の5・6列目へ）', 'hand', P(DOOR4_Z[0] - 3.5, PL + 2.6, DOOR4_Z[2] - 3), 2, true);
+    label('降りるドア（17〜20列目の側）', 'hand', P(DOOR4_S[0] - 3.5, PL + 2.6, DOOR4_S[2] - 2), 4, true);
+  }
+}
+function hakataLabels(sid) {
+  const mid = a => (a[0] + a[1]) / 2;
+  if (sid === 1) {
+    const L = ROUTES.stairs.legs, zs = Z_FAC.find(f => f.id === L.stairName), se = S_FAC.find(f => f.id === L.escId);
+    const sev = S_EVS.find(e => e.id === '北');
+    const r = {
+      stairs: [
+        label(`階段（${zs.car}号車付近）`, 'stair', P(zStairX(zi.x) + 2.4, 3.2, mid(zs.st)), 4),
+        label(`エスカレーター（${se.car}号車${se.id === '北' ? 'の先' : '付近'}）${KARI_S}`, 'esc', P(sEscX(si.x) + 1.6, 3, mid(se.es)), 4)
+      ],
+      ev: [
+        label('エレベーター（7号車付近）', 'ev', P(zi.x, PL + 1.3, Z_EV), 3),
+        label(`エレベーター（12号車の先）${KARI_S}`, 'ev', P(si.x + sev.dx, PL + 1.3, sev.z), 3),
+        label('幅の広い改札' + KARI, 'gate', P(0, .6, N_GATE.wide), 4),
+        label('ベビーカーはエレベーターで', 'hand', P(zi.x - 7, PL + .4, Z_EV + 10), 5, true),
+        label('駅弁は大人1人が買って合流', 'hand buy', P(-10, .6, 40), 5, true),
+        label('ここで合流', 'hand', P(DOOR_B[0] + 9, PL + 1.2, DOOR_B[2] + 10), 2, true)
+      ]
+    };
+    label('ここで駅弁を選ぶ', 'hand', P(SHOP.x + 3, .9, SHOP.z + 9), 5, true);
+    return r;
+  }
+  const e = S16_FAC.find(f => f.id === '11号車'), zf = Z4_FAC.find(f => f.id === ROUTES.stairs.legs.stairName);
+  return {
+    stairs: [
+      label(`エスカレーター（${e.car}号車付近）${KARI_S}`, 'esc', P(sEscX(si4.x) + 1.6, 3, mid(e.es)), 4),
+      zf.es ? label(`エスカレーター（${zf.car}号車付近）${KARI_S}`, 'esc', P(zEscX(zi4.x) - 1.6, 3, mid(zf.es)), 4)
+            : label(`階段（${zf.car}号車付近）`, 'stair', P(zStairX(zi4.x) + 2.4, 3.2, mid(zf.st)), 4)
+    ],
+    ev: [
+      label('エレベーター（8号車付近）', 'ev', P(si4.x, PL + 1.3, S16_EVS[0].z), 3),
+      label('エレベーター（8号車付近）', 'ev', P(zi4.x, PL + 1.3, Z4_EVS[0].z), 3),
+      label('幅の広い改札' + KARI, 'gate', P(0, .6, N_GATE.wide), 4),
+      label('ベビーカーはエレベーターで', 'hand', P(S16_WALK_X + 6, PL + .4, 10), 5, true),
+      label('ホームを南へ、4号車の方へ', 'hand', P(Z4_WALK_X + 7, PL + .4, -40), 5, true)
+    ]
+  };
+}
+
+/* ================= 新大阪駅の模型（②・③） ================= */
+function buildOsaka(sid) {
+  const two = sid === 2;
+  bx('ground', 360, 1, 640, 20, -12.5, -10, false);
+  // 3F 新幹線改札内コンコース
+  const [cx0, cx1] = O_CONC.x, [cz0, cz1] = O_CONC.z;
+  bx('conc2', cx1 - cx0, .6, cz1 - cz0, (cx0 + cx1) / 2, -.3, (cz0 + cz1) / 2);
+  // 壁：改札のところはあける
+  const gaps = x => Object.values(O_GATES).filter(g => g.x === x).map(g => [g.z[0] - 1.2, g.z.at(-1) + 1.2]).sort((a, b) => a[0] - b[0]);
+  for (const x of [cx0, cx1]) {
+    let z = cz0;
+    for (const [a, b] of gaps(x)) { wall(x, z, x, a); z = b; }
+    wall(x, z, x, cz1);
+  }
+  wall(cx0, cz0, cx1, cz0); wall(cx0, cz1, cx1, cz1);
+  // 改札の外の通路（西の端が御堂筋線・北口側）。形は推定
+  const [px0, px1] = O_PASS.x, [pz0, pz1] = O_PASS.z;
+  bx('conc', px1 - px0, .6, pz1 - pz0, (px0 + px1) / 2, -.3, (pz0 + pz1) / 2);
+  wall(px0, pz0 + 6, px0, -174); wall(px0, -156, px0, pz1); wall(px1, pz0 + 6, px1, cz0); wall(px1, cz1, px1, pz1);
+  wall(px0, pz1, O_DN.x - 2, pz1); wall(O_DN.x + 2, pz1, px1, pz1);   // 西の端（階段のところはあける）
+  // 西の端から地上へ（階段とエレベーターの場所は推定）
+  TAG = 'odn:st'; stairs(O_DN.x, O_DN.top, O_DN.bot, -OG * VY, OG * VY);
+  TAG = 'odn:ev'; elevator(O_DEV.x, O_DEV.z, -OG * VY, OG * VY);
+  TAG = 'base';
+  label('新幹線 改札内コンコース（3F）', 'floor', P(40, 0, 60), 6, true);
+  label('改札の外の通路（3F）', 'floor', P(-16, 0, 130), 6, true);
+  label('御堂筋線・北口側（西の端）', 'dim', P(-16, 1.4, 190), 6);
+  label('← 京都・東京方面', 'dir', P(40, PL + 1, -232), 8, true);
+  label('岡山・博多方面 →', 'dir', P(40, PL + 1, 232), 8, true);
+  label('北側', 'dir', P(96, 0, 0), 8, true);
+  // 在来線のりば（下の階・参考）
+  TAG = 'off';
+  for (let i = 0; i < 5; i++) bx('plat', 150, 1, 8, -45, -8, -140 - i * 17);
+  TAG = 'base';
+  label('在来線 1〜10番のりば（下の階）', 'dim', P(-80, -2.2, -175), 7);
+  // 改札口（南口を使う。ほかは薄く）
+  for (const [name, g] of Object.entries(O_GATES)) {
+    TAG = name === '南口' ? 'gate:南口' : 'off';
+    gateRow(g, g.x);
+    label(name === '南口' ? '新幹線 南口' : name === '北口' ? '北口' : name, name === '南口' ? 'gate key' : 'dim', P(g.x, 2.2, g.lane + 1), name === '南口' ? 2 : 7);
+  }
+  TAG = 'off';
+  gateRow(mkGate(-165, px0), px0);
+  TAG = 'base';
+  label('東改札口（在来線）', 'dim', P(px0, 2, -165), 7);
+  label('東口', 'dim', P(-16, 1.4, -228), 7);
+  flag(EXIT4, -1);
+  label('4番口（御堂筋線・地上）', 'gate key', P(EXIT4[0], EXIT4[1] + 2.4, EXIT4[2]), 1);
+
+  // ホーム
+  const useIdx = two ? 4 : 1, useTrack = two ? 27 : 22;
+  OPL.forEach((q, i) => {
+    const use = i === useIdx;
+    platform({ x: q.x, w: q.w, zr: [-210, 210], fac: q.fac, evs: q.evs, use, pre: 's',
+      tracks: q.tracks.map((n, j) => ({ x: q.trackX[j], on: use && n === useTrack })),
+      stX: q.stX, esX: q.esX, holeX: q.holeX, evX: q.evX, pillarX: q.side ? q.x - q.side * 1.2 : q.x });
+    const nums = q.tracks.join('・');
+    if (use) label(`新幹線 ${nums}番のりば`, 'shin', P(q.x, PL + .3, 60), 3);
+    else label(nums, 'dim', P(q.x, PL + .3, 80), 7);
+  });
+
+  if (two) {
+    // のぞみ28号：27番に着く16両（1号車が西＝博多側）。N700S
+    train({ trackX: O27.trackX[0], ...OS, width: 3.4, height: 3.6, zai: false, target: 13, nose: 8 });
+    label(`のぞみ28号 13号車 <span class="num">14:43</span>着 · 27番${KARI_S}`, 'shin key', P(O27.trackX[0], PL + 1.9, oz(12.5)), 1);
+    label('降りるドア（1〜3列目の側）', 'hand', P(DOOR2[0] + 3, PL + 2.6, DOOR2[2] + 3), 2, true);
+  } else {
+    // のぞみ17号：22番から出る16両（1号車が西＝博多側）。売り場（お弁当・おみやげ）は改札内のルート上
+    train({ trackX: O22.trackX[1], ...OS, width: 3.4, height: 3.6, zai: false, target: 12, nose: 8 });
+    label(`のぞみ17号 12号車 <span class="num">11:02</span>発 · 22番${KARI_S}`, 'shin key', P(O22.trackX[1], PL + 1.9, oz(11.5)), 1);
+    flag(DOOR3);
+    label('乗車口はここ（17〜20列目の側）', 'hand', P(DOOR3[0] - 3.5, PL + 2.6, DOOR3[2] + 3), 2, true);
+    shop(O_SHOP.x, O_SHOP.z, 9, 8, 'shopBody', new THREE.MeshLambertMaterial({ map: awningTex }), '売り場');
+    label('売り場（お弁当・おみやげ）' + KARI, 'shop key', P(O_SHOP.x, 2.6, O_SHOP.z), 2);
+    label('ここでお弁当・おみやげ', 'hand', P(O_SHOP.x - 6, .9, O_SHOP.z + 10), 5, true);
+  }
+}
+function osakaLabels(sid) {
+  const q = sid === 2 ? O27 : O22, g = q.fac.find(f => f.car === 12), e = q.evs[0];
+  const mid = a => (a[0] + a[1]) / 2;
+  return {
+    stairs: [label(`階段（${g.car}号車付近）`, 'stair', P(q.stX + 2.4, 3.2, mid(g.st)), 4),
+      label('地上へ下りる階段' + KARI, 'stair', P(O_DN.x + 3, OG / 2, (O_DN.top + O_DN.bot) / 2), 4)],
+    ev: [
+      label('地上へのエレベーター' + KARI, 'ev', P(O_DEV.x - 3, OG / 2, O_DEV.z), 3),
+      label(`エレベーター（${e.id}付近）`, 'ev', P(q.evX, PL + 1.3, e.z), 3),
+      label('幅の広い改札' + KARI, 'gate', P(O_S.x, .6, O_S.wide), 4),
+      label('ベビーカーはエレベーターで', 'hand', P(q.evX + 6, PL + .4, e.z + 12), 5, true)
+    ]
+  };
+}
+
+/* まとめて描画オブジェクトにする（使いみちの札ごとに分けて、薄くできるようにする） */
+let PARTS = [];
+function dimMat(mat, on) {
+  mat.userData.base ||= mat.color.clone();
+  mat.color.copy(mat.userData.base);
+  if (on) mat.color.lerp(new THREE.Color(0xffffff), mat.map ? 0 : .72);
+  mat.transparent = on; mat.opacity = on ? .3 : 1; mat.depthWrite = !on;
+  mat.needsUpdate = true;
+}
+function setDim(part, on) {
+  if (part.edge) { part.obj.material = on ? edgeDim : edgeMat; return; }
+  dimMat(part.obj.material, on);
+  part.obj.castShadow = part.cast && !on;
+}
+function finalize() {
+  const m = new THREE.Matrix4();
+  for (const tag of ['base', 'off']) {
+    const sp = sleeperPos.filter(q => q[2] === tag), pp = pillarPos.filter(q => q[2] === tag);
+    const sl = new THREE.InstancedMesh(new THREE.BoxGeometry(2.5, .22, .5), new THREE.MeshLambertMaterial({ color: 0xd6cdbf }), sp.length);
+    sp.forEach(([x, z], i) => { m.makeTranslation(x, TOP - 1.45, z); sl.setMatrixAt(i, m); });
+    sl.receiveShadow = true;
+    const pil = new THREE.InstancedMesh(new THREE.CylinderGeometry(.5, .5, 1, 10), new THREE.MeshLambertMaterial({ color: MAT.pillar.c }), pp.length);
+    pp.forEach(([x, z], i) => { m.compose(V(x, (TOP - 1.2 - 12) / 2, z), new THREE.Quaternion(), V(1, TOP - 1.2 + 12, 1)); pil.setMatrixAt(i, m); });
+    for (const o of [sl, pil]) { add(o); if (tag === 'off') dimMat(o.material, true); }
+  }
+  for (const [k, geos] of Object.entries(BUCK)) {
+    const [key, tag] = k.split('|'), spec = MAT[key];
+    const mat = spec.basic ? new THREE.MeshBasicMaterial({ map: spec.map }) : new THREE.MeshLambertMaterial(spec.map ? { map: spec.map } : { color: spec.c });
+    const mesh = new THREE.Mesh(mergeGeometries(geos), mat);
+    mesh.receiveShadow = !!spec.rec;
+    const part = { obj: mesh, tag, cast: !!spec.cast };
+    setDim(part, tag === 'off');
+    PARTS.push(part); add(mesh);
+    geos.forEach(g => g.dispose());
+  }
+  for (const [tag, geos] of Object.entries(EDGES)) {
+    const part = { obj: new THREE.LineSegments(mergeGeometries(geos), edgeMat), tag, edge: 1 };
+    setDim(part, tag === 'off');
+    PARTS.push(part); add(part.obj);
+    geos.forEach(g => g.dispose());
+  }
+}
+function teardown() {
+  if (!root) return;
+  scene.remove(root);
+  root.traverse(o => {
+    o.geometry?.dispose();
+    const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+    for (const mt of ms) {
+      if (mt === edgeMat || mt === edgeDim) continue;
+      if (mt.map && !SHARED_TEX.has(mt.map)) mt.map.dispose();
+      mt.dispose();
+    }
+  });
+  for (const L of LBL) L.wrap.remove();
+}
+
+/* ================= ルートの帯 ================= */
+const LIFT = V(0, .8, 0);
+const res = new THREE.Vector2(innerWidth, innerHeight);
+const lm = o => new LineMaterial({ worldUnits: false, resolution: res, ...o });
+// ルートは主役：白いふちは常に最前面に重ね、見えている所は実線、構造物の陰は濃い朱の点線。
+// 薄くした部品（半透明）より後に描くよう、線も transparent にして renderOrder を上げる
+const matBorder = lm({ color: 0xffffff, linewidth: 17, depthWrite: false, depthTest: false, transparent: true });
+// 本線（ベビーカー組・階段ルート）は朱、駅弁の買い出し組は藍
+function trackMats(todo, done, hid) {
+  const m = {
+    todo: lm({ color: todo, linewidth: 10.5, depthWrite: false, transparent: true }),
+    done: lm({ color: done, linewidth: 11, depthWrite: false, transparent: true }),
+    hid: lm({ color: hid, linewidth: 7.5, dashed: true, dashSize: 2.6, gapSize: 1.7, depthWrite: false, transparent: true })
+  };
+  m.todo.depthFunc = m.done.depthFunc = THREE.LessEqualDepth;
+  m.hid.depthFunc = THREE.GreaterDepth;     // 床や屋根に隠れた所だけ点線で見せる
+  return m;
+}
+const TM = { main: trackMats(0xefb0a8, 0xd6504c, 0xc8403b), buyer: trackMats(0xaec3d8, 0x2d5f9a, 0x2d5f9a) };
+const lineMats = [matBorder, ...Object.values(TM).flatMap(Object.values)];
+let routeObjs = [];
+const flat = pts => pts.flatMap(p => [p.x, p.y, p.z]);
+function mkLine(pts, mat, order) {
+  const g = new LineGeometry(); g.setPositions(flat(pts));
+  const l = new Line2(g, mat); l.computeLineDistances(); l.renderOrder = order; l.frustumCulled = false;
+  scene.add(l); routeObjs.push(l); return l;
+}
+function buildTrack(R, M, lift) {
+  const pts = R.pathPts.map(p => p.clone().add(lift));
+  R.cum = [0];
+  for (let i = 1; i < pts.length; i++) R.cum.push(R.cum[i - 1] + pts[i].distanceTo(pts[i - 1]));
+  R.liftPts = pts;
+  mkLine(pts, matBorder, 5);
+  mkLine(pts, M.todo, 6);
+  R.doneFull = mkLine(pts, M.done, 7);
+  R.donePart = mkLine([pts[0], pts[0].clone().add(V(0, 0, .01))], M.done, 7);
+  mkLine(pts, M.hid, 8);
+}
+function buildRouteLines(R) {
+  for (const o of routeObjs) { scene.remove(o); o.geometry.dispose(); }
+  routeObjs = [];
+  buildTrack(R, TM.main, LIFT);
+  if (R.buyer) buildTrack(R.buyer, TM.buyer, V(0, 1.1, 0));   // 重なる所は少し上に
+}
+const _a = new THREE.Vector3();
+function setDone(R, s) {
+  // s（表示上の距離）までを濃い朱にする
+  let k = 0;
+  while (k < R.cum.length - 1 && R.cum[k + 1] <= s) k++;
+  const { doneFull, donePart } = R;
+  doneFull.geometry.instanceCount = k;
+  if (k >= R.cum.length - 1 || s <= 0) { donePart.visible = false; return; }
+  const a = R.liftPts[k], b = R.liftPts[k + 1];
+  const t = (s - R.cum[k]) / (R.cum[k + 1] - R.cum[k]);
+  _a.copy(a).lerp(b, t);
+  const buf = donePart.geometry.attributes.instanceStart.data;
+  buf.array.set([a.x, a.y, a.z, _a.x, _a.y, _a.z]);
+  buf.needsUpdate = true;
+  donePart.visible = t > 0;
+}
+
+// 歩く人（ベビーカーのルートではベビーカー）
+const ICON = {
+  walk: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="13" cy="4" r="2.4" fill="#d6504c"/><path d="M12.5 7.5l-3 4.5 1.5 1.2 1.7-2.2.6 3.4-2.6 6.1 2 .8 2.4-5.6 2.3 5.6 2-.8-2.6-6.6-.6-3.6 2.3 2.1 1.6-1.3-3.6-3.4z" fill="#d6504c"/></svg>',
+  buyer: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="13" cy="4" r="2.4" fill="#2d5f9a"/><path d="M12.5 7.5l-3 4.5 1.5 1.2 1.7-2.2.6 3.4-2.6 6.1 2 .8 2.4-5.6 2.3 5.6 2-.8-2.6-6.6-.6-3.6 2.3 2.1 1.6-1.3-3.6-3.4z" fill="#2d5f9a"/></svg>',
+  ev: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5h3l1.3 3.2H20l-2.1 6H9.3z" fill="#d6504c"/><path d="M8.5 15.8h9.2" stroke="#d6504c" stroke-width="1.6"/><circle cx="9.5" cy="19.2" r="2" fill="none" stroke="#d6504c" stroke-width="1.8"/><circle cx="16.5" cy="19.2" r="2" fill="none" stroke="#d6504c" stroke-width="1.8"/></svg>'
+};
+const walkerWrap = document.createElement('div');
+walkerWrap.className = 'lw plain';
+const walkerEl = document.createElement('div');
+walkerEl.className = 'walker';
+walkerWrap.appendChild(walkerEl);
+const walker = new CSS2DObject(walkerWrap);
+scene.add(walker);
+const foot = new THREE.Mesh(new THREE.CircleGeometry(1.4, 24), new THREE.MeshBasicMaterial({ color: 0xd6504c, transparent: true, opacity: .28, depthWrite: false }));
+foot.rotation.x = -Math.PI / 2;
+foot.renderOrder = 9;
+scene.add(foot);
+// 駅弁の買い出し組（大人1人）
+const walker2Wrap = document.createElement('div');
+walker2Wrap.className = 'lw plain';
+const walker2El = document.createElement('div');
+walker2El.className = 'walker b';
+walker2El.innerHTML = ICON.buyer;
+walker2Wrap.appendChild(walker2El);
+const walker2 = new CSS2DObject(walker2Wrap);
+scene.add(walker2);
+const foot2 = new THREE.Mesh(foot.geometry, new THREE.MeshBasicMaterial({ color: 0x2d5f9a, transparent: true, opacity: .28, depthWrite: false }));
+foot2.rotation.x = -Math.PI / 2; foot2.renderOrder = 9;
+scene.add(foot2);
+
+/* ================= 時間の進み方 ================= */
+function sampleAt(R, t) {
+  t = Math.max(0, Math.min(R.T, t));
+  let i = R.legs.findIndex(L => t < L.t0 + L.dur - 1e-9);
+  if (i < 0) i = R.legs.length - 1;
+  const L = R.legs[i];
+  const local = t - L.t0;
+  const w = L.waitSec ? Math.min(1, local / L.waitSec) : 1;
+  const f = L.moveSec ? Math.max(0, Math.min(1, (local - L.waitSec) / L.moveSec)) : 1;
+  let clock = TRIP.arr;
+  for (let j = 0; j < i; j++) clock += R.legs[j].waitMin + R.wmin(R.legs[j].walk);
+  clock += L.waitMin * w + R.wmin(L.walk) * f;
+  if (R.K) clock = TRIP.arr + Math.min(t, R.T) / R.K;
+  let pos = null, s = L.d0;
+  if (L.stop) pos = P(...L.at);
+  else {
+    let rem = L.len * f, d = L.d0;
+    for (const e of L.edges) {
+      if (rem <= e.rl + 1e-6) { const u = e.rl ? rem / e.rl : 0; const q = e.a.clone().lerp(e.b, u); pos = P(q.x, q.y, q.z); s = d + e.dl * u; break; }
+      rem -= e.rl; d += e.dl;
+    }
+    if (!pos) { const e = L.edges[L.edges.length - 1]; pos = P(e.b.x, e.b.y, e.b.z); s = L.d0 + L.dlen; }
+  }
+  return { i, L, pos, s, clock };
+}
+
+/* ================= 右の一覧と比較 ================= */
+const $ = id => document.getElementById(id);
+const list = $('list');
+const KIND = { stair: '階段', esc: 'エスカレーター', ev: 'エレベーター', gate: '改札', shop: '買い物' };
+const m10 = m => `約${Math.round(m / 10) * 10}m`;
+const metric = R => R.buyer ? `2組で・${hhmm(R.meet)}そろう` : `${m10(R.walk)}・約${Math.ceil(R.kid + R.waits)}分`;
+function renderCmp() {
+  const A = ROUTES.stairs, B = ROUTES.ev, C = B.buyer;
+  const on = k => curKey === k ? ' class="on"' : '';
+  const min = x => `${Math.ceil(x)}分`, at = x => hhmm(x), sl = x => `${Math.floor(x)}分`;
+  /* 予定（チェックイン開始）より遅く着くときは、余裕のマイナスではなく「開始の何分後に着くか」で書く（着く時刻は分を切り捨てて表示） */
+  const byPlan = t => Math.floor(t) > TRIP.plan ? `<span class="late">チェックイン開始の${Math.floor(t) - TRIP.plan}分後に着く</span>` : sl(TRIP.plan - t);
+  if (C) {
+    const row = (h, a, b, c) => `<tr><td>${h}</td><td${on('stairs')}>${a}</td><td${on('ev')}>${b}</td><td${on('ev')}>${c}</td></tr>`;
+    $('cmp').innerHTML =
+      `<thead><tr><th scope="col">くらべる</th><th scope="col"${on('stairs')} data-r="stairs">階段・エスカ</th>` +
+      `<th scope="colgroup" colspan="2"${on('ev')} data-r="ev">エレベーター</th></tr>` +
+      `<tr class="sub"><th></th><th${on('stairs')}>全員</th><th${on('ev')}>ベビーカー</th><th${on('ev')}>買い出し</th></tr></thead><tbody>` +
+      row('歩く距離', m10(A.walk).slice(1), m10(B.walk).slice(1), m10(C.walk).slice(1)) +
+      row('歩く時間', min(A.kid), min(B.kid), `${min(C.kid)}<small>大人</small>`) +
+      row('EV待ち', '—', min(B.waits), '—') +
+      row('駅弁', `${SHOP_MIN}分`, '—', `${SHOP_MIN}分`) +
+      row('乗車口に着く', at(A.arrive), at(B.arrive), at(C.arrive)) +
+      row('発車まで余裕', sl(A.slack), sl(B.slack), sl(C.slack)) +
+      `<tr class="meet"><td>全員そろう</td><td${on('stairs')}>${at(A.meet)}</td><td colspan="2"${on('ev')}>${at(B.meet)}（余裕${sl(TRIP.dep - B.meet)}）</td></tr></tbody>`;
+  } else {
+    const row = (h, a, b, cls = '') => `<tr${cls}><td>${h}</td><td${on('stairs')}>${a}</td><td${on('ev')}>${b}</td></tr>`;
+    const hotel = CFG.mode === 'hotel';
+    $('cmp').innerHTML =
+      `<thead><tr><th scope="col">くらべる</th><th scope="col"${on('stairs')} data-r="stairs">階段・エスカ</th><th scope="col"${on('ev')} data-r="ev">エレベーター</th></tr></thead><tbody>` +
+      row('歩く距離', m10(A.walk).slice(1), m10(B.walk).slice(1)) +
+      row('歩く時間', min(A.kid), min(B.kid)) +
+      row('EV待ち', '—', min(B.waits)) +
+      (A.stops ? row('売り場', `${SHOP_MIN}分`, `${SHOP_MIN}分`) : '') +
+      (hotel
+        ? row('4番口に着く', at(A.arrive), at(B.arrive)) + row('ホテル着の目安', at(A.hotel), at(B.hotel), ' class="meet"') +
+          row(`予定${hhmm(TRIP.plan)}まで余裕`, byPlan(A.hotel), byPlan(B.hotel))
+        : row('乗車口に着く', at(A.arrive), at(B.arrive)) + row('発車まで余裕', sl(A.slack), sl(B.slack), ' class="meet"')) +
+      '</tbody>';
+  }
+  $('cmp').querySelectorAll('th[data-r]').forEach(th => th.addEventListener('click', () => chooseRoute(th.dataset.r)));
+}
+function renderLegs(P, start) {
+  P.legs.forEach((L, i) => {
+    const li = document.createElement('li');
+    const tag = KIND[L.kind] ? `<span class="kt ${L.kind}">${KIND[L.kind]}</span>` : '';
+    const d = L.stop ? `約${SHOP_MIN}分` : L.ride ? `待ち約${EV_WAIT_MIN}分` : Math.round(L.len) + 'm';
+    li.innerHTML = `<span class="i num">${start + i + 1}</span><span class="t">${L.name}${tag}${L.warn === 1 ? KARI : L.warn ? KARI_S : ''}<small>${L.sub}</small></span><span class="d num">${d}</span>`;
+    li.addEventListener('click', () => jumpTo(P, i));
+    list.appendChild(li);
+    L.li = li;
+  });
+}
+function sumNote(R) {
+  const adult = `大人の1.5倍で計算（大人だけなら約${Math.ceil(R.adult)}分）。`;
+  const ev = R.waits ? `エレベーター待ち${R.waits}分込みで、` : adult;
+  if (SID === 1) return R.buyer
+    ? `ベビーカー組は北乗換口からそのまま12番へ（エレベーター待ち${R.waits}分込みで<b>${hhmm(R.arrive)}ごろ</b>着）。` +
+      `大人1人が中央の売り場で駅弁を買い、<b>${hhmm(R.buyer.arrive)}ごろ</b>13号車の乗車口で合流。発車まで<b>約${Math.floor(TRIP.dep - R.meet)}分</b>の余裕です。`
+    : `大人の1.5倍で計算（大人だけなら約${Math.ceil(R.adult)}分）。駅弁に${SHOP_MIN}分使っても、ホーム到着は<b>${hhmm(R.arrive)}ごろ</b>。発車まで<b>約${Math.floor(R.slack)}分</b>の余裕です。`;
+  if (SID === 2) return `${ev}4番口に<b>${hhmm(R.arrive)}ごろ</b>。ホテルまでは徒歩約5分（子ども連れで約${HOTEL_MIN}分）なので、<b>ホテル着の目安は${hhmm(R.hotel)}ごろ</b>（しおりの予定 ${hhmm(TRIP.plan)}）。`;
+  if (SID === 3) return `${R.waits ? '' : adult}10:30ごろ駅に着いて、売り場に${SHOP_MIN}分${R.waits ? `、エレベーター待ちに${R.waits}分` : ''}使っても、12号車の乗車口に<b>${hhmm(R.arrive)}ごろ</b>。発車まで<b>約${Math.floor(R.slack)}分</b>の余裕です。`;
+  return `寄り道なし。${ev}4号車の乗車口（3号車のドア）に<b>${hhmm(R.arrive)}ごろ</b>。発車まで<b>約${Math.floor(R.slack)}分</b>の余裕です。`;
+}
+function renderList(R) {
+  list.innerHTML = '';
+  const head = (txt, cls) => { const li = document.createElement('li'); li.className = 'grp ' + cls; li.innerHTML = txt; list.appendChild(li); };
+  if (R.buyer) head(`ベビーカー組 · 北回り <span class="num">${hhmm(R.arrive)}</span>ごろ着`, 'g1');
+  renderLegs(R, 0);
+  if (R.buyer) {
+    head(`駅弁の買い出し組（大人1人） · 中央回り <span class="num">${hhmm(R.buyer.arrive)}</span>ごろ着`, 'g2');
+    renderLegs(R.buyer, R.legs.length);
+  }
+  $('total').innerHTML = `${m10(R.walk)}`.replace('m', '<small>m</small>');
+  $('walk').textContent = R.buyer ? `ベビーカー 徒歩約${Math.ceil(R.kid)}分` : `子ども連れ 徒歩約${Math.ceil(R.kid)}分`;
+  $('sumNote').innerHTML = sumNote(R);
+  $('eyebrow').textContent = `${R.label}のルート`;
+}
+
+/* ================= 再生 ================= */
+let curKey = 'stairs', R, RL = {};
+let speed = 1, playing = false, animT = 0, followCam = true, lastI = -1, ended = false, ctrlOpen = false;
+const mq = matchMedia('(max-width: 760px)');
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const playBtn = $('play');
+function setPlaying(p) {
+  playing = p;
+  playBtn.textContent = p ? '一時停止' : (animT >= R.TT - 1e-6 ? 'もう一度 出発' : (animT > 0 ? '再開' : '出発進行'));
+  document.body.classList.toggle('compact', p && mq.matches && !ctrlOpen);
+  layout();
+}
+function setRoute(k) {
+  curKey = k; R = ROUTES[k];
+  $('rA').setAttribute('aria-pressed', String(k === 'stairs'));
+  $('rB').setAttribute('aria-pressed', String(k === 'ev'));
+  $('bnote').hidden = k !== 'ev';
+  walkerEl.innerHTML = k === 'ev' ? ICON.ev : ICON.walk;
+  for (const [key, arr] of Object.entries(RL)) for (const L of arr) L.o.visible = key === k || (key === 'stairs' && !!R.buyer);
+  walker2.visible = foot2.visible = !!R.buyer;
+  for (const part of PARTS) if (part.tag !== 'base' && part.tag !== 'off') setDim(part, !R.use.has(part.tag));
+  buildRouteLines(R);
+  renderList(R); renderCmp();
+  animT = 0; lastI = -1; ended = false; followWho = 'a';
+  setPlaying(false);
+  frame(0);
+}
+function chooseRoute(k) {
+  if (k === curKey) return;
+  setRoute(k); homeView(true);
+  toast(k === 'ev' ? 'エレベーターだけで行くルートに切り替えました' : '階段・エスカレーターのルートに切り替えました', 2400);
+}
+function markLegs(P, s) {
+  const done = animT >= P.T - 1e-6, started = playing || animT > 0;
+  P.legs.forEach((L, i) => {
+    L.li.classList.toggle('now', !done && started && i === s.i);
+    L.li.classList.toggle('done', done || i < s.i);
+  });
+}
+function updateUI(s, sb, f) {
+  const t = s.clock;
+  if (CFG.mode === 'hotel') {
+    $('cd').textContent = hhmm(R.hotel);
+    $('clk').textContent = hhmm(t);
+  } else if (!realMode) {
+    const left = Math.max(0, (TRIP.dep - t) * 60);
+    $('cd').textContent = `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`;
+    $('clk').textContent = hhmm(t);
+  }
+  $('tbar').style.width = Math.min(100, (t - TRIP.arr) / (R.end - TRIP.arr) * 100).toFixed(1) + '%';
+  markLegs(R, s);
+  if (sb) markLegs(R.buyer, sb);
+  // 追いかけている組（f）の区間が変わったら知らせる
+  const done = animT >= R.TT - 1e-6, started = playing || animT > 0, key = f.who + f.i;
+  if (key !== lastI && started && !done) {
+    lastI = key;
+    const who = R.buyer ? (f.who === 'b' ? '買い出し組：' : 'ベビーカー組：') : '';
+    if (playing) {
+      if (f.L.kind === 'shop') toast(SID === 1 ? `${who}駅弁の売り場。ここで選んで買います（目安${SHOP_MIN}分）` : `売り場。ここでお弁当・おみやげを選びます（目安${SHOP_MIN}分）`, 2600);
+      else if (f.L.kind === 'ev') toast(`${who}エレベーターを待ちます（目安${EV_WAIT_MIN}分）`, 2200);
+      else if (f.L.kind === 'gate' && curKey === 'ev' && f.who === 'a') toast(`${R.buyer ? 'ベビーカー組：' : ''}幅の広い改札を通ります`, 2000);
+    }
+    f.L.li.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
+  }
+}
+playBtn.addEventListener('click', () => {
+  if (!playing && animT >= R.TT - 1e-6) { animT = 0; lastI = -1; }
+  if (!playing) ctrlOpen = false;
+  followCam = true; ended = false;
+  setPlaying(!playing);
+  if (playing) toast('');
+});
+/* しおりに戻る：開く前にいたしおりの画面へ（しおりが sessionStorage に残した場所）。直接開いたときは、のりものタブの「駅の乗り換え」へ */
+$('back').addEventListener('click', e => {
+  let from = null;
+  try { from = sessionStorage.getItem('xferFrom'); sessionStorage.removeItem('xferFrom'); } catch (err) { /* 使えないときは既定の行き先 */ }
+  if (!from) return;
+  e.preventDefault();
+  let ref = null;
+  try { ref = new URL(document.referrer); } catch (err) { /* noop */ }
+  if (ref && ref.origin === location.origin && !/transfer\.html$/.test(ref.pathname) && history.length > 1) history.back();
+  else location.href = './' + from;
+});
+$('again').addEventListener('click', () => { animT = 0; lastI = -1; ended = false; ctrlOpen = false; homeView(true); followCam = true; setPlaying(true); toast(''); });
+document.querySelectorAll('.speed button').forEach(b => b.addEventListener('click', () => {
+  speed = +b.dataset.sp;
+  document.querySelectorAll('.speed button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+}));
+document.querySelectorAll('.route button').forEach(b => b.addEventListener('click', () => chooseRoute(b.dataset.r)));
+function jumpTo(Pt, i) {
+  animT = Pt.legs[i].t0 + (Pt.legs[i].waitSec ? 0 : 1e-4);
+  lastI = -1; ended = false; followWho = Pt === R ? 'a' : 'b';
+  setPlaying(false); followCam = true;
+  const s = frame(0);
+  const f = followWho === 'b' && s.sb ? s.sb : s;
+  focusLeg(f.L, f.pos);
+  goal.target.copy(f.pos);
+}
+let followWho = 'a';
+
+/* ---- 画面の配置（スマホの畳み・シート・凡例） ---- */
+const legsEl = $('legs'), tgl = $('tgl'), legendEl = $('legend');
+tgl.addEventListener('click', () => {
+  const c = legsEl.classList.toggle('closed');
+  setMenu(false);
+  tgl.setAttribute('aria-expanded', String(!c)); tgl.textContent = c ? '区間・比較' : '閉じる';
+  layout();
+});
+const setLegend = open => { legendEl.dataset.open = String(open); $('legendBtn').setAttribute('aria-expanded', String(open)); };
+$('legendBtn').addEventListener('click', () => setLegend(legendEl.dataset.open !== 'true'));
+$('legendClose').addEventListener('click', () => setLegend(false));
+$('more').addEventListener('click', () => { ctrlOpen = true; document.body.classList.remove('compact'); layout(); });
+/* 「…」そのほかの操作：スマホでは、再生速度・もう一度・経路の説明をここにしまう（パソコンの幅では元の場所に戻す） */
+const xmBox = $('xmenuBox'), xmBtn = $('xmenu');
+const MOVE = ['fromto', 'dnote', 'bnote', 'again'].map(id => $(id)).concat([document.querySelector('.speed')]);
+const HOME = MOVE.map(el => [el.parentNode, el.nextSibling]);
+function placeUI() {
+  if (mq.matches) MOVE.forEach(el => $('xmSlot').appendChild(el));
+  else MOVE.forEach((el, i) => HOME[i][0].insertBefore(el, HOME[i][1] && HOME[i][1].parentNode === HOME[i][0] ? HOME[i][1] : null));
+  if (!mq.matches) setMenu(false);
+}
+function setMenu(open) {
+  xmBox.hidden = !open; xmBtn.setAttribute('aria-expanded', String(open));
+  $('xmLegend').textContent = legendEl.dataset.open === 'true' ? '凡例を閉じる' : '凡例を表示';
+}
+xmBtn.addEventListener('click', () => { const o = xmBox.hidden; if (o) setLegend(false); setMenu(o); });
+$('xmClose').addEventListener('click', () => setMenu(false));
+$('xmLegend').addEventListener('click', () => { setLegend(legendEl.dataset.open !== 'true'); setMenu(false); });
+$('again').addEventListener('click', () => setMenu(false));
+function applyMQ() {
+  legsEl.classList.toggle('closed', mq.matches);
+  setLegend(!mq.matches);
+  tgl.textContent = '区間・比較';
+}
+applyMQ(); placeUI();
+mq.addEventListener('change', () => { applyMQ(); placeUI(); layout(); });
+
+// 操作パネルに隠れない所の中心を、模型の中心にする
+function layout() {
+  const W = innerWidth, H = innerHeight;
+  const hd = document.querySelector('.train').getBoundingClientRect();
+  const cr = $('ctrl').getBoundingClientRect(), lr = legsEl.getBoundingClientRect();
+  let x0, x1, y0, y1;
+  if (mq.matches) {
+    /* 下の1列（出発進行・ルート）は距離の札のすぐ上。図は、上の札と下の1列のあいだの、場面のボタンを除いた所に合わせる */
+    const legsTop = legsEl.classList.contains('closed') ? lr.top : H - (parseFloat(getComputedStyle(legsEl).bottom) || 36) - (legsEl.querySelector('.sum').offsetHeight || 60);
+    document.body.style.setProperty('--bar-b', Math.round(H - legsTop + 8) + 'px');
+    const barTop = playBtn.getBoundingClientRect().top || legsTop - 54;
+    const sc = $('scenes').getBoundingClientRect();
+    x0 = 0; x1 = W - (sc.width ? sc.width + 14 : 0); y0 = hd.bottom; y1 = Math.min(barTop, lr.top);
+    $('toast').style.bottom = (H - barTop + 10) + 'px';
+  }
+  else { x0 = cr.right; x1 = lr.left; y0 = hd.bottom; y1 = H - 30; $('toast').style.bottom = ''; }
+  /* 横長の画面で高さが足りないときは、凡例を操作パネルの下に収めて中をスクロールさせる */
+  legendEl.style.maxHeight = mq.matches ? '' : Math.max(120, legendEl.getBoundingClientRect().bottom - cr.bottom - 10) + 'px';
+  legendEl.style.overflowY = mq.matches ? '' : 'auto';
+  FREE = { x0, x1, y0, y1 };
+  camera.setViewOffset(W, H, W / 2 - (x0 + x1) / 2, H / 2 - (y0 + y1) / 2, W, H);
+  camera.updateProjectionMatrix();
+}
+
+const toastEl = $('toast');
+let toastTimer;
+function toast(msg, ms = 4200) {
+  clearTimeout(toastTimer);
+  toastEl.textContent = msg; toastEl.style.opacity = msg ? 1 : 0;
+  if (msg) toastTimer = setTimeout(() => (toastEl.style.opacity = 0), ms);
+}
+
+/* ---- 視点：全体 → 区間ごとに追いかける → 最後に全体へ戻る ---- */
+const goal = { on: false, target: V(0, 0, 0), dist: 200, k: .05 };
+const homeOf = () => { const h = innerWidth / innerHeight < .9 ? CFG.home.port : CFG.home.land; h.dir.normalize(); return h; };
+const camDir = V(0, 1, 0);
+function homeView(animate = false) {
+  const h = homeOf();
+  camera.fov = h.fov; camera.updateProjectionMatrix();
+  camDir.copy(h.dir);
+  if (animate) { Object.assign(goal, { on: true, dist: h.dist, k: .045 }); goal.target.copy(h.target); return; }
+  goal.on = false;
+  controls.target.copy(h.target);
+  camera.position.copy(h.target).addScaledVector(h.dir, h.dist);
+  controls.update();
+}
+function focusLeg(L, pos) {
+  // 今の区間が収まる距離まで寄る
+  const pts = L.stop ? [pos] : L.edges.flatMap(e => [P(e.a.x, e.a.y, e.a.z), P(e.b.x, e.b.y, e.b.z)]);
+  const size = new THREE.Box3().setFromPoints(pts).getSize(V(0, 0, 0)).length();
+  const portrait = innerWidth / innerHeight < .9;
+  goal.on = true; goal.k = .04;
+  goal.dist = THREE.MathUtils.clamp(70 + size * 1.25, 85, 190) * (portrait ? 1.45 : 1);
+  camDir.copy(camera.position).sub(controls.target).normalize();
+  if (camDir.y < .45) camDir.copy(homeOf().dir);
+}
+controls.addEventListener('start', () => { followCam = false; goal.on = false; });
+
+/* ---- 当日の実時刻 ---- */
+let realMode = false;
+function jstNow() { const d = new Date(); return new Date(d.getTime() + (d.getTimezoneOffset() + 540) * 60000); }
+function updateDayLine() {
+  const n = jstNow();
+  const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+  const nowMin = n.getHours() * 60 + n.getMinutes() + n.getSeconds() / 60;
+  realMode = !!TRIP.dep && today === TRIP.day && nowMin >= TRIP.arr - 30 && nowMin < TRIP.dep && !playing && animT === 0;
+  if (realMode) {
+    const left = (TRIP.dep - nowMin) * 60;
+    $('cd').textContent = `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`;
+    $('clk').textContent = hhmm(nowMin);
+    $('clkLbl').textContent = 'いま';
+  } else $('clkLbl').textContent = '模擬時刻';
+}
+setInterval(updateDayLine, 1000);
+
+/* ---- 1コマ分の更新 ---- */
+let lastS;
+function endToast() {
+  if (CFG.mode === 'hotel') return `4番口に到着（${hhmm(R.meet)}ごろ）。ホテル着の目安は${hhmm(R.hotel)}ごろです`;
+  const left = Math.floor(TRIP.dep - R.meet);
+  if (R.buyer) return `全員が13号車の乗車口にそろいました（${hhmm(R.meet)}ごろ）。発車まで約${left}分`;
+  return `${CFG.goal}に到着（${hhmm(R.meet)}ごろ）。発車まで約${left}分`;
+}
+function frame(dt) {
+  if (playing) {
+    animT = Math.min(R.TT, animT + dt * speed);
+    if (animT >= R.TT) {
+      setPlaying(false);
+      toast(endToast(), 6000);
+      if (followCam) { ended = true; setTimeout(() => { if (ended && followCam && !playing) homeView(true); }, 1600); }
+    }
+  }
+  const s = sampleAt(R, animT); s.who = 'a';
+  const sb = R.buyer ? sampleAt(R.buyer, animT) : null;
+  if (sb) { sb.who = 'b'; s.sb = sb; s.clock = TRIP.arr + animT / R.K; }
+  // 再生中は、先に着く組が着くまでその組を、そのあとはもう一方を追いかける
+  if (playing && sb) followWho = animT < R.T ? 'a' : 'b';
+  const f = sb && followWho === 'b' ? sb : s;
+  updateUI(s, sb, f);
+  setDone(R, s.s);
+  walker.position.copy(s.pos).add(LIFT);
+  foot.position.copy(s.pos).add(V(0, .45, 0));
+  if (sb) {
+    setDone(R.buyer, sb.s);
+    walker2.position.copy(sb.pos).add(LIFT);
+    foot2.position.copy(sb.pos).add(V(0, .5, 0));
+  }
+  if (playing && followCam) {
+    if (f.who + f.i !== lastS || !goal.on) focusLeg(f.L, f.pos);
+    goal.target.copy(f.pos); goal.target.y = Math.min(goal.target.y, TOP * .6);
+  }
+  lastS = f.who + f.i;
+  return s;
+}
+
+/* ================= 場面の切り替え ================= */
+function buildScene(sid) {
+  teardown();
+  SID = sid; CFG = SCN[sid]; TRIP = CFG.trip;
+  root = new THREE.Group(); scene.add(root);
+  BUCK = {}; EDGES = {}; LBL = []; PARTS = []; sleeperPos = []; pillarPos = []; TAG = 'base';
+  ROUTES = makeRoutes();
+  if (CFG.station === 'hakata') { buildHakata(sid); RL = hakataLabels(sid); }
+  else { buildOsaka(sid); RL = osakaLabels(sid); }
+  finalize();
+  sun.target.position.copy(CFG.sun); sun.position.copy(CFG.sun).add(V(-80, 260, 180));
+  // 画面の文字
+  const [k, n, sub] = CFG.head;
+  $('hKind').textContent = (mq.matches ? ['', '①往路・博多', '②往路・新大阪', '③復路・新大阪', '④復路・博多'][sid] + '　' : '') + k; $('hName').textContent = n; $('hSub').innerHTML = sub;
+  $('cdLbl').textContent = CFG.mode === 'hotel' ? 'ホテル着の目安' : '発車まで';
+  $('fromto').innerHTML = CFG.fromto;
+  $('dnote').textContent = CFG.dnote || ''; $('dnote').hidden = !CFG.dnote;
+  $('rmA').textContent = metric(ROUTES.stairs);
+  $('rmB').textContent = metric(ROUTES.ev);
+  document.querySelectorAll('#scenes button').forEach(b => b.setAttribute('aria-current', String(+b.dataset.s === sid)));
+  document.querySelectorAll('#legend li[data-s]').forEach(li => { li.hidden = !li.dataset.s.includes(CFG.legend); });
+  document.title = ['', '①往路・博多', '②往路・新大阪', '③復路・新大阪', '④復路・博多'][sid] + '｜駅の乗り換え（3D）｜旅のしおり';
+  toast('');
+  ctrlOpen = false;
+  setRoute('stairs');
+  homeView();
+  layout();
+  updateDayLine();
+}
+document.querySelectorAll('#scenes button').forEach(b => b.addEventListener('click', () => {
+  const s = +b.dataset.s;
+  if (s === SID) return;
+  try { history.replaceState(null, '', '#s' + s); } catch (e) { /* 表示できない所では URL は変えない */ }
+  buildScene(s);
+}));
+
+/* ---- 描画ループと軽量化 ---- */
+const clock = new THREE.Clock();
+let frames = 0, acc = 0, warm = 0, degraded = false, dcl = 0;
+const perfEl = $('perf'), shBtn = $('shadowBtn');
+function setShadow(on) {
+  sun.castShadow = on;
+  shBtn.textContent = on ? '影 ON' : '影 OFF'; shBtn.setAttribute('aria-pressed', String(on));
+}
+shBtn.addEventListener('click', () => setShadow(!sun.castShadow));
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  renderer.setSize(innerWidth, innerHeight);
+  labelRenderer.setSize(innerWidth, innerHeight);
+  res.set(innerWidth, innerHeight);
+  for (const m of lineMats) m.resolution.copy(res);
+  layout();
+});
+
+buildScene(+((location.hash.match(/s([1-4])/) || [])[1] || 1));
+
+/* ---- 初回ガイド：主なボタンを1つずつ指して、何をするものかを一言で。一度見たら次からは出さない（トップのガイドとは別に覚える）。「？」で見直し ---- */
+const XGUIDE = [
+  { el: '#scenes', title: '場面の切り替え', text: '往路・復路の、博多と新大阪の4つの場面を切り替えます。' },
+  { el: '.train', title: '乗る列車', text: '乗り換える列車と、発車までの時間です。当日は本物の時刻で数えます。' },
+  { el: '.route', title: 'ルート', text: '階段・エスカレーターで行くか、エレベーター（ベビーカー）で行くかを選びます。' },
+  { el: '#play', title: '出発進行', text: '歩く道順を、図の上で順にたどります。途中で押すと一時停止します。図は1本指で回り、2本指で拡大できます。' },
+  { el: () => (mq.matches ? legsEl.querySelector('.sum') : legsEl), title: '距離と区間', text: '歩く距離と、子ども連れでかかる時間の目安です。「区間・比較」で区間ごとの距離と、2つのルートの比べを開きます。「凡例」は色の見方です。' },
+  { el: '#xmenu', title: 'そのほかの操作', text: '再生の速さ・もう一度・この場面の乗り換えの説明は、ここにしまってあります。' },
+  { el: '#xhelp', title: 'この案内', text: 'この案内は、ここからもう一度見られます。' },
+  { el: '#back', title: 'しおりに戻る', text: '開く前に見ていた、しおりの画面へ戻ります。' }
+];
+function xferGuide(force) {
+  if (!window.Guide) return;
+  if (playing) setPlaying(false);
+  setMenu(false); setLegend(mq.matches ? false : legendEl.dataset.open === 'true');
+  if (mq.matches && !legsEl.classList.contains('closed')) tgl.click();
+  toast('');
+  Guide.run('xfer', XGUIDE, { force, skip: '閉じる' });
+}
+$('xhelp').addEventListener('click', () => xferGuide(true));
+/* しおりの使い方ページから（#s1-guide）は、見たことがあっても案内を出す */
+if (/guide/.test(location.hash)) setTimeout(() => xferGuide(true), 900);
+else if (window.Guide && !Guide.seen('xfer')) setTimeout(() => xferGuide(false), 900);
+/* しおりのリンク（transfer.html#s1〜s4）で、開いたまま別の場面が指定されたとき */
+addEventListener('hashchange', () => { const s = +((location.hash.match(/s([1-4])/) || [])[1] || 0); if (s && s !== SID) buildScene(s); });
+
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), .1);
+  escTex.offset.y = (escTex.offset.y + dt * .6) % 1;
+  frame(dt);
+  if (goal.on) {
+    controls.target.lerp(goal.target, goal.k);
+    const want = controls.target.clone().addScaledVector(camDir, goal.dist);
+    camera.position.lerp(want, goal.k * 1.2);
+    if (!playing && controls.target.distanceTo(goal.target) < .5 && camera.position.distanceTo(want) < 1) goal.on = false;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+  if ((dcl += dt) > .1) { dcl = 0; declutter(); }
+
+  // 重いときは自動で軽くする
+  frames++; acc += dt; warm += dt;
+  if (acc >= 1) {
+    const fps = frames / acc;
+    perfEl.textContent = `${Math.round(fps)} fps${degraded ? ' · 軽量表示' : ''}`;
+    if (warm > 3 && fps < 32 && !degraded) {
+      degraded = true;
+      pixelRatio = Math.max(1, pixelRatio - .5);
+      renderer.setPixelRatio(pixelRatio);
+      if (fps < 24) setShadow(false);
+    }
+    frames = 0; acc = 0;
+  }
+});
+</script>
+</body>
+</html>

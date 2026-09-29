@@ -1,0 +1,2361 @@
+(() => {
+  'use strict';
+  const T = window.TRIP;
+  const $ = (s, el = document) => el.querySelector(s);
+  const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const app = $('#app');
+
+  /* ========== 保存（使えない環境でも動くように） ========== */
+  const store = {
+    get(k, d = null) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* 保存できなくても続行 */ } }
+  };
+  const session = {
+    get(k) { try { return sessionStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { v === null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch { /* noop */ } }
+  };
+
+  /* ========== 時刻 ========== */
+  const pad = s => (s.length === 4 ? '0' + s : s);
+  const jst = (date, hm) => new Date(`${date}T${pad(hm)}:00+09:00`);
+  /* 「いま」はすべて仮想の時計（sim.js）から。おためし中でなければ本物の時刻 */
+  const Clock = window.Clock;
+  const now = () => Clock.now();
+  const fmtHM = d => d.toLocaleTimeString('ja-JP', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Tokyo' });
+  const ymd = d => d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+  const dowOf = d => new Date(ymd(d) + 'T12:00:00+09:00').getDay();
+  const yen = n => (n < 0 ? '−¥' : '¥') + Math.abs(n).toLocaleString('ja-JP');
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const gmap = q => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q);
+  const tel = n => 'tel:' + n.replace(/[^0-9#+]/g, '');
+  const dur = m => m >= 60 ? `${Math.floor(m / 60)}時間${m % 60 ? m % 60 + '分' : ''}` : `${m}分`;
+  const ext = (href, label, cls = 'btn quiet') => `<a class="${cls} ext" href="${href}" target="_blank" rel="noopener">${label}</a>`;
+  /* 外部の地図・乗換案内（行程表の各区間の小さなリンク）。地点は T.places の正式名称＋住所、なければ駅名 */
+  const enc = encodeURIComponent, p2 = n => String(n).padStart(2, '0');
+  const placeQ = n => ((T.places || {})[n] || {}).q || n;
+  const gdir = (o, d, mode, wp) => `https://www.google.com/maps/dir/?api=1&origin=${enc(o)}&destination=${enc(d)}${wp && wp.length ? '&waypoints=' + enc(wp.join('|')) : ''}&travelmode=${mode}`;
+  /* Yahoo!乗換案内は、駅名だけだと別の会社の駅になることがある（「なんば」→南海線）。地下鉄の駅と分かる名前にする（2026-09-29に確認） */
+  const YJ_NAME = { 'なんば': 'なんば(地下鉄)', '梅田': '梅田(地下鉄)' }, yjName = n => YJ_NAME[n] || n;
+  const yjUrl = (from, to, date, hm) => { from = yjName(from); to = yjName(to); const [y, m, d] = date.split('-').map(Number), [hh, mm] = hm.split(':').map(Number); return `https://transit.yahoo.co.jp/search/result?from=${enc(from)}&to=${enc(to)}&y=${y}&m=${p2(m)}&d=${p2(d)}&hh=${p2(hh)}&m1=${Math.floor(mm / 10)}&m2=${mm % 10}&type=1`; };
+  const driveUrl = dv => gdir(dv.o, dv.d, 'driving', dv.wp);
+
+  /* ========== アイコン ========== */
+  const P = {
+    home: '<path d="M4 11.5 12 5l8 6.5V20H4z"/><path d="M10 20v-5h4v5"/>',
+    route: '<circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M8 18h7.5a3 3 0 0 0 0-6h-7a3 3 0 0 1 0-6H16"/>',
+    train: '<path d="M5 16.5c0-6 3-10.5 9-10.5h1.5c3 0 4.5 2 4.5 5.5v5a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 5 16.5z"/><path d="M14 6v5h6M8 21l1.5-3M17 21l-1.5-3M5.5 13H10"/>',
+    bowl: '<path d="M3.5 11h17a8.5 8.5 0 0 1-17 0z"/><path d="M14 4 9.5 11M18 3.5 11.5 11"/>',
+    spot: '<path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
+    walk: '<circle cx="13" cy="4.5" r="1.8"/><path d="M10 21l2-6 3 3v3M9 12.5 10 8l4 1 2 3 2.5 1M10 8l-3 2-1 3"/>',
+    metro: '<rect x="5.5" y="3.5" width="13" height="13" rx="3"/><path d="M5.5 11h13M8.5 20.5l2-4M15.5 20.5l-2-4"/>',
+    car: '<path d="M4.5 16v-4.5L6.5 7h11l2 4.5V16"/><path d="M3 16h18v2.5H3zM6.5 11.5h11"/>',
+    road: '<path d="M8 3 5 21M16 3l3 18M12 4v3M12 10v4M12 17v3"/>',
+    qr: '<rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1"/><path d="M14 14h3v3h-3zM17.5 17.5h3v3h-3zM14 20.5h1.5M20.5 14v1.5"/>',
+    seat: '<path d="M7 3.5v8.5a2 2 0 0 0 2 2h7M7.5 14l-1 7M16.5 14v7M7 10h8a2 2 0 0 1 2 2v2"/>',
+    sos: '<path d="M12 3.5 21 19.5H3z"/><path d="M12 10v4M12 16.8v.2"/>',
+    map: '<path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6z"/><path d="M9 4v14M15 6v14"/>',
+    menu: '<path d="M4 7h16M4 12h16M4 17h10"/>',
+    user: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-3.6 3.5-5.5 7-5.5s6.2 1.9 7 5.5"/>',
+    clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    bed: '<path d="M3 18V7M3 13h18v5M21 13a3 3 0 0 0-3-3h-7v3"/><circle cx="7" cy="10.5" r="1.5"/>',
+    today: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>',
+    more: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/>',
+    bag: '<path d="M5 8.5h14l-1 11.5H6z"/><path d="M9 8.5V7a3 3 0 0 1 6 0v1.5"/>',
+    yen: '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 7.5 12 12l3.5-4.5M12 12v5M9 12.5h6M9 15h6"/>',
+    pen: '<path d="M5 19l1-4 9.5-9.5a2.1 2.1 0 0 1 3 3L9 18z"/><path d="M13.5 7.5l3 3M5 19h14"/>',
+    stamp: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="5"/>',
+    text: '<path d="M4 18 8.5 6 13 18M5.8 14h5.4M15 18l2.5-7 2.5 7M15.8 16h3.4"/>',
+    moon: '<path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/>',
+    add: '<rect x="6.5" y="3" width="11" height="18" rx="2.5"/><path d="M12 9v6M9 12h6"/>',
+    bell: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
+    help: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.5M12 16.8v.2"/>',
+    play: '<circle cx="12" cy="12" r="8.5"/><path d="M10 8.5v7l5.5-3.5z"/>',
+    key: '<circle cx="8" cy="15" r="4"/><path d="M11 12 19.5 3.5M16 7l2.5 2.5M13.8 9.2l2 2"/>',
+    save: '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/>',
+    cube: '<path d="M12 3.5 19.5 7.8v8.4L12 20.5l-7.5-4.3V7.8z"/><path d="M4.5 7.8 12 12l7.5-4.2M12 12v8.5"/>',
+    out: '<path d="M13.5 4.5h6v6M19.5 4.5 11 13"/><path d="M17 14v4.5a1 1 0 0 1-1 1H5.5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1H10"/>',
+    here: '<path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.6" fill="currentColor"/>',
+    search: '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/>',
+    tip: '<path d="M9 17.5h6M9.8 20.5h4.4M12 3.5a5.5 5.5 0 0 0-3.3 9.9c.7.6 1.1 1.3 1.2 2.1h4.2c.1-.8.5-1.5 1.2-2.1A5.5 5.5 0 0 0 12 3.5z"/>',
+    book: '<path d="M4.5 5.5c2.6-.8 5.1-.6 7.5.9v13c-2.4-1.5-4.9-1.7-7.5-.9zM19.5 5.5c-2.6-.8-5.1-.6-7.5.9v13c2.4-1.5 4.9-1.7 7.5-.9z"/>'
+  };
+  const ic = (n, cls = 'ic') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`;
+
+  /* 挿絵（線画） */
+  const ART = {
+    station: '<path d="M6 40h36M9 40V22l15-10 15 10v18M15 40V28h6v12M27 28h6v6h-6zM20 20h8"/><circle cx="24" cy="20" r="0"/>',
+    torii: '<path d="M6 12c6 2 30 2 36 0M9 18h30M14 12v28M34 12v28M24 18v-6M6 40h36"/>',
+    deer: '<path d="M18 8l-3-5M18 8l-6-1M18 8l1-6M28 8l3-5M28 8l6-1M28 8l-1-6"/><path d="M17 11c0-2 3-3 6-3s6 1 6 3l-1.5 7c-.7 2.5-2.5 4-4.5 4s-3.8-1.5-4.5-4z"/><path d="M15 12l-4 1M31 12l4 1M22 22c-1.5 4-1.5 7 0 10h13c4 0 6-2.5 6-6v-2M25 32v10M36 32v10M40 29v13M28 32v10"/>',
+    daibutsu: '<path d="M24 6c-3 0-5 2-5 5s2 5 5 5 5-2 5-5-2-5-5-5zM19 9c1-2 3-3 5-3s4 1 5 3"/><path d="M14 42c0-12 4-22 10-22s10 10 10 22z"/><path d="M19 30c2 2 4 3 5 3M29 30c-2 2-4 3-5 3M8 42h32"/>',
+    loop: '<circle cx="24" cy="24" r="14"/><path d="M24 10v4M38 24h-4M24 38v-4M10 24h4"/><path d="M33 12l5-2-1 5"/>',
+    river: '<path d="M6 16h36M6 16v6M42 16v6M12 16v-5h24v5"/><path d="M4 32c4-3 8-3 12 0s8 3 12 0 8-3 12 0M4 39c4-3 8-3 12 0s8 3 12 0 8-3 12 0"/>',
+    castle: '<path d="M10 42h28M13 42V32h22v10M16 32l-3-5h22l-3 5M18 27v-6h12v6M15 21l9-7 9 7M20 14h8M24 8v6M21 42v-5h6v5"/>',
+    tower: '<path d="M16 42V10l8-4 8 4v32M12 42h24M20 14h8M20 20h8M20 26h8M20 32h8M24 6V2"/>',
+    food: '<path d="M8 22h32a16 16 0 0 1-32 0z"/><path d="M26 8l-6 14M33 7l-9 15M4 42h40"/>'
+  };
+  const art = (k, cls = '') => `<svg class="${cls}" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ART[k]}</svg>`;
+  const SPOT_ART = { osakastation: 'station', sakurai: 'torii', todaiji: 'deer', loop: 'loop', dotonbori: 'river', osakajo: 'castle', wowus: 'tower' };
+  const DAYC = n => `var(--day${n})`;
+  const COVER_DEER = `<svg class="cover-art" viewBox="0 0 120 110" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M38 20l-6-12M38 20l-12-3M38 20l2-13M56 20l6-12M56 20l12-3M56 20l-2-13"/><path d="M36 25c0-4 5-6 11-6s11 2 11 6l-3 13c-1.4 5-4.6 8-8 8s-6.6-3-8-8z"/><path d="M32 27l-7 2M62 27l7 2"/><circle cx="42" cy="31" r="1.3" fill="#fff"/><circle cx="52" cy="31" r="1.3" fill="#fff"/><path d="M44 46c-3 8-3 14 0 20h30c8 0 12-5 12-12v-4M50 66v24M70 66v24M80 60v30M58 66v24"/><path d="M4 96c20-4 40-4 60 0s40 4 56 0" stroke-opacity=".7"/><g fill="#fff" stroke="none"><circle cx="62" cy="56" r="1.8"/><circle cx="70" cy="54" r="1.8"/><circle cx="77" cy="58" r="1.8"/></g></svg>`;
+  /* 表紙の影絵（たこ焼き・大阪城・通天閣）。表紙の横線の上に置く */
+  const COVER_OSAKA = `<svg class="cover-osaka" viewBox="0 0 108 52" aria-hidden="true"><g fill="#fff">
+    <path d="M3 45h26l-3.2 5H6.2z"/><circle cx="9.5" cy="40.5" r="5.2"/><circle cx="18" cy="39.5" r="5.2"/><circle cx="26.2" cy="40.8" r="4.6"/><path d="M22.5 36.5 29 27" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>
+    <path d="M36 51l4-10h30l4 10z"/><path d="M44 41v-7h22v7z"/><path d="M39.5 34.8Q55 30 70.5 34.8L67 31.5H43z"/><path d="M47 31.5v-5h16v5z"/><path d="M42.5 27.6Q55 23.4 67.5 27.6L64 25H46z"/><path d="M49.5 25v-4.4h11V25z"/><path d="M45.5 21.4Q55 16.4 64.5 21.4L60.5 18H49.5z"/><path d="M50.5 18.3l-1-2.3M59.5 18.3l1-2.3" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M83 51l6.5-17h8l6.5 17h-3.6l-4.9-10.5h-4L86.6 51z"/><path d="M90 34.5V15h7v19.5z"/><path d="M87.5 16.5v-6h12v6z"/><path d="M90.5 10.5V7h6v3.5z"/><path d="M93.5 7V1" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></g>
+    <g fill="none" stroke="#d6504c" stroke-width="1.1"><circle cx="9.5" cy="40.5" r="5.2"/><circle cx="18" cy="39.5" r="5.2"/><path d="M47 37.5h3M54 37.5h3M61 37.5h3M50 28.8h2.5M57.5 28.8h2.5M92 20h3M92 25h3M92 30h3M90 13.5h7"/></g></svg>`;
+  /* 横から見た新幹線（最後尾＋中間車3両＋先頭車）。表紙がトップに見えているあいだ、ときどき横切る。
+     nz：のぞみ風（白い車体に青い線）／km：かもめ風（白い車体で下が赤）。どちらも左から右へ走る。実在の会社のロゴや文字は入れない */
+  const COVER_TRAIN = (() => {
+    const mids = [62, 108, 154];
+    const body = `<path d="M60 4.2h-24c-10 0-25 3.6-36.2 9.1-1 .5-.7 1.9.4 1.9H60z"/>${mids.map(x => `<rect x="${x}" y="4.2" width="44" height="11" rx="1.3"/>`).join('')}
+      <path d="M200 4.2h24c10 0 25 3.6 36.2 9.1 1 .5.7 1.9-.4 1.9H200z"/>`;
+    const wins = c => `<path d="M31 7.2h26${mids.map(x => `M${x + 3} 7.2h38`).join('')}M203 7.2h26" stroke="${c}" stroke-width="1.6" stroke-dasharray="3 2.2"/>`;
+    const nose = c => `<path d="M25 5.6c-5 .5-11 2.3-15 4.3M235 5.6c5 .5 11 2.3 15 4.3" stroke="${c}" stroke-width="1.7" fill="none" stroke-linecap="round"/>`;
+    const nz = `<svg class="cover-train nz" viewBox="0 0 261 16" aria-hidden="true"><g fill="#fff">${body}</g>
+      <path d="M4 10.6h56${mids.map(x => `M${x} 10.6h44`).join('')}M200 10.6h56" stroke="#2b5ea7" stroke-width="1.7"/>${wins('#9fb3c8')}${nose('#33445c')}</svg>`;
+    const km = `<svg class="cover-train km" viewBox="0 0 261 16" aria-hidden="true"><defs><clipPath id="km-low"><rect x="0" y="10.4" width="261" height="6"/></clipPath></defs>
+      <g fill="#fff">${body}</g><g fill="#a3252b" stroke="#fff" stroke-width=".7" clip-path="url(#km-low)">${body}</g><path d="M2 10.4h257" stroke="#fff" stroke-width=".6" opacity=".9"/>${wins('#a9b1ba')}${nose('#3a3f47')}</svg>`;
+    return nz + km;
+  })();
+  /* 表紙の新幹線：のぞみ風とかもめ風が、それぞれ別々に左から右へ走る。のぞみ風は速く、かもめ風は今までの速さ。
+     2台は同じ高さ（表紙の横線の上）を走る。追い抜きで重なるときは、のぞみ風が手前・かもめ風が後ろ。どちらも名所の影絵と鹿の後ろを通る。
+     トップにいる時間は短いので、開いてすぐ（1〜2秒）にのぞみ風、数秒おいてかもめ風が走り、その後も間を空けすぎずに次々に走る。
+     走り始めと、消えてから次に出るまでの間は、毎回、一定の幅の中で乱数で決める（決まった繰り返しに見えないように）。
+     走るのは表紙が画面に見えていて、アプリが前にあるときだけ。「視差効果を減らす」がオンなら走らせない（CSS でも止めている）。
+     鹿が跳ねるのは、のぞみ風が鹿の前を通るとき（3回に1回） */
+  const CoverTrain = (() => {
+    const RM = matchMedia('(prefers-reduced-motion: reduce)');
+    /* speed：画面上の平均の速さ（px/秒）。first：最初に走り出すまで、gap：消えてから次まで（ミリ秒の幅） */
+    const CARS = {
+      nz: { speed: 220, first: [400, 1600], gap: [1200, 4500] },
+      km: { speed: 145, first: [2600, 5200], gap: [1800, 6000] }
+    };
+    const st = { nz: { timer: 0, n: 0 }, km: { timer: 0, n: 0 } };
+    const rnd = ([a, b]) => a + Math.random() * (b - a);
+    let cover = null, io = null, seen = false;
+    const ok = () => !!cover && cover.isConnected && seen && document.visibilityState === 'visible' && !RM.matches;
+    /* 動きの緩急は cubic-bezier(.45,.05,.55,.95)。progAt：時間の割合 → 進んだ割合、timeAt：進んだ割合 → 時間の割合 */
+    const bez = (a, b, t) => 3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3;
+    const solve = (f, v) => { let lo = 0, hi = 1; for (let i = 0; i < 20; i++) { const m = (lo + hi) / 2; f(m) < v ? (lo = m) : (hi = m); } return (lo + hi) / 2; };
+    const progAt = x => bez(.05, .95, solve(t => bez(.45, .55, t), x));
+    const timeAt = p => solve(progAt, p);
+    const trainEl = k => cover && $(`.cover-train.${k}`, cover);
+    const running = k => { const tr = trainEl(k); return !!tr && tr.classList.contains('run'); };
+    function run(k) {
+      const s = st[k]; clearTimeout(s.timer); s.timer = 0;
+      if (!cover || !cover.isConnected || RM.matches) return;
+      const rail = $('.cover-rail', cover), tr = trainEl(k), deer = $('.cover-art', cover);
+      if (!rail || !tr || running(k)) return;
+      const rw = rail.clientWidth, tw = tr.getBoundingClientRect().width, dist = rw + tw, dur = dist / CARS[k].speed;
+      tr.style.setProperty('--rw', rw + 'px');
+      tr.style.setProperty('--dur', dur.toFixed(2) + 's');
+      tr.classList.remove('run'); void tr.offsetWidth; tr.classList.add('run');
+      if (k === 'nz' && s.n % 3 === 0) {
+        /* 鼻先が鹿の前を通るころに跳ねる */
+        const dx = deer ? deer.getBoundingClientRect().left + 38 - rail.getBoundingClientRect().left : rw * .8;
+        cover.style.setProperty('--hop', (dur * timeAt(Math.min(1, Math.max(0, dx / dist)))).toFixed(2) + 's');
+        cover.classList.remove('hop'); void cover.offsetWidth; cover.classList.add('hop');
+      }
+      s.n++;
+    }
+    const later = (k, ms) => { const s = st[k]; clearTimeout(s.timer); s.timer = ok() ? setTimeout(() => (ok() ? run(k) : (s.timer = 0)), ms) : 0; };
+    const idle = k => cover && !running(k) && !st[k].timer;
+    const wake = first => Object.keys(CARS).forEach(k => { if (idle(k)) later(k, rnd(first || !st[k].n ? CARS[k].first : CARS[k].gap)); });
+    const stopAll = () => Object.values(st).forEach(s => { clearTimeout(s.timer); s.timer = 0; });
+    function mount(el) {
+      stopAll(); io && io.disconnect(); io = null;
+      cover = el || null; seen = false;
+      if (!cover) return;
+      Object.keys(CARS).forEach(k => { st[k].n = 0; const tr = trainEl(k); tr && tr.addEventListener('animationend', () => { tr.classList.remove('run'); if (k === 'nz') cover && cover.classList.remove('hop'); later(k, rnd(CARS[k].gap)); }); });
+      if ('IntersectionObserver' in window) {
+        io = new IntersectionObserver(es => { seen = es[es.length - 1].isIntersecting; if (seen) wake(); });
+        io.observe($('.cover-rail', cover) || cover);
+      } else { seen = true; wake(true); }
+    }
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wake(); else stopAll(); });
+    RM.addEventListener && RM.addEventListener('change', () => { if (RM.matches) { stopAll(); cover && (cover.classList.remove('hop'), $$('.cover-train', cover).forEach(t => t.classList.remove('run'))); } else wake(); });
+    /* 表紙を押したとき：止まっている列車を、のぞみ風から先にすぐ走らせる */
+    const tap = () => { const k = !running('nz') ? 'nz' : !running('km') ? 'km' : null; k && run(k); };
+    return { mount, run: tap };
+  })();
+  const PIN = `<svg class="trainpin" viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="14" fill="#d6504c"/><path d="M8 17c0-4.5 2.2-7.5 7.5-7.5h1c2.3 0 4 1.6 4 4.6V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1z" fill="#fff"/><path d="M15 9.5v4.2h5.5" stroke="#d6504c" stroke-width="1.3" fill="none"/></svg>`;
+
+  /* ========== 家族 ========== */
+  const fam = () => store.get('fam');
+  const famName = () => (T.families[fam()] || {}).name;
+
+  /* ========== 「いまここ」：予定からのずれ ==========
+     行程表（または「今日の予定」）で、いまいる地点を押すと、そこを現在地とみなし、以降の予定をずれた分だけ動かした見込みで出す。
+     覚えるのはこの端末だけ（localStorage。使えないときは開いている間だけ）。おためし中は sessionStorage に分けて置く。
+     日付が変わったら、自動で元に戻す（date が今日でなければ無視して消す）。
+     固定の時刻（新幹線・特急の発車）は動かさない。ずれは固定の時刻で吸収し、間に合わなさそうなら一言出す */
+  let shiftMem = null;
+  function getShift() {
+    let v;
+    if (Clock.active()) { try { v = JSON.parse(session.get('shift-sim')); } catch { v = null; } }
+    else v = store.get('shift');
+    if (v === null || v === undefined) v = shiftMem;
+    if (!v || typeof v.min !== 'number') return null;
+    if (v.date !== ymd(now())) { if (!Clock.active()) try { localStorage.removeItem('shift'); } catch { /* noop */ } return null; }
+    return v;
+  }
+  function setShift(v) {
+    shiftMem = v;
+    if (Clock.active()) session.set('shift-sim', v ? JSON.stringify(v) : null);
+    else if (v) store.set('shift', v);
+    else try { localStorage.removeItem('shift'); } catch { /* noop */ }
+  }
+  /* 新幹線・特急に乗る地点（その発車時刻は動かさない） */
+  const fixedTrain = (day, i) => { const n = day.items[i + 1]; return n && n.t === 'move' && n.train ? T.trains[n.train] : null; };
+  /* 1日分の見込みの時刻。stop ごとに a（着）・d（発）・pa・pd（予定）を持つ。warn：間に合わなさそうな所 */
+  function schedule(day) {
+    const S = getShift(), an = S && S.date === day.date ? S : null;
+    let s = 0;
+    const warns = [];
+    const rows = day.items.map((it, i) => {
+      if (it.t !== 'stop') return { i, it };
+      const pa = it.arr ? jst(day.date, it.arr) : null, pd = it.dep ? jst(day.date, it.dep) : null;
+      const r = { i, it, pa, pd, a: pa, d: pd, est: false };
+      if (!an || i < an.i) return r;
+      const tr = fixedTrain(day, i);
+      if (i === an.i) {
+        s = an.min * 6e4;
+        if (pd && !tr) r.d = new Date(+pd + s); else if (!pd) r.a = new Date(+pa + s);
+        r.est = !!s && !tr; r.anchor = true;
+        if (tr && s > 0 && new Date(+(pa || pd) + s) > pd) warns.push({ i, text: `${tr.name}（${it.dep}発）に間に合うよう、ここで調整を` });
+        if (tr) s = 0;
+      } else if (s) {
+        if (pa) r.a = new Date(+pa + s);
+        if (tr) {
+          if (s > 0 && r.a && r.a > pd) warns.push({ i, text: `${tr.name}（${it.dep}発）に間に合うよう、ここで調整を` });
+          s = 0;
+        } else if (pd) r.d = new Date(+pd + s);
+        r.est = true;
+      }
+      if (it.due && s > 0) {
+        const due = jst(day.date, it.due), at = it.dueAt === 'dep' ? r.d : r.a;
+        if (at && at > due) warns.push({ i, text: `${it.dueName}に間に合うよう、ここで調整を` });
+      }
+      return r;
+    });
+    return { rows, warns, shift: an };
+  }
+  function events(day) {
+    if (!day.items) return [];
+    const { rows } = schedule(day);
+    return day.items.map((it, i) => {
+      if (it.t === 'stop') { const r = rows[i]; return { i, start: r.a || r.d, end: r.d || r.a, it, day, est: r.est }; }
+      const p = rows[i - 1], n = rows[i + 1];
+      return { i, start: p.d || p.a, end: n.a || n.d, it, day, est: p.est || n.est };
+    });
+  }
+  const allEvents = () => T.days.flatMap(events);
+  const hm = d => fmtHM(d);
+  const durTxt = m => (m >= 60 ? `${Math.floor(m / 60)}時間${m % 60 ? m % 60 + '分' : ''}` : `${m}分`);
+  /* ずれの一言（予定より約25分遅れ・13:27ごろ出発の見込み） */
+  function shiftText(day) {
+    const sc = schedule(day), S = sc.shift; if (!S) return null;
+    const r = sc.rows[S.i], at = r.d || r.a, m = Math.abs(S.min);
+    const go = at ? `${hm(at)}ごろ${r.pd || !r.pa ? '出発' : '到着'}の見込み` : '';
+    const head = S.min > 0 ? `予定より約${durTxt(m)}遅れ` : S.min < 0 ? `予定より約${durTxt(m)}早く進んでいます` : 'ほぼ予定どおりです';
+    return { text: S.min ? `${head}・${go}` : `${head}（${at ? hm(at) + (r.pd || !r.pa ? '発' : '着') + 'の予定' : ''}）`, warn: sc.warns[0] ? sc.warns[0].text : '', S };
+  }
+  /* 地点を「いまここ」にする */
+  function setHere(date, i) {
+    const day = T.days.find(d => d.date === date); if (!day) return;
+    const it = day.items[i]; if (!it || it.t !== 'stop') return;
+    const t = now(), pa = it.arr ? jst(date, it.arr) : null, pd = it.dep ? jst(date, it.dep) : null;
+    let min = 0;
+    if (pd && t > pd) min = Math.ceil((t - pd) / 6e4);
+    else if (!pd && pa && t > pa) min = Math.ceil((t - pa) / 6e4);
+    else if (pa && t < pa) min = -Math.round((pa - t) / 6e4);
+    else if (!pa && pd && t < pd) min = 0;
+    setShift({ date, i, min, at: +t });
+    toast(min > 0 ? `この先の予定を${durTxt(min)}遅らせて表示しています` : min < 0 ? `この先の予定を${durTxt(-min)}早めて表示しています` : '予定どおりです。この先の時刻はそのままです', 3200);
+    const y = scrollY; render(); scrollTo(0, y);
+  }
+  const shortName = it => it.type === 'hotel' ? 'ホテル' : it.type === 'car' ? 'レンタカーの店' : it.type === 'parking' ? '駐車場' : it.name.replace('・大阪城公園', '');
+  function nowNext(t = now()) {
+    const ev = allEvents();
+    let cur = ev.find(e => e.start <= t && t < e.end) || null;
+    const next = ev.find(e => e.start > t && e.it.t === 'stop') || null;
+    return { cur, next };
+  }
+  const phase = () => { const t = now(); return t < new Date(T.start) ? 'before' : t >= new Date(T.end) ? 'after' : 'during'; };
+  const todayDay = () => T.days.find(d => d.date === ymd(now()));
+  const todayN = () => (todayDay() || T.days[0]).n;
+
+  /* 駅の路線色 */
+  const KYUSHU = ['新大村', '武雄温泉', '博多'];
+  function lineOf(day, i) {
+    const it = day.items[i];
+    const mv = [day.items[i + 1], day.items[i - 1]].find(x => x && x.t === 'move' && x.mode !== 'walk');
+    const l = mv ? mv.line : '';
+    if (/御堂筋/.test(l)) return ['var(--midosuji)', 'Osaka Metro 御堂筋線'];
+    if (/千日前/.test(l)) return ['var(--sennichimae)', 'Osaka Metro 千日前線'];
+    if (/谷町/.test(l)) return ['var(--tanimachi)', 'Osaka Metro 谷町線'];
+    if (KYUSHU.includes(it.name)) return ['var(--jrk)', 'JR九州'];
+    return ['var(--jrw)', 'JR西日本'];
+  }
+
+  /* ========== 共通UI ========== */
+  /* 下から出る画面。題と×（と opt.head）は上に固定し、スクロールしても消えない */
+  function sheet(title, html, onMount, opt = {}) {
+    const bg = document.createElement('div');
+    bg.className = 'sheet-bg';
+    bg.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="sheet-top"><div class="sheet-h"><h3>${title}</h3><button class="close" aria-label="閉じる">×</button></div>${opt.head || ''}</div>${html}</div>`;
+    let cleanup = null;
+    const close = () => { typeof cleanup === 'function' && cleanup(); bg.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = e => { if (e.key === 'Escape') close(); };
+    bg.addEventListener('click', e => { if (e.target === bg || e.target.closest('.close') || e.target.closest('a[href^="#"]')) close(); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(bg);
+    if (onMount) cleanup = onMount(bg, close);
+    applyRuby($('.sheet', bg));
+    if (!opt.noFocus) $('.close', bg).focus({ preventScroll: true });
+  }
+  function toast(msg, ms = 1800) {
+    $$('.toast').forEach(x => x.remove());
+    const el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); el.textContent = msg; document.body.appendChild(el);
+    setTimeout(() => el.remove(), ms);
+  }
+  async function copy(text) {
+    try { await navigator.clipboard.writeText(text); toast('コピーしました'); } catch { toast(text); }
+  }
+  const copyBtn = t => `<button class="copy" data-copy="${esc(t)}">コピー</button>`;
+
+  function pickFamily(first = false) {
+    const cur = fam();
+    let done; const p = new Promise(r => (done = r));
+    sheet(first ? 'ようこそ' : '家族を切り替える', `<p class="small muted">選んだ家族の座席・お部屋・チェックインQR・費用を表示します。あとからいつでも変えられます。</p>
+      <div class="pick">${Object.entries(T.families).map(([k, f]) => `<button data-f="${k}" class="${cur === k ? 'on' : ''}"><span><b>${f.name}</b><br><span class="small muted">${f.label}</span></span><span aria-hidden="true">${cur === k ? '✓' : '→'}</span></button>`).join('')}</div>`,
+      (el, close) => { $$('[data-f]', el).forEach(b => b.addEventListener('click', () => { store.set('fam', b.dataset.f); close(); render(); })); return () => done(); });
+    return p;
+  }
+
+  const roomsFor = f => Object.entries(T.hotel.rooms).filter(([, r]) => !f || r.family === f);
+
+  /* ========== 予約番号とQRの鍵 ==========
+     ホテルの予約番号とチェックインQRは、合言葉で暗号にした形（T.hotel.lock）だけを公開ファイルに置く。
+     合言葉から PBKDF2（SHA-256）で鍵を作り、AES-GCM で開く。開けた鍵はこの端末（localStorage）に覚え、次からは合言葉なしで表示する */
+  const Lock = (() => {
+    const L = T.hotel.lock, KEY = 'hk';
+    let data = null;
+    const cs = () => (window.crypto && crypto.subtle) || null;
+    const bin = b => Uint8Array.from(atob(b), c => c.charCodeAt(0));
+    const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+    const norm = p => String(p).normalize('NFKC').replace(/\s+/g, '');
+    const open = async key => JSON.parse(new TextDecoder().decode(await cs().decrypt({ name: 'AES-GCM', iv: bin(L.iv) }, key, bin(L.data))));
+    async function unlock(pass) {
+      const base = await cs().importKey('raw', new TextEncoder().encode(norm(pass)), 'PBKDF2', false, ['deriveKey']);
+      const key = await cs().deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: bin(L.salt), iterations: L.iter }, base, { name: 'AES-GCM', length: 256 }, true, ['decrypt']);
+      data = await open(key);   /* 合言葉が違うと、ここで失敗する */
+      store.set(KEY, b64(await cs().exportKey('raw', key)));
+      return data;
+    }
+    async function restore() {
+      const raw = store.get(KEY);
+      if (!raw || !L || !cs()) return null;
+      try { data = await open(await cs().importKey('raw', bin(raw), 'AES-GCM', false, ['decrypt'])); } catch { data = null; }
+      return data;
+    }
+    function forget() { data = null; try { localStorage.removeItem(KEY); } catch { /* noop */ } }
+    return { ready: restore(), get: () => data, unlock, forget, saved: () => !!store.get(KEY), usable: () => !!(L && cs()) };
+  })();
+  const qrSrc = svg => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  /* 合言葉を入れる画面 */
+  function lockSheet(then) {
+    if (!Lock.usable()) return sheet('チェックインQR', '<p class="a2-lead">この画面では、予約番号とQRを表示できません。しおりのアドレス（https://〜）を、Safari または Chrome で開き直してください。</p>');
+    sheet('合言葉を入れてください', `<p class="lock-lead">予約番号とチェックインQRには、合言葉の鍵をかけています。一度入れると、この端末では次から入れずに表示します。</p>
+      <form class="lock-form" id="lockform" autocomplete="off"><label for="lock-pass">合言葉</label>
+        <input id="lock-pass" type="text" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" required>
+        <p class="lock-err" role="alert" hidden></p>
+        <button class="btn fill" type="submit">表示する</button></form>
+      <p class="lock-note">${ic('key')}合言葉は、家族のLINEで確認してください。</p>`,
+      (el, close) => {
+        const f = $('#lockform', el), inp = $('#lock-pass', el), err = $('.lock-err', el), btn = $('button[type="submit"]', el);
+        setTimeout(() => inp.focus(), 250);
+        f.addEventListener('submit', async e => {
+          e.preventDefault(); e.stopPropagation();
+          if (!inp.value.trim()) return;
+          btn.disabled = true; btn.textContent = '確かめています…'; err.hidden = true;
+          try { await Lock.unlock(inp.value); close(); toast('合言葉を確かめました'); updateQrThumbs(); then && then(); }
+          catch { err.textContent = '合言葉が違うようです。家族のLINEで、もう一度お確かめください。'; err.hidden = false; inp.select(); }
+          finally { btn.disabled = false; btn.textContent = '表示する'; }
+        });
+      });
+  }
+  /* 予約番号とQRを1枚の画像（PNG）にする：控えとしてスマホに保存 */
+  async function qrImage(k) {
+    const r = T.hotel.rooms[k], d = Lock.get()[k];
+    const W = 1080, H = 1500, c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    const img = new Image(); img.src = qrSrc(d.qr); await img.decode();
+    const MIN = '"Shippori Mincho B1", "Hiragino Mincho ProN", serif', GOT = '"Zen Kaku Gothic New", "Hiragino Sans", sans-serif';
+    x.fillStyle = '#fdfcf9'; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#d6504c'; x.fillRect(0, 0, W, 16);
+    x.textAlign = 'center'; x.fillStyle = '#2b2926';
+    x.font = `700 40px ${GOT}`; x.fillText('自動チェックインQR（控え）', W / 2, 110);
+    x.fillStyle = '#67625b'; x.font = `500 32px ${GOT}`; x.fillText(T.hotel.name, W / 2, 170);
+    x.fillStyle = '#fff'; x.strokeStyle = '#e4dfd5'; x.lineWidth = 3; x.beginPath(); x.roundRect(170, 230, 740, 740, 24); x.fill(); x.stroke();
+    x.imageSmoothingEnabled = false; x.drawImage(img, 210, 270, 660, 660);
+    x.fillStyle = '#a39d94'; x.font = `500 28px ${GOT}`; x.fillText('予約番号', W / 2, 1050);
+    x.fillStyle = '#2b2926'; x.font = '700 60px ui-monospace, Menlo, Consolas, monospace'; x.fillText(d.code, W / 2, 1125);
+    x.font = `700 42px ${MIN}`; x.fillText(`${r.no} ${r.name}`, W / 2, 1230);
+    x.fillStyle = '#67625b'; x.font = `500 32px ${GOT}`; x.fillText(`${r.who}・${r.nights}`, W / 2, 1290);
+    x.fillText(`チェックイン ${T.hotel.checkin}・チェックアウト ${T.hotel.checkout}`, W / 2, 1340);
+    x.fillStyle = '#a39d94'; x.font = `500 26px ${GOT}`; x.fillText('奈良・大阪 2026 家族旅行のしおり', W / 2, 1440);
+    return new Promise(res => c.toBlob(res, 'image/png'));
+  }
+  async function saveQrImage(k) {
+    const r = T.hotel.rooms[k];
+    const name = `checkin-qr-${k}.png`;
+    let blob;
+    try { blob = await qrImage(k); } catch (e) { console.error(e); return toast('画像を作れませんでした'); }
+    const file = new File([blob], name, { type: 'image/png' });
+    /* iPhone は共有シートの「画像を保存」で写真に入る。ほかはダウンロード */
+    if (isIOS && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: `チェックインQR ${r.no}` }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('画像を保存しました');
+  }
+  /* ホテルのページの小さなQR：鍵を開けたあとで差し替える */
+  function updateQrThumbs() {
+    const d = Lock.get();
+    $$('[data-qrthumb]').forEach(el => { const k = el.dataset.qrthumb; el.innerHTML = d && d[k] ? `<img src="${qrSrc(d[k].qr)}" alt="">` : ic('key'); });
+  }
+  Lock.ready.then(updateQrThumbs);
+
+  async function showQR() {
+    const f = fam();
+    if (!f) return pickFamily(true);
+    await Lock.ready;
+    if (!Lock.get()) return lockSheet(showQR);
+    const D = Lock.get();
+    const today = ymd(now());
+    const rooms = roomsFor(f);
+    let idx = Math.max(0, rooms.findIndex(([, r]) => r.from <= today && today < r.to));
+    const tabs = rooms.length > 1 ? `<div class="segs">${rooms.map(([, r], i) => `<button data-i="${i}" class="${i === idx ? 'on' : ''}">${r.nights}</button>`).join('')}</div>` : '';
+    const body = i => { const [k, r] = rooms[i]; return `<div class="qrbox"><img src="${qrSrc(D[k].qr)}" alt="チェックイン用QRコード"><div class="cd">${esc(D[k].code)}</div></div>
+      <p class="room-name">${r.no} ${esc(r.name)}</p><p class="small muted">${r.who}・${r.nights}・${r.size}</p>
+      <div class="btns"><button class="btn quiet" data-qrsave="${k}">${ic('save')} 画像として保存</button></div>`; };
+    sheet('自動チェックインQR', `<p class="small muted">${T.families[f].name}｜フロントの端末にかざします。画面を明るくすると読み取りやすくなります。</p>${tabs}<div class="qr-body">${body(idx)}</div>
+      <p class="note">「画像として保存」で、予約番号とQRを1枚の画像にして端末に残せます。電波がないときの控えにどうぞ。</p>`,
+      el => {
+        $$('[data-i]', el).forEach(b => b.addEventListener('click', () => {
+          $$('[data-i]', el).forEach(x => x.classList.toggle('on', x === b));
+          $('.qr-body', el).innerHTML = body(+b.dataset.i);
+        }));
+        el.addEventListener('click', e => { const b = e.target.closest('[data-qrsave]'); if (b) saveQrImage(b.dataset.qrsave); });
+      });
+  }
+
+  /* 目次：タブバーと同じ5つに分けたサイトマップ（三本線の目次は補助。どのページもタブのどれかからたどれる）。
+     見出しの下に項目を一段下げて並べ、見出しごとに折りたためる（最初は全部開く）。いちばん上に、しおり内の検索 */
+  const TOC = [
+    ['きょう', [['きょう（いま・つぎ）', '#/', ''], ['チェックインQR', '#qr', '']]],
+    ['日程', [['1日目　10/17（土）', '#/trip/1', ''], ['2日目　10/18（日）', '#/trip/2', ''], ['3日目　10/19（月）', '#/trip/3', ''], ['4日目　10/20（火）', '#/trip/4', '']]],
+    ['のりもの', [['いまどのへん？（のぞみ）', '#/ride/live/nozomi28', ''], ['指定席券と座席表', '#/ride', ''], ['駅の乗り換え（3D）', '#/ride/transfer', '博多・新大阪'], ['駅の時刻表（大阪市内）', '#/ride/tt', '7駅'], ['車窓から見える城', '#/ride/castles', ''], ['博多駅の駅弁', '#/ride/ekiben', ''], ['鉄道トリビア', '#/ride/trivia', ''], ['レンタカー', '#/stay/car', '10/18']]],
+    ['まっぷ', [['行く場所の地図', '#/map', ''], ['ドライブの道順', '#/map/drive', '10/18'], ['公式の案内図', '#/map/official', ''], ['おでかけ', '#/spot', '7か所'], ['ごはん', '#/food', ''], ['奈良公園近くの駐車場', '#/sos/parking', '10/18']]],
+    ['その他', [['旅のワンポイント', '#/tips', '気温・服装・コツ'], ['トリビア', '#/trivia', '5つの分類'], ['持ち物チェック', '#/bag', ''], ['予算と割り勘メモ', '#/money', ''], ['ホテルとお部屋', '#/stay', ''], ['緊急連絡先・病院', '#/sos', ''], ['思い出メモ', '#/memo', ''], ['スタンプ帳', '#/spot/stamps', ''], ['おためしモード', '#sim', '旅行中の画面を先に体験'], ['使い方', '#/help', '機能ごとの説明書']]]
+  ];
+  const TOC_ACT = { '#qr': 'qr', '#sim': 'sim' };
+  const tocLinks = list => list.map(([l, href, s]) => `<a href="${href}"${TOC_ACT[href] ? ` data-act="${TOC_ACT[href]}"` : ''}>${l}<span>${s}</span></a>`).join('');
+  function showToc() {
+    sheet('しおりの目次', `<div class="toc" id="toc">${TOC.map(([h, list]) => `<details class="toc-g" open><summary class="toc-h"><span>${h}</span><small>${list.length}</small></summary><div class="toc-items">${tocLinks(list)}</div></details>`).join('')}</div>
+      <div class="srch-res" id="srch-res" hidden aria-live="polite"></div>`,
+      (el, close) => {
+        $$('#toc [data-act]', el).forEach(b => b.addEventListener('click', e => { e.preventDefault(); close(); }));
+        const inp = $('#srch', el), res = $('#srch-res', el), toc = $('#toc', el), sh = $('.sheet', el);
+        let found = [];
+        const draw = () => {
+          const q = inp.value.trim();
+          toc.hidden = !!q; res.hidden = !q;
+          if (!q) return;
+          found = searchFor(q);
+          res.innerHTML = found.length ? `<p class="srch-n">${found.length > 40 ? '40件以上' : found.length + '件'}見つかりました</p><ul>${found.slice(0, 40).map((r, k) => `<li><button type="button" data-hit="${k}"><b>${esc(r.t)}</b><small>${esc(r.s)}</small>${r.x ? `<span>${esc(snippet(r.x, q))}</span>` : ''}</button></li>`).join('')}</ul>`
+            : `<p class="srch-none">「${esc(q)}」は見つかりませんでした。<br><span class="small muted">ひらがなや、短いことば（例：ちゅうしゃじょう、QR）でもお試しください。</span></p>`;
+          applyRuby(res);
+          sh.scrollTop = 0;
+        };
+        inp.addEventListener('input', draw);
+        $('.srch-x', el).addEventListener('click', () => { inp.value = ''; draw(); inp.focus(); });
+        res.addEventListener('click', e => { const b = e.target.closest('[data-hit]'); if (!b) return; const r = found[+b.dataset.hit]; close(); searchGo(r); });
+      }, { head: `<div class="srch" role="search"><label class="srch-box">${ic('search')}<input type="search" id="srch" enterkeyhint="search" autocomplete="off" placeholder="ことばで探す（例：駐車場・QR）" aria-label="しおりの中を探す"></label><button type="button" class="srch-x" aria-label="検索のことばを消す">消す</button></div>` });
+  }
+
+  /* ========== 文字の大きさ（標準／大）。端末に保存 ========== */
+  const FS = { m: '標準', l: '大' };
+  const applyFs = v => { if (v === 'l') document.documentElement.dataset.fs = 'l'; else delete document.documentElement.dataset.fs; };
+  function setFs(v) {
+    store.set('fs', v); applyFs(v);
+    /* 地図の高さなどを測り直す */
+    dispatchEvent(new Event('resize'));
+  }
+  applyFs(store.get('fs'));
+
+  /* ========== その他（下から出る一覧） ========== */
+  const MORE = [
+    ['旅のしたく', [['tip', '旅のワンポイント', '#/tips'], ['book', 'トリビア', '#/trivia'], ['bag', '持ち物チェック', '#/bag'], ['yen', '予算と割り勘メモ', '#/money']]],
+    ['やど', [['bed', 'ホテルとお部屋', '#/stay'], ['qr', 'チェックインQR', '#qr']]],
+    ['もしも', [['sos', '緊急連絡先・病院', '#/sos']]],
+    ['旅の記録', [['pen', '思い出メモ', '#/memo'], ['stamp', 'スタンプ帳', '#/spot/stamps']]]
+  ];
+  const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  function moreSheet() {
+    const fs = store.get('fs') === 'l' ? 'l' : 'm';
+    const dark = (document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
+    sheet('その他', `${MORE.map(([h, list]) => `<h4 class="more-h">${h}</h4><div class="more-tiles">${list.map(([i, l, href]) => `<a href="${href}"${TOC_ACT[href] ? ` data-act="${TOC_ACT[href]}"` : ''}>${ic(i)}<span>${l}</span></a>`).join('')}</div>`).join('')}
+      <h4 class="more-h">おためしモード</h4>
+      <button class="more-sim" data-act="sim">${ic('play')}<span><b>旅行中の画面を、先に試せます</b><small>時計を旅行中の日時に合わせて、その時刻の画面を体験します。新幹線の車内（いまどのへん？）の6場面もここから選べます。</small></span></button>
+      <h4 class="more-h">設定</h4>
+      <div class="more-rows">
+        <div class="more-row">${ic('text')}<span>文字の大きさ</span><span class="more-seg" role="group" aria-label="文字の大きさ">${Object.entries(FS).map(([k, l]) => `<button data-fs="${k}" aria-pressed="${fs === k}">${l}</button>`).join('')}</span></div>
+        <div class="more-row">${ic('moon')}<span>画面の明るさ</span><span class="more-seg" role="group" aria-label="画面の明るさ"><button data-theme-set="light" aria-pressed="${!dark}">明るい</button><button data-theme-set="dark" aria-pressed="${dark}">暗い</button></span></div>
+        <button class="more-row" data-act="fam">${ic('user')}<span>家族を切り替える</span><small>${esc(famName() || '未選択')}</small></button>
+        <button class="more-row" data-act="a2hs">${ic('add')}<span>ホーム画面に追加</span><small>${standalone() ? '追加ずみ' : ''}</small></button>
+        <button class="more-row" data-act="lockforget">${ic('key')}<span>この端末の合言葉を消す</span><small>${Lock.saved() ? '' : '入力されていません'}</small></button>
+      </div>
+      <h4 class="more-h">使い方</h4>
+      <div class="more-rows">
+        <a class="more-row" href="#/help">${ic('help')}<span>使い方</span><small>機能ごとの説明書</small></a>
+        <button class="more-row" data-act="toc">${ic('menu')}<span>しおりの目次</span><small>すべてのページ</small></button>
+      </div>`,
+      (el, close) => {
+        $$('[data-act]', el).forEach(b => b.addEventListener('click', e => { e.preventDefault(); close(); }, true));
+        $$('[data-fs]', el).forEach(b => b.addEventListener('click', () => { setFs(b.dataset.fs); $$('[data-fs]', el).forEach(x => x.setAttribute('aria-pressed', x === b)); }));
+        $$('[data-theme-set]', el).forEach(b => b.addEventListener('click', () => { document.documentElement.dataset.theme = b.dataset.themeSet; store.set('theme', b.dataset.themeSet); $$('[data-theme-set]', el).forEach(x => x.setAttribute('aria-pressed', x === b)); }));
+      });
+  }
+  /* ========== 使い方（#/help、#/help/項目） ==========
+     1つの機能を1枚にまとめる：実際の画面の写真＋番号の吹き出し＋1〜2行の説明。
+     写真と吹き出しの位置は tools/shoot-manual.js が撮って書き出す（assets/manual/*.webp と marks.json）。
+     pts の m:1 が番号付き（写真の上の吹き出しと同じ順）、m の無いものは写真に写っていない補足 */
+  const MANUAL = [
+    { id: 'top', tab: 'トップ', where: 'しおりを開くと最初に出る〈トップ〉の、表紙とその下のカードの説明です。', ic: 'home', title: 'トップ', sub: '表紙と、出発までのカード', pts: [
+      { m: 1, t: '家族を選ぶと、座席・お部屋・チェックインQR・費用がその家族の分になります。' },
+      { m: 1, t: 'のぞみ風とかもめ風の列車が、ときどき左から右へ横切ります。表紙を押すと、すぐに走ります。' },
+      { m: 1, t: '出発までの日数と、最初に乗る列車です。旅行中は「いまの予定・次の予定」に変わります。' }] },
+    { id: 'today', tab: 'きょう', where: '下のタブの〈きょう〉を押したときの、旅行中の画面の説明です。', ic: 'today', title: 'きょう', sub: '旅行中に、まず開く所', pts: [
+      { m: 1, t: '下の「きょう」を押すと、いつでもこの画面に戻ります。' },
+      { m: 1, t: 'いまの予定と、次の予定です。日付と時刻から自動で選びます。' },
+      { m: 1, t: '次に乗る列車と、発車までの時間です。「時刻表」で前後の便も見られます。' }] },
+    { id: 'shift', tab: '日程', where: '〈日程〉の行程表で、いまいる地点の「いまここ」を押したときの画面の説明です。', ic: 'here', title: 'いまここ', sub: '予定からずれたとき', pts: [
+      { m: 1, t: 'いまいる地点の「いまここ」を押すと、そこを現在地として、この先の予定をずれた分だけ動かした見込みで出します。' },
+      { m: 1, t: 'ずれと、出発の見込みです。「予定どおりに戻す」で、いつでも元に戻せます。' },
+      { m: 1, t: '見込みの時刻は朱色で「ごろ」と出します。新幹線・特急の発車時刻は動かさず、間に合わなさそうなときは一言でお知らせします。' },
+      { t: 'トップの「今日の予定」からも、いまいる所を1回押すだけで合わせられます。' },
+      { t: '合わせていないときは、時計だけで決めた「予定では、いまごろ」を出します。合わせた内容はこの端末だけに残り、日付が変わると元に戻ります。' }] },
+    { id: 'ride', tab: 'のりもの', where: '下のタブの〈のりもの〉の、一覧の画面の説明です。', ic: 'train', title: 'のりもの', sub: '指定席券・座席表・時刻表', pts: [
+      { m: 1, t: '新幹線の中では、ここから「いまどのへん？」を開きます。' },
+      { m: 1, t: '見たい項目へ移ります。駅の乗り換え（3D）・時刻表・車窓の城などがあります。' },
+      { m: 1, t: '往路と復路を切り替えます。' },
+      { m: 1, t: '指定席券です。「座席表とメモ」を開くと、席の位置と進行方向が分かります。' }] },
+    { id: 'xfer', tab: 'のりもの', where: '〈のりもの〉の「駅の乗り換え（3D）」から開く、3D乗換図の画面の説明です。', ic: 'walk', title: '駅の乗り換え（3D）', sub: '博多・新大阪での歩き方', pts: [
+      { m: 1, t: 'しおりに戻ります。開く前に見ていた画面へ戻ります。' },
+      { m: 1, t: '4つの場面（往路・復路の博多と新大阪）を切り替えます。' },
+      { m: 1, t: '階段・エスカレーターか、エレベーター（ベビーカー）かを選びます。' },
+      { m: 1, t: '「出発進行」で、歩く道順を順にたどります。図は1本指で回り、2本指で拡大できます。' }] },
+    { id: 'live', tab: 'のりもの', where: '〈のりもの〉の「いまどのへん？」を開いたときの、地図の画面の説明です。', ic: 'map', title: 'いまどのへん？', sub: '新幹線の車内で', pts: [
+      { m: 1, t: '自分の列車です。鼻先が進む向きを向いています。' },
+      { m: 1, t: '方位磁針。押すたびに「北が上」と「進行方向が上」が切り替わります。' },
+      { m: 1, t: '立体（斜めから見下ろす地図）と、平面を切り替えます。' },
+      { m: 1, t: '地図だけを大きく表示します。' },
+      { m: 1, t: 'この説明書と、画面の上での案内を開きます。' },
+      { m: 1, t: '次の停車駅と、到着までの時間です。' },
+      { m: 1, t: '時速です。下の線は速さの目安で、時速300kmでいっぱいになります。全画面では、この札が画面の下に出ます。' },
+      { t: '地図は1回押すと、指で動かせるようになります。' },
+      { t: '「現在地を使う」を押していないときは、時刻表どおりの位置です。遅れているときは押すと、GPSで遅れを測って「約○分遅れ」と出し、時刻をずらします。運行の状況は、地図の下の「JR公式の運行情報」で確かめられます。' }] },
+    { id: 'search', tab: 'すべての画面', where: '右上の「目次」か、〈その他〉のいちばん下の「しおりの目次」から開く、目次と検索の説明です。', ic: 'search', title: '目次と検索', sub: 'あの情報はどこ？', pts: [
+      { m: 1, t: 'ことばを入れると、しおりの中から探します。ひらがなでも探せます。電波がなくても使えます。' },
+      { m: 1, t: '見つかった所を押すと、その場所へ移って、短く光ります。' },
+      { t: '何も入れないときは、タブと同じ5つに分けた目次です。見出しを押すと、たためます。' }] },
+    { id: 'sim', tab: 'その他', where: '〈その他〉の「おためしモード」で場面を選んだあとの、画面の上の帯の説明です。', ic: 'play', title: 'おためしモード', sub: '旅行中の画面を、先に試す', pts: [
+      { m: 1, t: 'おためし中は、画面の上に帯が出ます。時計は旅行中の日時になります。' },
+      { m: 1, t: '再生・一時停止と、早送り（×1・×10・×60）です。' },
+      { m: 1, t: '「終了」で本物の時刻に戻ります。' },
+      { m: 1, t: '始めるときは「その他」→「おためしモード」から、場面を選びます。' }] },
+    { id: 'qr', tab: 'トップ・日程', where: 'トップや日程の「チェックインQR」を押したときに出る、合言葉の画面の説明です。', ic: 'qr', title: '予約とQR', sub: '合言葉・画像として保存', pts: [
+      { m: 1, t: '初めて表示するときに、合言葉を入れます。合言葉は家族のLINEでご確認ください。' },
+      { m: 1, t: '一度入れると、この端末では次から入れずに表示します。' },
+      { t: '表示した画面の「画像として保存」で、予約番号とQRを1枚の画像にして端末に残せます。' },
+      { t: '端末を人に貸すときなどは、「その他」→「この端末の合言葉を消す」を押します。' }] },
+    { id: 'a2hs', tab: 'その他', where: '〈その他〉の「ホーム画面に追加」を押したときの、案内の画面の説明です。', ic: 'add', title: 'ホーム画面に追加', sub: 'アプリのように開く', pts: [
+      { m: 1, t: 'ホーム画面には「旅のしおり」の名前で並びます。' },
+      { m: 1, t: 'Pixel は確認の画面で「追加」を押すと完了です。iPhone は手順の案内が出ます。' },
+      { t: '「その他」→「ホーム画面に追加」から、いつでも追加できます。' }] },
+    { id: 'fs', tab: 'その他', where: '〈その他〉の画面の下にある、表示の設定の説明です。', ic: 'text', title: '文字を大きく', sub: '標準と大', pts: [
+      { m: 1, t: '「その他」の設定で、文字の大きさを「標準」「大」から選びます。選んだ大きさは、この端末に残ります。' },
+      { m: 1, t: '画面の明るさ（明るい・暗い）も、ここで切り替えられます。' }] },
+    { id: 'offline', tab: 'のりもの', where: '電波がないときに〈いまどのへん？〉を開いた、地図の画面の説明です。', ic: 'sos', title: '電波が無いとき', sub: '機内モードでも開けます', pts: [
+      { m: 1, t: '列車の位置は時刻表から推定するので、電波がなくても動きます。' },
+      { m: 1, t: '地図の下地は、一度表示した所だけ出ます。航空写真は保存しません。' },
+      { t: 'しおりは端末に保存されます。電波がなくても、ホーム画面やブックマークから開けます。' },
+      { t: '天気予報と、外部のサイトへのリンクは、電波が戻ってからご覧ください。' }] },
+    { id: 'news', tab: 'トップ', where: 'トップの表紙の右上にある、ベルの印（お知らせ）の説明です。', ic: 'bell', title: 'お知らせ', sub: 'しおりが変わったとき', pts: [
+      { m: 1, t: 'ベルを押すと、お知らせの一覧が開きます。まだ読んでいないお知らせがあると、件数が付きます。' },
+      { m: 1, t: '一覧の行を押すと、詳しい説明が出ます。「その場所を見る」で、変わった画面へ移って、その場所が短く光ります。' },
+      { t: 'お知らせは、しおりを直したときに足していきます。読んだかどうかは、この端末に覚えます。' }] },
+    { id: 'intro', tab: 'トップ', where: '初めて開いたときに、画面の案内の前に出る「このしおりで、できること」のスライドの説明です。', ic: 'play', title: '機能紹介', sub: 'このしおりで、できること', pts: [
+      { m: 1, t: '横にめくると、次の機能の紹介に進みます。動画は、そのスライドを開いたときに再生します。' },
+      { m: 1, t: '下の点で、いま何枚目かが分かります。' },
+      { m: 1, t: '「スキップ」を押すと、紹介を閉じて画面の案内へ進みます。' },
+      { t: 'この使い方ページの目次の下にある「機能紹介をもう一度見る」から、いつでも見直せます。' }] },
+    { id: 'xhelp', tab: 'のりもの', where: '3D乗換図を初めて開いたときに出る、ボタンの案内の説明です。', ic: 'walk', title: '3D乗換図の案内', sub: 'ボタンを1つずつ説明', pts: [
+      { m: 1, t: '白い枠で囲んだボタンの役目を、1つずつ説明します。「次へ」で進みます。' },
+      { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
+      { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
+  ];
+  const MAN_V = 12;
+  let manMarks = null;
+  const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
+  function viewHelp(id) {
+    const i = MANUAL.findIndex(x => x.id === id);
+    if (i < 0) return `<div class="wrap">${topbar()}${phead('Guide', '使い方', '機能ごとに、1枚ずつまとめました。見たい項目を押してください。')}
+      <div class="hp-tiles">${MANUAL.map((x, k) => `<a href="#/help/${x.id}"><span class="hp-n num">${k + 1}</span>${ic(x.ic)}<span><b>${x.title}</b><small>${x.sub}</small></span></a>`).join('')}</div>
+      <section class="sec">${secH('画面の上の案内', 'Tour')}
+        <div class="more-rows"><button class="more-row" data-act="guide-app">${ic('help')}<span>画面の案内をもう一度見る</span><small>下のタブの使い分け</small></button>
+        <button class="more-row" data-act="guide-live">${ic('train')}<span>いまどのへん？の案内を見る</span><small>地図の見方と操作</small></button>
+        <a class="more-row" href="transfer.html#s1-guide">${ic('walk')}<span>3D乗換図の案内を見る</span><small>ボタンを1つずつ説明</small></a>
+        <button class="more-row" data-act="intro">${ic('play')}<span>機能紹介をもう一度見る</span><small>このしおりで、できること</small></button></div></section></div>`;
+    const x = MANUAL[i], prev = MANUAL[i - 1], next = MANUAL[i + 1];
+    let n = 0;
+    const src = `assets/manual/${x.id}.webp?v=${MAN_V}`;
+    return `<div class="wrap">${topbar()}<a class="hp-back" href="#/help">‹ 使い方の目次</a>
+      <div class="phead hp-head"><div class="eyebrow num">${i + 1} / ${MANUAL.length}</div><h1>${x.title}</h1></div>
+      ${x.where ? `<p class="hp-where"><span class="hp-tab">${esc(x.tab)}</span><span>${esc(x.where)}</span></p>` : ''}
+      <figure class="hp-fig" id="hp-fig" data-id="${x.id}"><img src="${src}" alt="${esc(x.title)}の画面" decoding="async"><div class="hp-marks" aria-hidden="true"></div></figure>
+      <ol class="hp-pts">${x.pts.map(p => `<li class="${p.m ? '' : 'plain'}">${p.m ? `<span class="hp-no num">${++n}</span>` : '<span class="hp-dot" aria-hidden="true"></span>'}<span>${esc(p.t)}</span></li>`).join('')}</ol>
+      <nav class="hp-pager" aria-label="前後の項目">${prev ? `<a href="#/help/${prev.id}">‹ ${prev.title}</a>` : '<span></span>'}${next ? `<a href="#/help/${next.id}">${next.title} ›</a>` : '<a href="#/help">目次へ ›</a>'}</nav></div>`;
+  }
+  /* 写真の上に、番号の吹き出しと枠を置く（位置は写真に対する割合） */
+  function drawMarks() {
+    const fig = $('#hp-fig'); if (!fig) return;
+    loadMarks().then(all => {
+      const box = $('.hp-marks', fig), m = all[fig.dataset.id];
+      if (!box || !m) return;
+      box.innerHTML = m.marks.map((r, k) => r ? `<i class="hp-mk" style="left:${r[0]}%;top:${r[1]}%;width:${r[2]}%;height:${r[3]}%"></i><b class="hp-bub num" style="left:max(${r[0]}%, 11px);top:max(${r[1]}%, 11px)">${k + 1}</b>` : '').join('');
+    });
+  }
+  /* 画面の上の案内（コーチマーク）の見直し */
+  function replayGuide(which) {
+    if (which === 'app') { if (location.hash !== '#/') location.hash = '#/'; setTimeout(() => appGuide(true), 500); return; }
+    const k = liveNowKey() || (ymd(now()) >= '2026-10-20' ? 'nozomi17' : 'nozomi28');
+    if (!location.hash.startsWith('#/ride/live/' + k) || location.hash.endsWith('/full')) location.hash = '#/ride/live/' + k;
+    setTimeout(() => window.LiveMap && LiveMap.guide ? LiveMap.guide() : null, 900);
+  }
+
+  /* ========== ホーム画面に追加（案内） ==========
+     初めて開いたときに出す。「あとで」は次に開いたときにもう一度。「今後は表示しない」・ホーム画面から開いているときは出さない */
+  let bip = null;
+  addEventListener('beforeinstallprompt', e => { e.preventDefault(); bip = e; });
+  addEventListener('appinstalled', () => { bip = null; store.set('a2hs', 'done'); });
+  const UA = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/.test(UA);
+  const inApp = /\bLine\/|FBAN|FBAV|Instagram|MicroMessenger|KAKAOTALK|YJApp|Twitter|TikTok|musical_ly/i.test(UA);
+  const a2hsDue = () => !standalone() && store.get('a2hs') !== 'never' && store.get('a2hs') !== 'done' && !session.get('a2hsAsked') && (isIOS || isAndroid);
+  const HOMEICON = '<img class="a2-icon" src="assets/icon.svg" alt="" width="52" height="52">';
+  const SHARE = '<svg class="a2-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 9H6.5A1.5 1.5 0 0 0 5 10.5v8A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5v-8A1.5 1.5 0 0 0 17.5 9H16M12 14V3.5M8.5 7 12 3.5 15.5 7"/></svg>';
+  const ADDSQ = '<svg class="a2-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="M12 8.5v7M8.5 12h7"/></svg>';
+  /* auto：初回の自動表示（「あとで」「今後は表示しない」を出す） */
+  function a2hsSheet(auto = false) {
+    return new Promise(done => {
+      if (auto) session.set('a2hsAsked', '1');
+      const url = location.href.split('#')[0];
+      let body;
+      if (standalone()) body = `<p class="a2-lead">このしおりは、ホーム画面から開いています。追加の必要はありません。</p>`;
+      else if (inApp) body = `<p class="a2-lead">LINE などのアプリの中の画面では、ホーム画面に追加できません。<b>${isIOS ? 'Safari' : 'Chrome'}</b>で開き直してから、もう一度お試しください。</p>
+        <p class="small muted">${isIOS ? '右下（または右上）のメニューから「ブラウザで開く」「Safariで開く」を選ぶか、' : '右上のメニュー（︙）から「ブラウザで開く」を選ぶか、'}下のアドレスをコピーして貼り付けてください。</p>
+        <div class="a2-url"><span class="num">${esc(url)}</span><button class="btn quiet" data-a2="copy">コピー</button></div>`;
+      else body = `<p class="a2-lead">ホーム画面に置くと、アプリのように1回のタップで開けます。電波が弱い場所でも開きやすくなります。</p>`;
+      const btns = standalone() || inApp ? (auto ? '<div class="a2-btns"><button class="btn quiet" data-a2="later">閉じる</button></div>' : '')
+        : `<div class="a2-btns"><button class="btn fill" data-a2="yes">ホーム画面に追加する</button>${auto ? '<button class="btn quiet" data-a2="later">あとで</button>' : ''}</div>${auto ? '<button class="a2-never" data-a2="never">今後は表示しない</button>' : ''}`;
+      sheet('ホーム画面に追加しますか？', `<div class="a2-top">${HOMEICON}<div><b>旅のしおり</b><small>奈良・大阪 2026</small></div></div>${body}<div class="a2-steps"></div>${btns}`, (el, close) => {
+        el.addEventListener('click', async e => {
+          const b = e.target.closest('[data-a2]'); if (!b) return;
+          const k = b.dataset.a2;
+          if (k === 'copy') return copy(url);
+          if (k === 'later') return close();
+          if (k === 'never') { store.set('a2hs', 'never'); toast('今後は表示しません。「その他」からいつでも追加できます'); return close(); }
+          if (k === 'yes') {
+            if (bip) {
+              const ev = bip; bip = null;
+              try { ev.prompt(); const r = await ev.userChoice; if (r && r.outcome === 'accepted') store.set('a2hs', 'done'); } catch { /* noop */ }
+              return close();
+            }
+            /* iPhone は自動で追加できないので、手順を示す。Android で確認画面を出せないときも手順を示す */
+            $('.a2-steps', el).innerHTML = isIOS ? `<ol class="a2-list">
+                <li><span class="a2-n">1</span><span>画面の下の<b>共有ボタン</b>${SHARE}を押します<small>（□から↑が出ている形です）</small></span></li>
+                <li><span class="a2-n">2</span><span>一覧を上へずらし、<b>「ホーム画面に追加」</b>${ADDSQ}を押します</span></li>
+                <li><span class="a2-n">3</span><span>右上の<b>「追加」</b>を押すと完了です</span></li></ol>`
+              : `<ol class="a2-list"><li><span class="a2-n">1</span><span>画面の右上のメニュー<b>（︙）</b>を押します</span></li>
+                <li><span class="a2-n">2</span><span><b>「ホーム画面に追加」</b>または<b>「アプリをインストール」</b>を押します</span></li>
+                <li><span class="a2-n">3</span><span>確認の画面で<b>「追加」</b>（または「インストール」）を押すと完了です</span></li></ol>`;
+            b.closest('.a2-btns').innerHTML = '<button class="btn quiet" data-a2="later">閉じる</button>';
+            const nv = $('.a2-never', el); nv && nv.remove();
+            if (isIOS) { const ar = document.createElement('div'); ar.className = 'a2-arrow'; ar.setAttribute('aria-hidden', 'true'); ar.innerHTML = '<span>共有ボタンは、画面のいちばん下にあります</span><i>↓</i>'; $('.sheet', el).appendChild(ar); }
+          }
+        });
+        return () => done();
+      });
+    });
+  }
+
+  /* ========== おためし（シミュレーション） ========== */
+  const MD = date => date.slice(5).replace('-', '/').replace(/^0/, '').replace('/0', '/');
+  const DOW = '日月火水木金土';
+  const dowJ = date => DOW[new Date(date + 'T12:00:00+09:00').getDay()];
+  const SCENES = [
+    ['駅の時刻表', [
+      { id: 'tt-d1', title: '10/17（土）16:05　新大阪駅から梅田へ', text: '御堂筋線の時刻表と「次の3本」。16:13の便が乗る予定の便です。', t: '2026-10-17T16:05', go: '#/trip/1', tt: 'd1-shinosaka', pos: [34.7334, 135.5002, '新大阪駅'] },
+      { id: 'tt-d3', title: '10/19（月）10:00　道頓堀から、なんば駅へ', text: '平日ダイヤの千日前線。10:25の便で谷町九丁目へ。', t: '2026-10-19T10:00', go: '#/trip/3', tt: 'd3-namba', pos: [34.6687, 135.5013, '道頓堀'] }
+    ]],
+    ['旅の場面', [
+      { id: 'kamome', title: '10/17 10:30　かもめ92号に乗車中', t: '2026-10-17T10:30', go: '#/' },
+      { id: 'hakata', title: '10/17 12:05　博多で乗り換え', t: '2026-10-17T12:05', go: '#/trip/1' },
+      { id: 'nozomi28', title: '10/17 13:37　のぞみ28号・福山の手前', t: '2026-10-17T13:37', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28' } },
+      { id: 'nara', title: '10/18 14:40　奈良公園', t: '2026-10-18T14:40', go: '#/trip/2' },
+      { id: 'loop', title: '10/18 17:12　環状線ドライブ', t: '2026-10-18T17:12', go: '#/trip/2' },
+      { id: 'dotonbori', title: '10/19 9:50　道頓堀', t: '2026-10-19T09:50', go: '#/trip/3' },
+      { id: 'nozomi17', title: '10/20 11:24　のぞみ17号・姫路の手前', t: '2026-10-20T11:24', go: '#/ride/live/nozomi17', pos: { track: 'nozomi17' } },
+      { id: 'after', title: '10/20 18:00　旅行のあと', t: '2026-10-20T18:00', go: '#/' }
+    ]],
+    ['いまどのへん？（のぞみの車内）', [
+      { id: 'lm28', title: '10/17 12:13　のぞみ28号・博多を発車（往路）', text: '作り物のGPSが線路を進みます。上の帯の「×1」を押すと×10・×60に早送りできます。', t: '2026-10-17T12:13', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28' } },
+      { id: 'lm28-kanmon', title: '10/17 12:34　のぞみ28号・関門トンネルの手前', text: 'トンネルでGPSが途切れ、時刻表からの推定に切り替わります。', t: '2026-10-17T12:34', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28' } },
+      { id: 'lm28-late', title: '10/17 13:45　のぞみ28号・5分遅れ（福山の手前）', text: 'GPSから遅れを見つけて「約5分遅れ」と表示。到着時刻とアラームもずれます。', t: '2026-10-17T13:45', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28', delay: 5 } },
+      { id: 'lm28-arr', title: '10/17 14:36　のぞみ28号・新大阪の7分前', text: '降車アラーム（5分前・1分前）の確認に。', t: '2026-10-17T14:36', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28' } },
+      { id: 'lm17', title: '10/20 11:01　のぞみ17号・新大阪を発車（復路）', t: '2026-10-20T11:01', go: '#/ride/live/nozomi17', pos: { track: 'nozomi17' } },
+      { id: 'lm17-arr', title: '10/20 13:20　のぞみ17号・博多の手前', text: '降車アラームと、リレーかもめへの乗り換えカウントダウン。', t: '2026-10-20T13:20', go: '#/ride/live/nozomi17', pos: { track: 'nozomi17' } }
+    ]]
+  ];
+  const sceneById = id => SCENES.flatMap(([, l]) => l).find(s => s.id === id);
+  function startScene(sc) {
+    Clock.start(sc.t, { scenario: { id: sc.id, title: sc.title }, pos: sc.pos || null });
+    if (sc.go && location.hash !== sc.go) location.hash = sc.go; else render();
+    if (sc.tt) setTimeout(() => openTT({ leg: sc.tt, preview: false }), 350);
+  }
+  function simSheet() {
+    const cur = Clock.state();
+    const d = cur ? cur.now : new Date('2026-10-17T10:00:00+09:00');
+    const local = new Date(d.getTime() + 9 * 36e5).toISOString().slice(0, 16);
+    sheet('おためしモード', `<p class="small muted">時計を旅行中の日時に合わせて、その時刻の画面を先に体験できます。おためし中は画面の上に帯が出ます。「終了」を押すか、このタブを閉じると、本物の時刻に戻ります。</p>
+      ${SCENES.map(([h, list]) => `<h4 class="sim-h">${h}</h4><div class="pick sim-pick">${list.map(sc => `<button data-scene="${sc.id}"><span><b>${esc(sc.title)}</b>${sc.text ? `<br><span class="small muted">${esc(sc.text)}</span>` : ''}</span><span aria-hidden="true">→</span></button>`).join('')}</div>`).join('')}
+      <h4 class="sim-h">日時を指定</h4>
+      <form class="sim-form" id="simform"><input type="datetime-local" id="sim-at" value="${local}" min="2026-09-01T00:00" max="2026-11-30T23:59" aria-label="おためしの日時"><button class="btn fill" type="submit">この日時で始める</button></form>
+      ${cur ? '<div class="btns"><button class="btn quiet" data-sim="stop">おためしを終了して、本物の時刻に戻す</button></div>' : ''}`,
+      (el, close) => {
+        $$('[data-scene]', el).forEach(b => b.addEventListener('click', () => { close(); startScene(sceneById(b.dataset.scene)); }));
+        $('#simform', el).addEventListener('submit', e => { e.preventDefault(); e.stopPropagation(); const v = $('#sim-at', el).value; if (!v) return; close(); Clock.start(v, { scenario: { title: '日時を指定' } }); render(); });
+        $$('[data-sim]', el).forEach(b => b.addEventListener('click', () => close()));
+      });
+  }
+  function seekSheet() {
+    const st = Clock.state(); if (!st) return;
+    const local = new Date(st.now.getTime() + 9 * 36e5).toISOString().slice(0, 16);
+    const jumps = T.days.map(d => { const f = d.items && d.items[0]; return f ? [`${d.label}（${d.dow}）${f.dep || f.arr}`, `${d.date}T${pad(f.dep || f.arr)}`] : null; }).filter(Boolean);
+    sheet('時刻を動かす', `<div class="seek-steps">${[['−1時間', -60], ['−10分', -10], ['+10分', 10], ['+1時間', 60]].map(([l, m]) => `<button class="btn quiet" data-shift="${m}">${l}</button>`).join('')}</div>
+      <form class="sim-form" id="seekform"><input type="datetime-local" id="seek-at" value="${local}" aria-label="飛ぶ日時"><button class="btn fill" type="submit">この時刻へ</button></form>
+      <h4 class="sim-h">各日の出発時刻へ</h4><div class="seek-steps">${jumps.map(([l, v]) => `<button class="btn quiet" data-jump="${v}">${l}</button>`).join('')}</div>`,
+      (el, close) => {
+        $$('[data-shift]', el).forEach(b => b.addEventListener('click', () => { Clock.shift(+b.dataset.shift * 6e4); close(); }));
+        $$('[data-jump]', el).forEach(b => b.addEventListener('click', () => { Clock.seek(b.dataset.jump); close(); }));
+        $('#seekform', el).addEventListener('submit', e => { e.preventDefault(); e.stopPropagation(); const v = $('#seek-at', el).value; if (v) { Clock.seek(v); close(); } });
+      });
+  }
+  const simTime = d => `${d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' })}（${DOW[dowOf(d)]}）<b>${d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Tokyo' })}</b>`;
+  function simBar() {
+    const st = Clock.state();
+    let bar = $('.simbar');
+    document.body.classList.toggle('sim-on', !!st);
+    if (!st) { bar && bar.remove(); return; }
+    if (!bar) { bar = document.createElement('div'); bar.className = 'simbar'; bar.setAttribute('role', 'region'); bar.setAttribute('aria-label', 'おためし中の操作'); document.body.prepend(bar); }
+    const html = `<div class="sb-l"><span class="sb-tag">おためし中<small>SIMULATION</small></span><span class="sb-time num" aria-live="off">${simTime(st.now)}</span></div>
+      <div class="sb-r"><button data-sim="toggle" aria-label="${st.paused ? '再生' : '一時停止'}">${st.paused ? '▶' : '❚❚'}</button><button data-sim="speed" aria-label="再生速度">×${st.speed}</button><button data-sim="seek">時刻</button><button data-sim="stop" class="sb-stop">終了</button></div>`;
+    if (bar.dataset.v !== html) { bar.innerHTML = html; bar.dataset.v = html; }
+  }
+
+  const topbar = () => `<header class="topbar"><a class="mark" href="#/"><i>し</i>しおり</a><div class="top-actions">
+    <button class="tbtn" data-act="fam">${ic('user')}${esc(famName() || '家族を選ぶ')}</button><button class="tbtn" data-act="toc">${ic('menu')}目次</button></div></header>`;
+  const phead = (eb, title, lead = '') => `<div class="phead"><div class="eyebrow">${eb}</div><h1>${title}</h1>${lead ? `<p class="lead">${lead}</p>` : ''}</div>`;
+  const secH = (title, eb = '', id = '') => `<div class="sec-h"${id ? ` id="${id}"` : ''}><h2>${title}</h2>${eb ? `<span class="eyebrow">${eb}</span>` : ''}</div>`;
+  const infoList = rows => `<dl class="info">${rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
+
+  /* ========== ホーム ========== */
+  /* 表紙の下のカード（和紙色。大きな明朝体の数字と朱の飾りで目立たせる） */
+  const TAPE = '<i class="dc-tape" aria-hidden="true"></i>';
+  /* 予定の行を押したときの移り先（そのとき出ている予定ごとに決める）：
+     のぞみ → いまどのへん？／ホテル・スポット・ごはんなど、ページのある地点 → そのページ／ほか（かもめ・リレーかもめ・地下鉄・駅など） → 行程表のその区間 */
+  function evGo(day, i) {
+    const it = day.items[i];
+    if (it.t === 'move' && it.train && T.nozomiLine[it.train]) return ['#/ride/live/' + it.train, ''];
+    if (it.t === 'stop' && it.to) return [it.to, ''];
+    return ['#/trip/' + day.n, '#it-' + i];
+  }
+  const goRow = (day, i, inner, lab) => { const [g, m] = evGo(day, i); return `<button type="button" class="dc-go" data-go="${g}"${m ? ` data-mark="${m}"` : ''} aria-label="${esc(lab)}">${inner}<i class="dc-arr" aria-hidden="true">›</i></button>`; };
+  function board() {
+    const t = now(), ph = phase();
+    if (ph === 'before') {
+      const ms = new Date(T.start) - t;
+      const d = Math.floor(ms / 864e5), h = Math.floor(ms % 864e5 / 36e5), m = Math.floor(ms % 36e5 / 6e4);
+      const legs = ['kamome92', 'relay92', 'nozomi28'].map(k => T.trains[k]);
+      return `<section class="dc" aria-label="出発までのカウントダウン">${TAPE}
+        <div class="dc-head"><span class="dc-k">${ic('train')}出発まで</span></div>
+        <span class="dc-stamp" aria-hidden="true"><small>出発</small>10.17</span>
+        <div class="dc-count"><b class="num" id="cd-d">${d}</b><span class="u">日</span><span class="hm num" id="cd-hm">${h}時間${String(m).padStart(2, '0')}分</span></div>
+        <ol class="dc-legs">${legs.map((tr, i) => { const d1 = T.days[0], k = Object.keys(T.trains).find(x => T.trains[x] === tr), j = d1.items.findIndex(x => x.t === 'move' && x.train === k);
+          const inner = `<b class="num">${tr.dep}</b><span>${tr.from}発　${tr.name}${i === legs.length - 1 ? `<small class="num">${tr.to} ${tr.arr}着</small>` : ''}</span>`;
+          return `<li>${j >= 0 ? goRow(d1, j, inner, `${tr.name}（${T.nozomiLine[k] ? 'いまどのへん？' : '行程表'}へ）`) : inner}</li>`; }).join('')}</ol></section>`;
+    }
+    if (ph === 'after') {
+      const tr = T.trains.kamome33;
+      return `<section class="dc" aria-label="旅のおわり">${TAPE}
+        <span class="dc-stamp" aria-hidden="true"><small>帰着</small>10.20</span>
+        <div class="dc-bye">おかえりなさい</div>
+        <p class="dc-sub num">${tr.name}　${tr.to} ${tr.arr}着。思い出メモとスタンプ帳は、いつでも見返せます。</p></section>`;
+    }
+    const { cur, next } = nowNext(t);
+    const nm = e => e.it.t === 'stop' ? e.it.name : e.it.line;
+    const tm = e => { const it = e.it; return it.t === 'stop' ? (it.dep && e.start <= t ? fmtHM(e.end) + '発' : fmtHM(e.start) + (it.arr ? '着' : '発')) : fmtHM(e.end) + '着'; };
+    const mins = next ? Math.max(0, Math.round((next.start - t) / 6e4)) : 0;
+    const dN = todayDay(), S = dN && getShift();
+    /* 「いまここ」を押していないときは、時計だけで決めた「予定では、いまごろ」と言う */
+    return `<section class="dc" aria-label="いまの予定">${TAPE}
+      <div class="dc-head"><span class="dc-k">${ic('clock')}${dN ? `${dN.n}日目　${dN.label}（${dN.dow}）` : ''}</span><span class="dc-at num">${fmtHM(t)} 現在</span></div>
+      <dl class="dc-rows"><div><dt>${S ? 'いま' : '予定では<br>いまごろ'}</dt><dd>${cur ? goRow(cur.day, cur.i, `<span>${esc(nm(cur))}<small class="num">${tm(cur)}${cur.est ? '（見込み）' : ''}</small></span>`, nm(cur)) : '自由時間'}</dd></div>${next ? `<div><dt>つぎ</dt><dd>${goRow(next.day, next.i, `<span>${esc(nm(next))}<small class="num">${tm(next)}${next.est ? '（見込み）' : ''}</small></span>`, nm(next))}</dd></div>` : ''}</dl>
+      ${next ? `<div class="dc-count mini"><span class="pre">つぎまで</span><b class="num">${mins >= 60 ? Math.floor(mins / 60) : mins}</b><span class="u">${mins >= 60 ? '時間' : '分'}</span>${mins >= 60 ? `<span class="hm num">${mins % 60}分</span>` : ''}</div>` : '<div class="dc-bye mini">きょうの予定は、ここまでです</div>'}
+      ${dN ? syncBox(dN, cur, next, t) : ''}</section>`;
+  }
+  /* 「今日の予定」のカードから、1回で「いまここ」：いちばん近い2つの地点を並べる */
+  function syncBox(day, cur, next, t) {
+    if (getShift()) return shiftBar(day);
+    const ev = events(day), stops = ev.filter(e => e.it.t === 'stop' && e.it.type !== 'ramp');
+    let cand = [];
+    if (cur && cur.it.t === 'stop') cand = [cur, stops.find(e => e.i > cur.i)];
+    else if (cur) cand = [[...stops].reverse().find(e => e.i < cur.i), stops.find(e => e.i > cur.i)];
+    else cand = [[...stops].reverse().find(e => e.end <= t), stops.find(e => e.start > t)];
+    cand = cand.filter(Boolean).filter((e, k, a) => a.indexOf(e) === k).slice(0, 2);
+    if (!cand.length) return '';
+    return `<div class="dc-sync"><p>予定からずれたら、いまいる所を押してください。この先の時刻を合わせます。</p>
+      <div class="dc-here">${cand.map(e => `<button type="button" class="here-chip" data-here="${day.date}:${e.i}">${ic('here')}<span>${esc(shortName(e.it))}</span></button>`).join('')}<a class="more" href="#/trip/${day.n}">ほかの地点</a></div></div>`;
+  }
+  /* いま使いそうなもの（D-3）：時刻と行程から2〜3個だけ。つぎの列車のカードにあるもの（時刻表・指定席券・いまどのへん？）は出さない */
+  function toolsNow(t = now()) {
+    const day = todayDay(); if (!day) return '';
+    const ev = events(day), soon = ms => ms >= -5 * 6e4 && ms <= 60 * 6e4;
+    const out = [], add = (k, h) => { if (out.length < 3 && !out.some(x => x[0] === k)) out.push([k, h]); };
+    ev.forEach(e => {
+      const it = e.it, near = (e.start <= t && t < e.end) || soon(e.start - t);
+      if (!near) return;
+      if (it.qr) add('qr', `<button type="button" class="tool" data-act="qr">${ic('qr')}チェックインQR</button>`);
+      if (it.t === 'move' && it.dr) add('drive', `<a class="tool" href="#/map/drive">${ic('road')}ドライブの道順</a>`);
+      if (it.type === 'parking' && !it.minor) add('park', `<a class="tool" href="#/sos/parking">${ic('car')}駐車場の候補</a>`);
+      const xf = it.t === 'stop' && XFER.find(x => x.date === day.date && x.st === it.name && x.arr === it.arr);
+      if (xf) add('xf' + xf.s, `<a class="tool" href="${xferHref(xf.s)}">${ic('cube')}${xferLabel(xf)}</a>`);
+      if (it.t === 'stop' && it.to && /^#\/(spot|food)\//.test(it.to)) add('to' + it.to, `<a class="tool" href="${it.to}">${ic(it.type === 'food' ? 'bowl' : 'spot')}${esc(shortName(it))}</a>`);
+    });
+    return out.length ? `<nav class="tools-now" aria-label="いま使いそうなもの"><span>いま使いそう</span>${out.map(x => x[1]).join('')}</nav>` : '';
+  }
+  function tickCountdown() {
+    const d = $('#cd-d'); if (!d) return;
+    const ms = new Date(T.start) - now(); if (ms <= 0) return render();
+    d.textContent = Math.floor(ms / 864e5);
+    $('#cd-hm').textContent = `${Math.floor(ms % 864e5 / 36e5)}時間${String(Math.floor(ms % 36e5 / 6e4)).padStart(2, '0')}分`;
+  }
+
+  const WX = c => c <= 1 ? ['晴', 'sun'] : c <= 3 ? ['曇', 'cloud'] : c <= 48 ? ['霧', 'cloud'] : c <= 67 || (c >= 80 && c <= 82) ? ['雨', 'rain'] : c <= 77 || (c >= 85 && c <= 86) ? ['雪', 'rain'] : ['雷', 'rain'];
+  async function loadWeather(el) {
+    if (!el) return;
+    try {
+      const url = (lat, lon) => `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FTokyo&start_date=2026-10-17&end_date=2026-10-20`;
+      const [osaka, nara] = await Promise.all([url(34.70, 135.50), url(34.685, 135.84)].map(u => fetch(u).then(r => r.ok ? r.json() : Promise.reject(r.status))));
+      el.innerHTML = `<div class="weather">${T.days.map((d, i) => {
+        const dd = (d.n === 2 ? nara : osaka).daily; const [k, cls] = WX(dd.weather_code[i]);
+        return `<div><div class="wd">${d.label}（${d.dow}）</div><div class="wk ${cls}">${k}</div><div class="wt num"><span class="hi">${Math.round(dd.temperature_2m_max[i])}°</span> / <span class="lo">${Math.round(dd.temperature_2m_min[i])}°</span></div><div class="wp">降水 ${dd.precipitation_probability_max[i] ?? '-'}%・${d.n === 2 ? '奈良' : '大阪'}</div></div>`;
+      }).join('')}</div><p class="note">予報：Open-Meteo。2日目は奈良、ほかの日は大阪の予報です。</p>`;
+    } catch {
+      el.innerHTML = `<div class="weather">${T.days.map(d => `<div><div class="wd">${d.label}（${d.dow}）</div><div class="wk wait">予報<br>まち</div><div class="wp">${d.n === 2 ? '奈良' : '大阪'}</div></div>`).join('')}</div>
+        <p class="note">出発のおよそ2週間前（10/2ごろ）から、大阪と奈良の天気予報が自動で表示されます。</p>`;
+    }
+  }
+
+  /* ========== いまどのへん？（のぞみ）の小さな路線図 ==========
+     駅の位置（LINE.stations）を線で結んだだけの略図。列車の印は時刻表から */
+  const liveNowKey = (t = now()) => Object.keys(T.nozomiLine).find(k => { const tr = T.trains[k]; return t >= jst(tr.date, tr.dep) - 30 * 6e4 && t < jst(tr.date, tr.arr); }) || null;
+  function routeMini(key, opt = {}) {
+    const L = window.LINE; if (!L || !T.nozomiLine[key]) return '';
+    const pos = {}; L.stations.forEach(([n, la, lo]) => (pos[n] = [la, lo]));
+    const k = Math.cos(34.2 * Math.PI / 180), sc = 52;
+    const xy = ([la, lo]) => [+((lo - 130.05) * k * sc).toFixed(1), +((34.98 - la) * sc).toFixed(1)];
+    const s = liveState(key), names = s.st.map(x => x.name);
+    const pts = names.map(n => xy(pos[n]));
+    const path = p => p.map((q, i) => (i ? 'L' : 'M') + q.join(' ')).join('');
+    let here = null, done = [];
+    if (!opt.demo && s.mode !== 'before') {
+      const i0 = Math.min(Math.floor(s.pos), pts.length - 1), f = s.pos - i0, a = pts[i0], b = pts[Math.min(i0 + 1, pts.length - 1)];
+      here = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+      done = pts.slice(0, i0 + 1).concat([here]);
+    } else here = opt.demo ? pts[names.indexOf('福山')] : pts[0];
+    const LB = { 博多: 'b', 小倉: 't', 広島: 'b', 岡山: 'b', 新神戸: 't', 新大阪: 'b' };
+    const lab = n => { const [x, y] = xy(pos[n]); const w = LB[n]; const anc = n === '博多' ? 'start' : n === '新大阪' ? 'end' : 'middle'; return `<text x="${n === '博多' ? x - 4 : n === '新大阪' ? x + 4 : x}" y="${w === 't' ? y - 7 : y + 15}" text-anchor="${anc}">${n}</text>`; };
+    return `<svg class="rmini" viewBox="0 -2 244 92"${opt.demo ? '' : ` data-rmini="${key}" data-p="${s.pos.toFixed(3)}"`} role="img" aria-label="山陽新幹線の略図${opt.demo ? '' : `（${esc(names[Math.round(s.pos)])}のあたり）`}">
+      <text class="rm-sea" x="150" y="52" text-anchor="middle">瀬戸内海</text>
+      <path class="rm-line" d="${path(pts)}"/>${done.length ? `<path class="rm-done" d="${path(done)}"/>` : ''}
+      ${s.st.map((x, i) => x.stop ? `<circle class="rm-st" cx="${pts[i][0]}" cy="${pts[i][1]}" r="2.6"/>` : '').join('')}
+      <g class="rm-lab">${Object.keys(LB).map(lab).join('')}</g>
+      <g class="rm-train" transform="translate(${here[0].toFixed(1)} ${here[1].toFixed(1)})"><circle r="6.5"/><path d="M-3.2 1.6c0-2.6 1.3-4 3.6-4h.4c1.3 0 2.2.9 2.2 2.5v1.5a.6.6 0 0 1-.6.6h-5a.6.6 0 0 1-.6-.6z"/></g>
+    </svg>`;
+  }
+  /* いまどのへん？の一言（次の駅・残り時間） */
+  function liveLine(key, t = now()) {
+    const tr = T.trains[key], s = liveState(key, t);
+    const mins = d => Math.max(0, Math.round((d - t) / 6e4));
+    const hm = m => `${m >= 60 ? Math.floor(m / 60) + '時間' : ''}${m % 60}分`;
+    const next = s.st.slice(Math.floor(s.pos) + 1).find(x => x.stop);
+    if (s.mode === 'before') return { k: '発車まで', main: 'あと' + hm(mins(s.st[0].dep)), sub: `${tr.from} ${tr.dep}発・${tr.car}号車` };
+    if (s.mode === 'after') return { k: '到着', main: tr.to, sub: 'おつかれさまでした' };
+    if (s.mode === 'stopped') return { k: '停車中', main: s.st[s.i].name, sub: `${fmtHM(s.st[s.i].dep)}に発車します` };
+    return { k: 'つぎは', main: next ? next.name : tr.to, sub: next ? `${fmtHM(next.arr)}着・あと${hm(mins(next.arr))}` : '' };
+  }
+  /* 「きょう」の乗車中カード（乗車の30分前から到着まで、いちばん上に大きく） */
+  function liveCard(key) {
+    const tr = T.trains[key], L = liveLine(key);
+    return `<section class="tl-card" id="today-live" aria-label="いまどのへん？">
+      <a class="tl-main" href="#/ride/live/${key}/full">
+        <span class="tl-h"><span class="tl-tag">いまどのへん？</span><span class="tl-tr">${tr.name}<small class="num">${tr.from} ${tr.dep} → ${tr.to} ${tr.arr}</small></span></span>
+        ${routeMini(key)}
+        <span class="tl-now"><span class="tl-k">${L.k}</span><b>${esc(L.main)}</b><span class="tl-s num">${esc(L.sub)}</span></span>
+        <span class="tl-go">地図を大きく開く</span>
+      </a>
+      <div class="tl-sub"><a class="more" href="#/ride/live/${key}">駅の一覧・見どころ</a><a class="more" href="#/ride/${key}">指定席券</a></div>
+    </section>`;
+  }
+  /* 「きょう」のつぎの列車（旅行中、きょう乗る列車・地下鉄のうち、まだ出ていないもの） */
+  function nextTrainCard(t = now()) {
+    const d = todayDay(); if (!d) return '';
+    const e = events(d).find(x => x.it.t === 'move' && ['shinkansen', 'train', 'jr', 'metro'].includes(x.it.mode) && x.start > t);
+    if (!e) return '';
+    const from = d.items[e.i - 1], to = d.items[e.i + 1], it = e.it;
+    const m = Math.max(0, Math.round((e.start - t) / 6e4));
+    const leg = TT.legs.find(l => l.date === d.date && l.from === from.name && l.dep === from.dep);
+    return `<section class="nt-card" aria-label="つぎの列車"><div class="nt-k">つぎの列車<span class="num">あと${m >= 60 ? Math.floor(m / 60) + '時間' : ''}${m % 60}分</span></div>
+      <div class="nt-main"><b class="num">${e.est ? fmtHM(e.start) : esc(from.dep)}</b><span>${e.est ? '<small class="est">ごろ</small>' : ''}${esc(from.name)}発 → ${esc(to.name)} <span class="num">${e.est ? fmtHM(e.end) + 'ごろ' : esc(to.arr || '')}</span>着${e.est ? `<small class="nt-was num">（予定 ${esc(from.dep)}発）</small>` : ''}</span></div>
+      <div class="nt-line">${ic(MODE[it.mode] || 'train')}<span>${esc(it.line)}</span></div>${it.train ? seatInline(it.train) : ''}
+      ${leg || it.train ? `<div class="acts">${leg ? actB(`data-tt="${leg.id}"`, 'clock', '時刻表', 'pri') : ''}${it.train && T.nozomiLine[it.train] ? actA(`#/ride/live/${it.train}`, 'train', 'いまどのへん？', 'pri') : ''}${it.train ? actA(`#/ride/${it.train}`, 'seat', '指定席券') : ''}${it.mode === 'metro' || it.mode === 'jr' ? moveExt(d, e.i) : ''}</div>` : ''}</section>`;
+  }
+  /* 旅行前だけ：いまどのへん？とおためしモードの紹介（1枚にまとめる） */
+  const TRY = [['nara', '奈良公園の午後', '10/18 14:40'], ['tt-d3', '道頓堀から地下鉄へ', '10/19 10:00']];
+  function introCard() {
+    return `<section class="intro" aria-label="いまどのへん？と、おためしモードのご紹介">
+      <div class="intro-h"><span class="intro-k">新幹線の車内で</span><h2>いまどのへん？</h2></div>
+      ${routeMini('nozomi28', { demo: true })}
+      <p class="intro-t">新幹線の車内で、いまどこを走っているか、窓から何が見えるかが分かります。</p>
+      <p class="intro-s num">10/17 のぞみ28号・10/20 のぞみ17号で使えます。</p>
+      <div class="btns"><button class="btn fill" data-try="lm28">先にのぞいてみる</button></div>
+      <div class="intro-sim"><p class="intro-sk">旅行中の画面を、先に試せます</p>
+        <div class="intro-scenes">${TRY.map(([id, l, w]) => `<button data-try="${id}"><b>${l}</b><small class="num">${w}</small></button>`).join('')}</div>
+        <p class="intro-n">おためし中は画面の上に帯が出ます。「終了」を押すと本物の時刻に戻ります。<button class="more" data-act="sim">ほかの場面</button></p></div>
+    </section>`;
+  }
+  function todayTop() {
+    const ph = phase();
+    if (ph !== 'during') return board() + (ph === 'before' ? tvLine(tvPick(0), '今日のトリビア') + introCard() : '');
+    const lk = liveNowKey();
+    const nd = nudgeHtml(nudge()), tv = tvLine(tvPick(todayN()), '今日のトリビア');
+    return lk ? liveCard(lk) + nd + board() + tv + toolsNow() : nd + board() + tv + toolsNow() + nextTrainCard();
+  }
+
+  function viewHome() {
+    const f = fam(), tn = todayDay(), ph = phase();
+    const stamps = store.get('stamps', {});
+    const got = T.stamps.filter(s => stamps[s.id]).length;
+    /* 旅行中は表紙を小さくして、いま必要な情報をすぐ下に出す。旅行前・後の表紙は、ときどき新幹線が横切る（CoverTrain。押すとすぐ走る） */
+    const cover = ph === 'during' ? `<header class="cover slim"><div class="cover-in"><div class="cover-frame"></div>
+      <div class="cover-top"><span class="lat">Nara &amp; Osaka</span><span class="cover-acts">${bellBtn()}<button class="chip" data-act="fam">${ic('user')} ${esc(famName() || '家族を選ぶ')}</button></span></div>
+      <div class="slim-row"><h1 class="slim-title">しおり</h1>${tn ? `<p class="slim-day"><small>DAY ${tn.n}</small>${tn.label}（${tn.dow}）<span>${esc(tn.theme)}</span></p>` : ''}${COVER_DEER}</div>
+    </div></header>` : `<header class="cover"><div class="cover-in"><div class="cover-frame"></div>
+      <div class="cover-top"><span class="lat">Nara &amp; Osaka</span><span class="cover-acts">${bellBtn()}<button class="chip" data-act="fam">${ic('user')} ${esc(famName() || '家族を選ぶ')}</button></span></div>
+      <h1 class="cover-title" aria-label="しおり"><span>し</span><span>お</span><span>り</span></h1>
+      <div class="cover-sub"><div class="kind">家族旅行</div><div class="place">奈良・大阪</div></div>
+      <div class="cover-bottom"><div class="cover-rail" aria-hidden="true">${COVER_TRAIN}${COVER_OSAKA}</div><div class="dates"><small>2026 ／ 3泊4日</small>10.17 — 10.20</div>${COVER_DEER}</div>
+    </div></header>`;
+    return `${cover}
+    <div class="wrap">
+      <div class="today-top" id="today-top">${todayTop()}</div>
+      <nav class="shortcuts" aria-label="よく使う">
+        <button data-act="qr">${ic('qr')}チェックイン<br>QR</button>
+        <a href="#/ride">${ic('seat')}わたしの<br>座席</a>
+        <a href="#/trip/${todayN()}">${ic('route')}${tn ? '今日の' : '1日目の'}<br>旅程</a>
+        <a href="#/sos">${ic('sos')}もしもの<br>とき</a>
+      </nav>
+
+      <section class="sec">${secH('4日間の旅', 'Itinerary')}
+        <div>${T.days.map(d => `<a class="dayrow${tn && tn.n === d.n ? ' today' : ''}" href="#/trip/${d.n}" style="--c:${DAYC(d.n)}">
+          <span class="dstamp"><small>DAY ${d.n}</small><b>${d.label.split('/')[1]}</b><em>${d.dow}</em></span>
+          <span><span class="dt">${d.label}（${d.dow}）｜${d.theme}</span><br><span class="tt">${esc(d.title)}</span></span><span class="go">→</span></a>`).join('')}</div>
+      </section>
+
+      <section class="sec">${secH('旅先のお天気', 'Weather')}<div id="weather"><div class="small muted">読み込み中…</div></div></section>
+
+      <section class="sec">${secH(f ? `${T.families[f].name}のお部屋` : 'お部屋', 'Hotel')}
+        <p class="small muted" style="margin-bottom:10px">${esc(T.hotel.name)}｜チェックイン ${T.hotel.checkin}・チェックアウト ${T.hotel.checkout}</p>
+        ${roomsFor(f).map(([, r]) => `<div class="room-line"><span class="room-no">${r.no}</span><div><div class="small muted">${r.who}・${r.nights}</div><div class="room-name">${esc(r.name)}</div><div class="small muted">${r.size}・${esc(r.bed)}</div></div></div>`).join('')}
+        <div class="btns"><button class="btn fill" data-act="qr">${ic('qr')} チェックインQR</button><a class="more" href="#/stay">ホテルの案内</a></div>
+      </section>
+
+      <section class="sec">${secH('スタンプ帳', 'Stamps')}
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><p class="small muted">行った場所でスタンプを押していきます。いま <span class="stamp-count num">${got}</span> / ${T.stamps.length}</p><a class="more" href="#/spot/stamps">スタンプ帳へ</a></div>
+      </section>
+      <p class="foot"><span class="lat">Have a nice trip.</span>家族旅行のしおり・2026${ph === 'during' ? '' : '<br><button class="more" data-act="sim" style="margin-top:10px">おためしモードで、旅行中の画面を試す</button>'}</p>
+    </div>`;
+  }
+
+  /* ========== まっぷ（行く場所を日ごとに） ========== */
+  function viewMap() {
+    const TYPE_IC = { hotel: 'bed', spot: 'spot', food: 'bowl', car: 'car', parking: 'car', visit: 'home' };
+    const days = T.days.map(d => {
+      const seen = new Set(), rows = [];
+      d.items.forEach(it => {
+        if (it.t !== 'stop' || it.minor || it.type === 'station' || it.type === 'ramp' || !(it.to || it.map)) return;
+        const key = it.to || it.name; if (seen.has(key)) return; seen.add(key);
+        rows.push({ ic: TYPE_IC[it.type] || 'spot', name: it.name, when: it.arr || it.dep, kind: TYPE_LABEL[it.type] || '', to: it.to, q: it.map || (it.type === 'hotel' ? T.hotel.name : it.name) });
+      });
+      T.spots.filter(sp => sp.day === d.n && !seen.has('#/spot/' + sp.id)).forEach(sp => rows.push({ ic: 'road', name: sp.name, when: '', kind: 'おでかけ', to: '#/spot/' + sp.id, q: sp.map }));
+      /* 新幹線に乗る日は、いまどのへん？（車内の地図）も並べる */
+      d.items.filter(it => it.t === 'move' && T.nozomiLine[it.train]).forEach(it => { const tr = T.trains[it.train]; rows.unshift({ ic: 'train', name: `${tr.name}は いまどのへん？`, when: tr.dep, kind: '新幹線の車内', to: '#/ride/live/' + it.train, q: '' }); });
+      return { d, rows };
+    });
+    return `<div class="wrap">${topbar()}${phead('Map', 'まっぷ', '行く場所を日ごとにまとめました。「地図」を押すと、地図のアプリで開きます。')}
+      <a class="map-live" href="#/ride/live/${ymd(now()) >= '2026-10-20' ? 'nozomi17' : 'nozomi28'}">${routeMini(ymd(now()) >= '2026-10-20' ? 'nozomi17' : 'nozomi28', { demo: !liveNowKey() })}<span><b>新幹線の中は「いまどのへん？」</b><small>走っている場所と、窓から見えるものを地図で</small></span></a>
+      ${days.map(({ d, rows }) => `<section class="sec map-day" style="--c:${DAYC(d.n)}">${secH(`${d.n}日目　${d.label}（${d.dow}）`, d.theme)}
+        <ul class="map-list">${rows.map(r => `<li><span class="map-ic">${ic(r.ic)}</span><span class="map-n">${r.kind ? `<small>${r.kind}${r.when ? '・' + r.when : ''}</small>` : ''}${r.to ? `<a href="${r.to}">${esc(r.name)}</a>` : esc(r.name)}</span>${r.q ? ext(gmap(r.q), '地図', 'btn quiet map-go') : ''}</li>`).join('')}</ul>
+        ${d.drives ? driveBlock(d) : ''}</section>`).join('')}
+      <section class="sec" id="official">${secH('公式の案内図', 'Official maps')}
+        <p class="sec-lead">PDFしおりに載せていた、公式の地図・構内図です。外のサイトで開きます。</p>
+        <ul class="omaps">${(T.officialMaps || []).map(m => `<li><a class="ext" href="${m.url}" target="_blank" rel="noopener"><b>${esc(m.name)}</b><small>${esc(m.by)}・${esc(m.when)}</small></a></li>`).join('')}
+          <li><a href="#/spot/loop"><b>阪神高速 環状線の案内図</b><small>環状線ドライブのページにあります・10/18</small></a></li></ul></section>
+      <section class="sec">${secH('ほかの一覧', 'More')}
+        <div class="map-more"><a href="#/spot">${ic('spot')}<span><b>おでかけ</b><small>7か所の紹介と小ネタ</small></span></a><a href="#/food">${ic('bowl')}<span><b>ごはん</b><small>お昼と夕ごはん候補7店</small></span></a><a href="#/sos/parking">${ic('car')}<span><b>駐車場</b><small>奈良公園の近く（10/18）</small></span></a><a href="#/stay">${ic('bed')}<span><b>ホテル</b><small>${esc(T.hotel.name)}</small></span></a></div>
+      </section></div>`;
+  }
+
+  /* ========== ドライブの道順（10/18） ==========
+     案A：Googleマップの道順。経由地（最大9か所）を予定の順に入れて、ほぼ1本の道にする（運転中の案内はGoogleマップに任せる）
+     案B：予定の道筋を、地図に1本の線で描く（確認用）。線は assets/drive-route.json（国土地理院の道路中心線から作成）。
+          地図の下地は地理院タイルだけ。電波がなくても線は出る（下地は一度表示した所だけ） */
+  function driveBlock(d) {
+    return `<div class="drive" id="drive">
+      <h3 class="sub">ドライブの道順</h3>
+      <p class="sec-lead">PDFしおりの行程表と、環状線の略図の矢印のとおりに引いた、予定の道筋です。環状線は時計回りに一周します。</p>
+      <div class="dm" id="dm"><div class="dm-map" id="dm-map" role="img" aria-label="10/18のドライブの予定の道筋"></div><p class="dm-err" hidden>地図を表示できません。下の道順とGoogleマップをご覧ください。</p></div>
+      <ol class="dm-legs">${d.drives.map((v, k) => `<li data-drive="${v.id}"><span class="dm-n num">${k + 1}</span><div><b>${esc(v.label)}</b><small class="num">${esc(v.when)}</small><p>${esc(v.via)}</p>
+        <div class="acts">${actX(driveUrl(v), 'out', 'Googleマップで開く', `Googleマップ：${v.label}（経由地入り）`).replace('ext-s', 'ext-s dm-go')}</div></div></li>`).join('')}</ol>
+      <p class="note">Googleマップには、経由地を予定の順に入れて、予定の道筋に近づけています。経由地の間で別の道が出ることや、スマホのアプリでは経由地の数が限られることがあります（Google側の都合です）。運転中の案内はGoogleマップにお任せください。この地図は、予定の確認用です。</p>
+      <p class="note">地図の下地は、電波がないときは一度表示した所だけ出ます。道筋の線は、電波がなくても出ます。地図：地理院タイル（国土地理院）。道筋：国土地理院の道路中心線から作成。</p></div>`;
+  }
+  let dmMap = null;
+  async function mountDriveMap() {
+    const box = $('#dm-map'); if (!box) return;
+    const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
+    if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
+    let ml, geo;
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=15').then(r => r.json())]); } catch (e) { return fail(); }
+    if (!box.isConnected || dmMap) return;
+    const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+    const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
+    const lines = { type: 'FeatureCollection', features: geo.features.filter(f => f.geometry.type === 'LineString') };
+    const pts = geo.features.filter(f => f.properties.name), arrows = geo.features.filter(f => 'arrow' in f.properties);
+    let w = 180, s = 90, e = -180, n = -90; lines.features.forEach(f => f.geometry.coordinates.forEach(([x, y]) => { w = Math.min(w, x); e = Math.max(e, x); s = Math.min(s, y); n = Math.max(n, y); }));
+    const MAIN = ['ホテル', '親戚の家', 'まるかつ天理店', '奈良公園近くの駐車場'];
+    let map;
+    try {
+      map = new ml.Map({
+        container: box, bounds: [[w, s], [e, n]], fitBoundsOptions: { padding: { top: 28, bottom: 34, left: 24, right: 96 } }, maxZoom: 17, minZoom: 7, attributionControl: false, dragRotate: false, pitchWithRotate: false, touchPitch: false, fadeDuration: 0,
+        cooperativeGestures: true, pixelRatio: Math.min(devicePixelRatio || 1, 2),
+        locale: { 'CooperativeGesturesHandler.WindowsHelpText': 'Ctrl キーを押しながらスクロールすると拡大・縮小できます', 'CooperativeGesturesHandler.MacHelpText': '⌘ キーを押しながらスクロールすると拡大・縮小できます', 'CooperativeGesturesHandler.MobileHelpText': '地図は2本指で動かせます' },
+        style: { version: 8, sources: {
+          pale: { type: 'raster', tiles: ['https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png'], tileSize: 256, minzoom: 2, maxzoom: 18, attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>' },
+          route: { type: 'geojson', data: lines }
+        }, layers: [
+          { id: 'bg', type: 'background', paint: { 'background-color': col('--paper-2') } },
+          { id: 'pale', type: 'raster', source: 'pale', paint: dark ? { 'raster-brightness-max': 0.42, 'raster-saturation': -0.4 } : { 'raster-saturation': -0.2 } },
+          { id: 'case', type: 'line', source: 'route', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': dark ? '#1b1a18' : '#ffffff', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 5, 13, 9, 16, 13] } },
+          { id: 'line', type: 'line', source: 'route', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': col('--shu'), 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2.6, 13, 5, 16, 8] } }
+        ] }
+      });
+    } catch (e) { return fail(); }
+    dmMap = map;
+    map.addControl(new ml.AttributionControl({ compact: false }), 'bottom-left');
+    map.addControl(new ml.NavigationControl({ showCompass: false }), 'top-right');
+    pts.forEach(f => {
+      const el = document.createElement('div'); el.className = 'dm-pt' + (MAIN.includes(f.properties.name) ? ' main' : '');
+      el.innerHTML = `<i></i><span>${esc(f.properties.name)}</span>`;
+      new ml.Marker({ element: el, anchor: 'left', offset: [-6, 0] }).setLngLat(f.geometry.coordinates).addTo(map);
+    });
+    arrows.forEach(f => {
+      const el = document.createElement('div'); el.className = 'dm-arrow'; el.setAttribute('aria-hidden', 'true');
+      el.innerHTML = '<svg viewBox="0 0 20 20"><path d="M10 3 16 15 10 12 4 15z"/></svg>';
+      new ml.Marker({ element: el, rotation: f.properties.arrow, rotationAlignment: 'map' }).setLngLat(f.geometry.coordinates).addTo(map);
+    });
+    const zc = () => box.classList.toggle('zin', map.getZoom() >= 11.5);
+    map.on('zoom', zc); zc();
+    map.on('error', () => { /* 下地のタイルが取れないときも、線はそのまま */ });
+  }
+
+  /* ========== 旅程 ========== */
+  function seatInline(key) {
+    const f = fam(), tr = T.trains[key];
+    const s = f ? T.seats[key][f] : [...T.seats[key].yamaguchi, ...T.seats[key].iizuka];
+    return `<span class="seat-inline">${f ? famName() : '6席'} ${tr.car}号車 <b>${s.join('・')}</b></span>`;
+  }
+  const MODE = { shinkansen: 'train', train: 'train', jr: 'train', metro: 'metro', walk: 'walk', car: 'car', highway: 'road' };
+  const TYPE_LABEL = { hotel: 'ホテル', spot: 'おでかけ', food: 'ごはん', car: 'レンタカー', parking: '駐車場', visit: '訪問' };
+
+  /* 行程表のボタンは3段階にそろえ、どの行も同じ並び（1段目→2段目→3段目）で本文の下に置く。同じ行き先のボタンは1つの行に1つだけ。
+     1段目 pri：その地点・区間で使う主な機能（3D乗換・時刻表・いまどのへん？・チェックインQR）
+     2段目：しおりの中のページ（指定席券・スポットのページなど）
+     3段目 ext-s：外の地図・乗換案内（小さなアイコンと短い言葉。各区間に1つ） */
+  const actA = (href, icon, label, tier = '', attrs = '') => `<a class="act${tier ? ' ' + tier : ''}" href="${href}"${attrs}>${ic(icon)}<span>${label}</span></a>`;
+  const actB = (attrs, icon, label, tier = '') => `<button type="button" class="act${tier ? ' ' + tier : ''}" ${attrs}>${ic(icon)}<span>${label}</span></button>`;
+  const actX = (href, icon, label, aria) => `<a class="act ext-s" href="${href}" target="_blank" rel="noopener" aria-label="${esc(aria)}" title="${esc(aria)}">${ic(icon)}<span>${label}</span></a>`;
+  const TO_ACT = { spot: ['spot', 'くわしく'], visit: ['spot', 'くわしく'], hotel: ['bed', 'ホテルの案内'], car: ['car', 'レンタカー'], parking: ['car', '駐車場の候補'], food: ['bowl', 'お店のページ'] };
+  const LINK_IC = { '#/ride/ekiben': 'bowl', '#/spot/loop': 'road' };
+  const xferLabel = xf => `${xf.st === '博多' ? '乗り換え' : xf.s === 2 ? '駅の出方' : '駅での乗り方'}（3D）`;
+  /* 区間の外部リンク：電車・地下鉄は Yahoo!乗換案内（日付と出発時刻入り）、徒歩・車は Googleマップの道順。新幹線・特急はしおりの中の案内に任せる */
+  function moveExt(day, i) {
+    const it = day.items[i], a = day.items[i - 1], b = day.items[i + 1];
+    if (it.mode === 'metro' || it.mode === 'jr') return actX(yjUrl(a.name, b.name, day.date, a.dep || a.arr), 'out', '乗換案内', `Yahoo!乗換案内：${a.name}→${b.name}（${MD(day.date)} ${a.dep || a.arr}発）`);
+    if (it.mode === 'walk') return actX(gdir(placeQ(a.name), placeQ(b.name), 'walking'), 'out', '徒歩ルート', `Googleマップ：${shortName(a)}→${shortName(b)}の徒歩ルート`);
+    if (it.mode === 'car' || it.mode === 'highway') {
+      const dv = it.dr && (day.drives || []).find(x => x.id === it.dr);
+      return dv ? actX(driveUrl(dv), 'out', '車ルート', `Googleマップ：${dv.label}（予定の道筋の経由地入り）`)
+        : actX(gdir(placeQ(a.name), placeQ(b.name), 'driving'), 'out', '車ルート', `Googleマップ：${shortName(a)}→${shortName(b)}の車ルート`);
+    }
+    return '';
+  }
+  /* 声かけ：大きな移動の出発の予定時刻が来たら、行程表と「今日の予定」の上に一度だけ小さく出す（1日4回まで。閉じたら次の節目まで出さない） */
+  const NUDGE_MAX = 4;
+  const bigMove = (day, i) => { const it = day.items[i], a = day.items[i - 1]; return it.t === 'move' && (['shinkansen', 'train', 'jr', 'metro'].includes(it.mode) || ((it.mode === 'car' || it.mode === 'highway') && it.dr && a && a.type !== 'ramp' && !a.minor)); };
+  function nudge() {
+    const day = todayDay(); if (!day || phase() !== 'during' && !Clock.active()) return null;
+    const t = now(), sc = schedule(day), S = sc.shift;
+    let st = store.get('nudge'); if (!st || st.date !== day.date) st = { date: day.date, seen: [], closed: [] };
+    const m = day.items.map((it, i) => i).find(i => {
+      if (!bigMove(day, i)) return false;
+      const r = sc.rows[i - 1], at = r.d || r.a;
+      return at && t >= at && t < +at + 15 * 6e4 && !(S && S.i >= i - 1);
+    });
+    if (m === undefined) return null;
+    const id = `${day.date}:${m}`;
+    if (st.closed.includes(id)) return null;
+    if (!st.seen.includes(id)) { if (st.seen.length >= NUDGE_MAX) return null; st.seen.push(id); store.set('nudge', st); }
+    return { id, day, text: `予定では、いまごろ${shortName(day.items[m - 1])}を出発です。ずれていたら、いまいる場所を押すと、この先の時刻を合わせられます。` };
+  }
+  const nudgeHtml = nd => nd ? `<div class="nudge" role="note"><p>${esc(nd.text)}</p><button type="button" class="nudge-x" data-nudge="${nd.id}" aria-label="この案内を閉じる">×</button></div>` : '';
+  /* ずれの帯（行程表の上と「今日の予定」） */
+  function shiftBar(day) {
+    const x = shiftText(day); if (!x) return '';
+    return `<div class="shift-bar" role="status"><p class="shb-main">${ic('here')}<span>${esc(x.text)}</span></p>${x.warn ? `<p class="shb-warn">${esc(x.warn)}</p>` : ''}
+      <button type="button" class="act" data-unshift>予定どおりに戻す</button></div>`;
+  }
+
+  function viewTrip(n) {
+    const day = T.days.find(d => d.n === n) || T.days[0];
+    const t = now(), evs = events(day), sc = schedule(day);
+    const curIdx = (evs.find(e => e.start <= t && t < e.end) || {}).i;
+    const isToday = ymd(t) === day.date, S = sc.shift;
+    const nowWord = S ? 'いま' : '予定ではいまごろ';
+    const c = DAYC(day.n);
+    const tabs = `<nav class="daytabs" aria-label="日付">${T.days.map(d => `<a href="#/trip/${d.n}" style="--c:${DAYC(d.n)}" class="${d.n === day.n ? 'on' : ''}">DAY ${d.n}<b>${d.label.split('/')[1]}</b>${d.dow}</a>`).join('')}</nav>`;
+    const warnAt = i => (sc.warns.find(w => w.i === i) || {}).text;
+    const lis = day.items.map((it, i) => {
+      const e = evs[i];
+      const st = i === curIdx ? 'now' : (e.end < t ? 'done' : '');
+      const nowTag = st === 'now' ? `<span class="now-tag">${nowWord}</span>` : '';
+      if (it.t === 'stop') {
+        const r = sc.rows[i];
+        const ta = r.a && r.pa && +r.a !== +r.pa, td = r.d && r.pd && +r.d !== +r.pd;
+        const tm = (d, p, moved, u) => moved ? `<span class="est">${hm(d)}<small>${u}ごろ</small></span>` : `${hm(p)}<small>${u}</small>`;
+        const time = (it.arr ? tm(r.a, r.pa, ta, '着') : '') + (it.dep ? tm(r.d, r.pd, td, '発') : '')
+          + (ta || td ? `<small class="was">予定<br>${it.arr && ta ? it.arr + '着' : it.dep + '発'}</small>` : '');
+        const leg = it.type === 'station' && TT.legs.find(l => l.date === day.date && l.from === it.name && l.dep === it.dep);
+        const xf = it.type === 'station' && XFER.find(x => x.date === day.date && x.st === it.name && x.arr === it.arr);
+        const to = it.to && (TO_ACT[it.type] || ['spot', 'くわしく']);
+        const acts = [
+          leg ? actB(`data-tt="${leg.id}"`, 'clock', '時刻表', 'pri') : '',
+          xf ? actA(xferHref(xf.s), 'cube', xferLabel(xf), 'pri') : '',
+          it.qr ? actB('data-act="qr"', 'qr', 'チェックインQR', 'pri') : '',
+          to ? actA(it.to, to[0], to[1]) : '',
+          it.link ? actA(it.link[1], LINK_IC[it.link[1]] || 'spot', esc(it.link[0])) : '',
+          it.map ? actX(gmap(it.map), 'out', '地図', `${it.name}をGoogleマップで開く`) : ''
+        ].filter(Boolean).join('');
+        let head;
+        if (it.type === 'station' && !it.minor) {
+          const [col, co] = lineOf(day, i);
+          head = `${nowTag}<div class="sign" style="--line:${col}"><div class="sign-main"><div class="sign-kanji">${esc(it.name)}</div><div class="sign-roma">${esc(it.roma)}</div></div><div class="sign-band"></div><div class="sign-foot"><span class="sign-co">${co}</span><span>${it.kind === 'start' ? 'ここから出発' : it.kind === 'goal' ? 'とうちゃく' : ''}</span></div></div>`;
+        } else if (it.type === 'station') {
+          const [col] = lineOf(day, i);
+          head = `<div class="stop-name" style="--line:${col}">${nowTag}<span class="linechip"></span>${esc(it.name)}<span class="small muted" style="font-weight:500">　駅</span></div>`;
+        } else {
+          head = `${TYPE_LABEL[it.type] && !it.minor ? `<div class="stop-kind">${TYPE_LABEL[it.type]}${it.kind === 'goal' ? '・とうちゃく' : it.kind === 'start' ? '・出発' : ''}</div>` : ''}<div class="stop-name">${nowTag}${esc(it.name)}</div>`;
+        }
+        const here = isToday && it.type !== 'ramp' ? `<button type="button" class="here" data-here="${day.date}:${i}" aria-pressed="${!!(S && S.i === i)}" aria-label="${esc(shortName(it))}を、いまいる場所にする">いまここ</button>` : '';
+        const w = warnAt(i);
+        return `<li class="${st}${S && S.i === i ? ' anchor' : ''}" id="it-${i}"><div class="row ${it.minor ? 'minor' : ''} ${it.type === 'ramp' ? 'ramp' : ''}">
+          <div class="time num">${time}${here}</div><div class="pin"></div>
+          <div class="body">${head}${it.note ? `<p class="stop-note${it.optional ? ' opt' : ''}">${esc(it.note)}</p>` : ''}${w ? `<p class="stop-warn">${esc(w)}</p>` : ''}${acts ? `<div class="acts">${acts}</div>` : ''}</div></div></li>`;
+      }
+      const tr = it.train && T.trains[it.train];
+      const extra = [
+        tr ? `<div>${tr.kind}・${tr.vehicle}</div>` : '',
+        it.detail ? `<div>${esc(it.detail)}</div>` : '',
+        it.dist ? `<div>距離 ${it.dist}</div>` : '',
+        it.note ? `<div>${esc(it.note)}</div>` : ''
+      ].join('');
+      const acts = [
+        tr && T.nozomiLine[it.train] ? actA(`#/ride/live/${it.train}`, 'train', 'いまどのへん？', 'pri') : '',
+        tr ? actA(`#/ride/${it.train}`, 'seat', '指定席券') : '',
+        it.link ? actA(it.link[1], LINK_IC[it.link[1]] || 'spot', esc(it.link[0])) : ''
+      ].filter(Boolean).join('');
+      const openIt = tr || st === 'now' || it.note;
+      /* 3段目（外の地図・乗換案内）は、区間の行の右端に1つ */
+      return `<li class="${st}" id="it-${i}"><div class="row move-row"><div class="time num">${dur(it.min)}</div><div class="pin"></div>
+        <div class="body"><div class="mv-head">${extra ? `<details${openIt ? ' open' : ''}><summary class="move-line">${ic(MODE[it.mode] || 'route')}<span>${nowTag}${esc(it.line)} <span class="tog">詳細</span></span></summary><div class="move-extra">${extra}</div></details>`
+          : `<div class="move-line">${ic(MODE[it.mode] || 'route')}<span>${nowTag}${esc(it.line)}</span></div>`}${moveExt(day, i)}</div>${tr ? seatInline(it.train) : ''}${acts ? `<div class="acts">${acts}</div>` : ''}</div></div></li>`;
+    }).join('');
+    const prevN = day.n > 1 ? day.n - 1 : null, nextN = day.n < 4 ? day.n + 1 : null;
+    return `<div class="wrap" style="--c:${c}">${tabs}
+      <header class="dayhead"><div class="eyebrow">Day ${day.n} — ${day.label} (${day.dow})・${day.theme}</div><h1>${esc(day.title)}</h1><p class="route">${esc(day.route)}｜${day.summary}</p>
+      <div class="acts">${day.drives ? actA('#/map/drive', 'road', 'ドライブの道順（地図とGoogleマップ）') : ''}${T.tips && T.tips.items.some(x => x.day.includes(day.n)) ? actA(`#/tips/d${day.n}`, 'tip', 'この日のワンポイント') : ''}</div>
+      ${tvLine(tvPick(day.n), 'この日のトリビア', `#/trivia/d${day.n}`)}</header>
+      ${isToday ? `<div class="trip-sync">${nudgeHtml(nudge())}${shiftBar(day) || `<p class="sync-hint">${ic('here')}<span>予定からずれたら、いまいる地点の「いまここ」を押すと、この先の時刻を合わせて表示します。</span></p>`}</div>` : ''}
+      <ol class="tl">${lis}</ol>
+      ${day.dinner ? `<div class="dinner-note"><p class="memo">${esc(day.dinner)}</p><div class="btns"><a class="btn" href="#/food/dinner">夕ごはん候補を見る</a></div></div>` : ''}
+      <p class="note">移動時間は、子ども連れや荷物を考えた余裕を含む目安です。「乗換案内」「徒歩ルート」「車ルート」は、外のサイト（Yahoo!乗換案内・Googleマップ）で開きます。</p>
+      <div class="btns" style="justify-content:space-between;margin-top:28px">${prevN ? `<a class="btn quiet" href="#/trip/${prevN}">← ${prevN}日目</a>` : '<span></span>'}${nextN ? `<a class="btn quiet" href="#/trip/${nextN}">${nextN}日目 →</a>` : ''}</div></div>`;
+  }
+
+  /* ========== 駅の時刻表 ========== */
+  const TT = window.TT || { stations: [], legs: [], lines: {}, holidays: [] };
+  const TD = () => (window.TT_DATA && window.TT_DATA.tables) || {};
+  const DIA = { weekday: '平日', holiday: '土休日' };
+  const isHoliday = date => { const w = new Date(date + 'T12:00:00+09:00').getDay(); return w === 0 || w === 6 || TT.holidays.includes(date); };
+  const diaOf = date => (isHoliday(date) ? 'holiday' : 'weekday');
+  const addDays = (date, n) => ymd(new Date(new Date(date + 'T12:00:00+09:00').getTime() + n * 864e5));
+  const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
+  const hm2 = m => `${Math.floor(m / 60) % 24}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
+  /* 運行日：0〜3時台は前の日のダイヤの続き。min はその日の0時からの分（24時以降も通し） */
+  function svc(t) {
+    const j = new Date(t.getTime() + 9 * 36e5);
+    let date = j.toISOString().slice(0, 10), h = j.getUTCHours();
+    if (h < 4) { date = addDays(date, -1); h += 24; }
+    return { date, min: h * 60 + j.getUTCMinutes() + j.getUTCSeconds() / 60 };
+  }
+  const ttStation = id => TT.stations.find(s => s.id === id);
+  const ttLineOf = (stn, table) => (stn.lines.find(l => l.dirs.includes(table)) || stn.lines[0]).line;
+  const firstChar = s => [...s][0];
+
+  function ttHTML(c) {
+    const stn = c.stn, table = c.table, data = TD()[table], line = TT.lines[ttLineOf(stn, table)];
+    const leg = c.leg;
+    const live = svc(now());
+    const ref = c.preview && leg ? { date: leg.date, min: toMin(leg.dep) - 10 } : live;
+    const auto = diaOf(ref.date);
+    /* JR の表は平日のみ収録：土休日を選んでも平日の表を出し、その旨を書く */
+    const only = data && data.weekdayOnly && !data.holiday;
+    const dia = only ? 'weekday' : c.dia || auto;
+    const list = data && data[dia] ? data[dia].map(([t, dest, type, x, pl]) => ({ m: toMin(t), dest, type: type || '', skip: x === false, pl })) : [];
+    const planM = leg && leg.table === table && diaOf(leg.date) === dia ? toMin(leg.dep) : null;
+    const stnLegs = TT.legs.filter(l => l.station === stn.id);
+
+    /* 行き先・種別の記号 */
+    const cnt = {}; list.forEach(x => (cnt[x.dest] = (cnt[x.dest] || 0) + 1));
+    const main = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])[0];
+    const dA = (data && data.destAbbr) || {}, tA = (data && data.typeAbbr) || {};
+    const dMark = {}; Object.keys(cnt).filter(d => d !== main).forEach(d => { let k = dA[d] || firstChar(d); if (!dA[d] && Object.values(dMark).includes(k)) k = [...d].slice(0, 2).join(''); dMark[d] = k; });
+    const tMark = {}; list.forEach(x => { if (x.type && !/^(普通|各駅停車|各停)$/.test(x.type) && !tMark[x.type]) tMark[x.type] = tA[x.type] || (x.type.replace(/快速$/, '') ? firstChar(x.type) : '快'); });
+    const mainTo = /運転$/.test(main || '') ? `<b>${esc(main)}</b>` : `<b>${esc(main)}</b>行き`;
+
+    const segs = (items, attr, cur) => items.length > 1 ? `<div class="segs tt-segs">${items.map(([v, l]) => `<button ${attr}="${v}" class="${v === cur ? 'on' : ''}">${l}</button>`).join('')}</div>` : '';
+    const dirName = id => (TD()[id] || {}).dir || (TT.dirNames || {})[id] || '';
+    const lineTabs = segs(stn.lines.map(l => [l.dirs[0], TT.lines[l.line].name]), 'data-ttdir', stn.lines.find(l => l.dirs.includes(table)).dirs[0]);
+    const dirs = stn.lines.find(l => l.dirs.includes(table)).dirs;
+    const dirTabs = dirs.length > 1 ? segs(dirs.map(d => [d, dirName(d)]), 'data-ttdir', table) : `<p class="tt-dir1">${esc(dirName(table))}</p>`;
+
+    const head = `<div class="tt-sign" style="--line:${line.color}"><span class="tt-code">${stn.code}</span><div><b>${esc(stn.name)}</b><small>${esc(stn.roma)}</small></div><span class="tt-co">${line.co}<br>${line.name}</span></div>`;
+    const legRow = stnLegs.length ? `<div class="tt-legs"><span>旅程で乗る便</span>${stnLegs.map(l => `<button data-ttleg="${l.id}" class="${leg && leg.id === l.id ? 'on' : ''}">${MD(l.date)} ${l.dep}<small>→${esc(l.to)}</small></button>`).join('')}</div>` : '';
+    const diaRow = `<div class="tt-dia"><span>${MD(ref.date)}（${dowJ(ref.date)}）は<b>${DIA[auto]}ダイヤ</b></span>${only ? '<span class="tt-only">平日のみ収録</span>' : `<span class="tt-diasw">${['weekday', 'holiday'].map(k => `<button data-ttdia="${k}" class="${k === dia ? 'on' : ''}">${DIA[k]}</button>`).join('')}</span>`}</div>
+      ${only && auto === 'holiday' ? '<p class="tt-prev">この駅は平日の表だけを収録しています。土休日の時刻は、下の「公式の時刻表」で確認してください。</p>' : ''}`;
+
+    const legRows = () => leg && leg.table === table ? [
+      ['乗る便', `${leg.dep}発 → ${esc(leg.to)}（約${leg.min}分）`],
+      ['ホーム・車両', `${leg.platform}・<b>${esc(leg.car)}</b>${leg.note ? `<br><small>${esc(leg.note)}</small>` : ''}`],
+      ['降りたら', `<b>${esc(leg.exit)}</b>${leg.near ? `（${esc(leg.near)}に近い）` : ''}`],
+      ['運賃の目安', esc(leg.fare)]
+    ] : [];
+    if (!data || !list.length) {
+      return `${head}${lineTabs}${dirTabs}${legRow}<p class="tt-missing">この駅の時刻表は、しおりにはまだ入っていません。下の「公式の時刻表」（JRおでかけネット）で確認してください。</p>
+        ${legRows().length ? infoList(legRows()) : ''}
+        <div class="btns">${stn.official ? ext(stn.official, '公式の時刻表') : ''}${ext(line.info, `運行情報（${line.co}）`)}</div>`;
+    }
+
+    /* 次の3本 */
+    const up = list.filter(x => !x.skip && x.m >= Math.floor(ref.min));
+    const next3 = up.slice(0, 3);
+    const rem = x => { const r = x.m - ref.min; return r < 1 ? 'まもなく' : `あと${Math.floor(r)}分`; };
+    const K = ['先発', '次発', '次々発'];
+    const tS = (data && data.typeShort) || {};
+    const tm = x => `${x.type && tMark[x.type] ? `<i class="tt-type">${esc(tS[x.type] || x.type)}</i>` : ''}${esc(x.dest)}${x.pl ? `<small class="tt-pl">${x.pl}番</small>` : ''}`;
+    const board = `<section class="board tt-board" aria-label="次の3本"><div class="board-head"><span>　</span><span>${line.name}　${esc(dirName(table))}</span><span>${c.preview ? `${MD(ref.date)} 予定` : fmtHM(now()) + ' 現在'}</span></div>
+      ${next3.length ? next3.map((x, i) => `<div class="board-row tt-row${i ? ' sub' : ''}${x.m === planM ? ' plan' : ''}"><span class="k">${K[i]}</span><span class="n">${tm(x)}</span><span class="t num">${hm2(x.m)}</span><span class="r">${x.m === planM ? '乗る便' : c.preview ? '' : rem(x)}</span></div>`).join('')
+        : `<div class="board-row"><span class="k">　</span><span class="n">本日の運転は終了しました</span><span class="t"></span></div>`}</section>
+      ${c.preview ? `<p class="tt-prev">${MD(leg.date)}（${dowJ(leg.date)}）${leg.dep}発の予定に合わせて表示しています。当日は、いまの時刻から数えます。</p>` : ''}`;
+
+    /* 時ごとの一覧 */
+    const hours = []; list.forEach(x => { const h = Math.floor(x.m / 60); (hours[hours.length - 1] && hours[hours.length - 1].h === h ? hours[hours.length - 1].xs : (hours.push({ h, xs: [] }), hours[hours.length - 1].xs)).push(x); });
+    const curH = Math.floor(ref.min / 60), nx = next3[0];
+    const grid = `<div class="tt-grid" role="table" aria-label="${esc(stn.name)} ${line.name} ${esc(dirName(table))} ${DIA[dia]}">${hours.map(({ h, xs }) => `<div class="tt-hr${h === curH ? ' cur' : ''}" role="row"><b class="num" role="rowheader">${h % 24}</b><div class="tt-ms" role="cell">${xs.map(x => {
+      const cls = [x.m < Math.floor(ref.min) ? 'past' : '', x.m === planM ? 'plan' : '', x === nx ? 'nx' : '', x.skip ? 'skip' : ''].filter(Boolean).join(' ');
+      const marks = (tMark[x.type] ? `<i class="mt">${tMark[x.type]}</i>` : '') + (dMark[x.dest] ? `<i class="md">${dMark[x.dest]}</i>` : '');
+      return `<span class="${cls}"${x.m === planM ? ' aria-label="乗る予定の便"' : ''}>${String(x.m % 60).padStart(2, '0')}${marks ? `<sup>${marks}</sup>` : ''}</span>`;
+    }).join('')}</div></div>`).join('')}</div>
+      <p class="tt-legend">無印は${mainTo}${Object.entries(dMark).map(([d, k]) => `・<i class="md">${k}</i>は${esc(d)}行き`).join('')}${Object.entries(tMark).map(([t, k]) => `・<i class="mt">${k}</i>は${esc(t)}`).join('')}${planM !== null ? '・<span class="lg-plan">囲み</span>は乗る予定の便' : ''}${list.some(x => x.skip) ? '・<s>取り消し線</s>は新大阪に止まらない列車' : ''}</p>`;
+
+    const first = list.find(x => !x.skip), last = [...list].reverse().find(x => !x.skip);
+    const rows = legRows();
+    if (data.platform) rows.push(['のりば', esc(data.platform)]);
+    rows.push(['始発・終電', `<span class="num">${hm2(first.m)}</span>発 ／ 終電 <b class="num">${hm2(last.m)}</b>発 ${esc(last.dest)}行き`]);
+    const src = data.sources && (data.sources[dia] || data.sources.weekday);
+    return `${head}${lineTabs}${dirTabs}${legRow}${diaRow}${board}${grid}${infoList(rows)}
+      <div class="btns">${ext(line.info, `運行情報（${line.co}）`)}${src ? ext(src, '公式の時刻表') : ''}</div>
+      <p class="note">${MD(data.checked)}時点の${line.co}公式時刻表より。${data.diaNote ? esc(data.diaNote) + '。' : ''}遅れや臨時列車は反映されません。</p>`;
+  }
+  const liveHooks = new Set();
+  function openTT(opt = {}) {
+    let leg = opt.leg ? TT.legs.find(l => l.id === opt.leg) : null;
+    const stn = ttStation(leg ? leg.station : opt.station) || TT.stations[0];
+    const today = svc(now()).date;
+    if (!leg) leg = TT.legs.find(l => l.station === stn.id && l.date === today) || null;
+    const c = { stn, leg, table: leg ? leg.table : stn.lines[0].dirs[0], dia: null, preview: !!(leg && leg.date !== today && opt.leg && opt.preview !== false) };
+    sheet('駅の時刻表', '<div class="tt" id="tt-body"></div>', el => {
+      const body = $('#tt-body', el), sh = $('.sheet', el);
+      const draw = scroll => {
+        const y = sh.scrollTop, gy = $('.tt-grid', body) ? $('.tt-grid', body).scrollTop : 0;
+        body.innerHTML = ttHTML(c);
+        applyRuby(body);
+        /* 一覧だけを、いまの時（予定の表示では乗る便の時）までスクロール */
+        const g = $('.tt-grid', body);
+        if (g) {
+          const r = c.preview && $('.tt-ms .plan', g) ? $('.tt-ms .plan', g).closest('.tt-hr') : $('.tt-hr.cur', g);
+          if (scroll) { if (r) g.scrollTop = r.offsetTop - 8; } else g.scrollTop = gy;
+        }
+        sh.scrollTop = y;
+      };
+      draw(true);
+      body.addEventListener('click', e => {
+        const b = e.target.closest('[data-ttdir],[data-ttdia],[data-ttleg]'); if (!b) return;
+        const td = svc(now()).date;
+        if (b.dataset.ttdir) { c.table = b.dataset.ttdir; c.leg = TT.legs.find(l => l.table === c.table && l.date === td) || null; c.preview = false; c.dia = null; }
+        if (b.dataset.ttdia) c.dia = b.dataset.ttdia === diaOf(svc(now()).date) && !c.preview ? null : b.dataset.ttdia;
+        if (b.dataset.ttleg) { c.leg = TT.legs.find(l => l.id === b.dataset.ttleg); c.table = c.leg.table; c.preview = c.leg.date !== td; c.dia = null; }
+        draw(!b.dataset.ttdia);
+      });
+      const hook = () => draw(false);
+      liveHooks.add(hook);
+      return () => liveHooks.delete(hook);
+    });
+  }
+  function ttSection() {
+    return `<section class="sec">${secH('駅の時刻表（大阪市内）', 'Timetables', 'tt')}
+      <p class="sec-lead">旅程で乗る地下鉄とJRの駅です。駅を押すと、その日のダイヤで「次の3本」と時刻の一覧が開きます。電波がなくても見られます。</p>
+      <ul class="tt-list">${TT.stations.map(s => {
+        const legs = TT.legs.filter(l => l.station === s.id);
+        return `<li><button data-tts="${s.id}"><span class="tt-chips">${s.lines.map(l => `<i style="--line:${TT.lines[l.line].color}"></i>`).join('')}</span><span><b>${esc(s.name)}</b><small>${s.lines.map(l => TT.lines[l.line].name).join('・')}</small></span><span class="tt-when num">${legs.map(l => `${MD(l.date)} ${l.dep}`).join('<br>')}</span><span class="go" aria-hidden="true">→</span></button></li>`;
+      }).join('')}</ul></section>`;
+  }
+
+  /* ========== のりもの ========== */
+  /* 駅の乗り換え（3D）：transfer.html#s1〜s4。three.js はそのページを開いたときだけ読み込む */
+  const XFER = [
+    { s: 1, date: '2026-10-17', st: '博多', arr: '11:42', title: '博多の乗り換え', sub: 'リレーかもめ92号 → のぞみ28号', when: '10/17 11:42着 → 12:15発' },
+    { s: 2, date: '2026-10-17', st: '新大阪', arr: '14:43', title: '新大阪での出方', sub: 'のぞみ28号 → 4番口・ホテルへ', when: '10/17 14:43着' },
+    { s: 3, date: '2026-10-20', st: '新大阪', arr: '10:30', title: '新大阪での乗り方', sub: '4番口 → のぞみ17号', when: '10/20 11:02発' },
+    { s: 4, date: '2026-10-20', st: '博多', arr: '13:30', title: '博多の乗り換え', sub: 'のぞみ17号 → リレーかもめ33号', when: '10/20 13:30着 → 13:54発' }
+  ];
+  const xferHref = n => `transfer.html#s${n}`;
+  const xferLink = (n, label, cls = 'more') => `<a class="${cls} xfer-link" href="${xferHref(n)}">${label}</a>`;
+  function xferSection(dir) {
+    const list = dir === 'back' ? [...XFER.slice(2), ...XFER.slice(0, 2)] : XFER;
+    return `<section class="sec">${secH('駅の乗り換え（3D）', 'Stations', 'transfer')}
+      <p class="sec-lead">博多と新大阪の駅を立体の図にして、ホームから次の列車・出口までの道のりを示します。階段とエレベーターのルートを切り替えられ、歩く距離と時間の目安も出ます。図は目安です。当日は駅の案内表示を優先してください。</p>
+      <div class="xfer-grid">${list.map(x => `<a class="xfer" href="${xferHref(x.s)}"><span class="xfer-n">${'①②③④'[x.s - 1]}</span><span><b>${x.title}</b><small>${x.sub}</small><small class="num">${x.when}</small></span></a>`).join('')}</div>
+      <div class="btns">${ext('https://www.jr-odekake.net/eki/premises?id=0910127', '博多駅の構内図（公式）')}${ext('https://www.jr-odekake.net/eki/premises?id=0610155', '新大阪駅の構内図（公式）')}</div>
+      <p class="note">初めて開くときは、図の部品を読み込むのに少し時間がかかります。一度開けば、電波がなくても見られます。構内図（公式）はJRおでかけネットで開きます。</p></section>`;
+  }
+  /* 座席表：真上から見た図。左から右へ列の番号順に並べ、進行方向の矢印を付ける。
+     1列目は、のぞみは博多寄り（西）、リレーかもめ（787系）は武雄温泉寄り、かもめ（N700S）は長崎寄り。
+     なので往路（東・博多・武雄温泉へ向かう）はどれも番号の大きい側＝右が前、復路は左が前。
+     のぞみは E席が北側（山側）・A席が南側（海側）。図は上が北になる（車窓の城は北側＝往路は左・復路は右の窓） */
+  function seatMap(key) {
+    const tr = T.trains[key], f = fam();
+    const mine = f ? T.seats[key][f] : [];
+    const all = [...T.seats[key].yamaguchi, ...T.seats[key].iizuka];
+    const [L, R] = tr.layout.split('|');
+    const fwd = tr.dir === 'go';
+    const sanyo = !!T.nozomiLine[key];
+    const top = [...R].reverse(), bot = [...L].reverse();
+    const winT = sanyo ? `北側（山側）の窓・${R.slice(-1)}席` : `窓側・${R.slice(-1)}席`;
+    const winB = sanyo ? `南側（海側）の窓・${L[0]}席` : `窓側・${L[0]}席`;
+    const cell = (r, c) => { const id = `${r}${c}`; const m = mine.includes(id); return `<span class="seat ${m ? 'mine' : all.includes(id) ? 'fam' : ''}" aria-label="${id}${m ? '（わたしの席）' : ''}">${c}</span>`; };
+    const line = c => `<span class="sm-l">${c}</span>${tr.rows.map(r => cell(r, c)).join('')}`;
+    const arrow = `<svg class="sm-arrow" viewBox="0 0 40 12" aria-hidden="true"><path d="M2 6h34M30 1.5 37 6l-7 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    return `<div class="smap" role="img" aria-label="${tr.car}号車の座席表。進行方向は図の${fwd ? '右' : '左'}。${sanyo ? `上が北側（山側）の窓の${R.slice(-1)}席、下が南側（海側）の窓の${L[0]}席` : ''}">
+      <div class="sm-dir ${fwd ? 'r' : 'l'}"><span>進行方向<small>${esc(tr.to)}へ</small></span>${arrow}</div>
+      <div class="sm-win">${winT}</div>
+      <div class="sm-grid" style="--n:${tr.rows.length}">${top.map(line).join('')}<span class="sm-aisle">通路</span>${bot.map(line).join('')}
+        <span class="sm-l"></span>${tr.rows.map(r => `<span class="sm-rn num">${r}</span>`).join('')}</div>
+      <div class="sm-win">${winB}</div></div>
+      ${sanyo ? `<p class="sm-note">${R.slice(-1)}席の窓が北側（山側）です。車窓の城は北側に見えます（${fwd ? '往路は進行方向の左' : '復路は進行方向の右'}）。</p>` : ''}
+      <div class="seat-legend" style="margin-top:8px">${f ? `<span><i style="background:var(--shu)"></i>${famName()}</span><span><i style="background:var(--paper-3)"></i>${f === 'iizuka' ? '山口家' : '飯塚家'}</span>` : '<span><i style="background:var(--paper-3)"></i>予約した6席</span>'}<span class="num">数字は列の番号</span></div>`;
+  }
+  function ticket(key) {
+    const tr = T.trains[key], f = fam();
+    const mine = f ? T.seats[key][f] : [...T.seats[key].yamaguchi, ...T.seats[key].iizuka];
+    const [m, d] = tr.date.slice(5).split('-').map(Number);
+    return `<article class="ticket-wrap" id="${key}" style="margin-top:14px"><div class="ticket">
+      <div class="t-head"><b>${tr.ticket}</b><span>${f ? famName() : '6名分'}</span></div>
+      <div class="t-route"><span class="st">${tr.from}</span><span class="arr">→</span><span class="st">${tr.to}</span></div>
+      <div class="t-time num"><span>${m}月${d}日（${tr.dep}発）</span><span>（${tr.arr}着）</span></div>
+      <div class="t-seat"><span class="tn">${tr.name}</span><span class="car num">${tr.car}号車</span><span class="seats num">${mine.join('・')}</span></div>
+      <div class="t-foot">${tr.kind}・${tr.vehicle}・${dur(tr.min)}</div></div>
+      ${T.nozomiLine[key] ? `<div class="btns ticket-live"><a class="btn live-btn" href="#/ride/live/${key}">${ic('train')} いまどのへん？</a><a class="more" href="#/ride/live/${key}/full">全画面の地図</a>${key === 'nozomi28' ? xferLink(2, '新大阪での出方（3D）') : key === 'nozomi17' ? xferLink(3, '新大阪での乗り方（3D）') : ''}</div>` : ''}
+      <details class="ticket-more"><summary>座席表とメモ</summary>${seatMap(key)}<p class="note">${esc(tr.carNote)}</p>
+      <div class="btns">${ext(tr.timetable, '最新の時刻表')}</div></details></article>`;
+  }
+
+  function viewRide(sub, arg, opt) {
+    if (sub === 'live') return viewLive(arg, opt === 'full');
+    if (T.trains[sub]) session.set('dir', T.trains[sub].dir);
+    const dir = session.get('dir') || (ymd(now()) >= '2026-10-20' ? 'back' : 'go');
+    const keys = Object.keys(T.trains).filter(k => T.trains[k].dir === dir);
+    const tf = T.transfers[dir];
+    const lk = dir === 'go' ? 'nozomi28' : 'nozomi17', ltr = T.trains[lk];
+    return `<div class="wrap">${topbar()}${phead('Trains', 'のりもの', '指定席券・乗り換え・車窓の楽しみを、この一枚に。')}
+      <a class="ride-live" href="#/ride/live/${lk}"><span class="rl-h"><span class="tl-tag">いまどのへん？</span><b>${ltr.name}</b><small class="num">${MD(ltr.date)} ${ltr.from} ${ltr.dep} → ${ltr.to} ${ltr.arr}</small></span>
+        ${routeMini(lk, { demo: liveNowKey() !== lk })}<span class="rl-t">新幹線の車内で、いまどこを走っているか、窓から何が見えるかが分かります。</span></a>
+      <nav class="ride-idx" aria-label="のりものの一覧">${[['指定席券と座席表', '#/ride/' + keys[0]], ['駅の乗り換え（3D）', '#/ride/transfer'], ['駅の時刻表', '#/ride/tt'], ['車窓の城', '#/ride/castles'], ['駅弁', '#/ride/ekiben'], ['鉄道トリビア', '#/ride/trivia'], ['レンタカー', '#/stay/car']].map(([l, h]) => `<a href="${h}">${l}</a>`).join('')}</nav>
+      <div class="segs" role="tablist"><button data-dir="go" class="${dir === 'go' ? 'on' : ''}">往路　10/17（土）</button><button data-dir="back" class="${dir === 'back' ? 'on' : ''}">復路　10/20（火）</button></div>
+      ${!fam() ? `<p class="small">家族を選ぶと、自分の席だけが光ります。<button class="more" data-act="fam">家族を選ぶ</button></p>` : ''}
+      ${keys.map((k, i) => ticket(k) + (tf[i] ? `<div class="transfer"><span class="w">乗り換え</span><div><b>${tf[i].at}駅</b><span class="small muted">　約${tf[i].wait}</span><p class="small">${esc(tf[i].text)}</p>${tf[i].at === '博多' ? `<div class="btns" style="margin-top:6px">${xferLink(dir === 'go' ? 1 : 4, '博多の乗り換えを立体の図で', 'btn quiet')}</div>` : ''}</div></div>` : '')).join('')}
+
+      ${xferSection(dir)}
+
+      ${ttSection()}
+
+      <section class="sec">${secH('車窓から見える3つの城', 'Castles', 'castles')}
+        <p class="sec-lead">福山城は停車中に、三原城跡と姫路城は通過中に見えます。${dir === 'go' ? '往路はどれも<b>進行方向の左</b>の窓。' : '復路はどれも<b>進行方向の右</b>の窓。'}時刻は目安です。</p>
+        ${T.castles.map((c, j) => `<div class="castle" data-sid="castle-${j}">${art('castle', 'castle-icon')}<div><h3>${c.name}<span class="small muted" style="font-family:var(--f-got);font-weight:500">　${c.station}駅・${c.side}</span></h3>
+          <p class="small">${esc(c.text)}</p><p class="when num"><b>${dir === 'go' ? '左' : '右'}の窓</b>・${dir === 'go' ? c.go : c.back}</p><div class="btns" style="margin-top:6px">${ext(c.url, 'くわしく', 'more')}</div></div></div>`).join('')}
+      </section>
+
+      <section class="sec">${secH('博多駅の駅弁', 'Ekiben', 'ekiben')}
+        <p class="sec-lead">人気ランキング全11品。乗り換え中に買うなら、2F新幹線改札内のコンコース（おみやげ街道博多・野の葡萄など）が一番早いです。「食べたい」を押すと、この端末に印が残ります。</p>
+        <ol class="bento">${T.ekiben.map(([n, p, d, chk], i) => `<li><span class="rk num">${i + 1}</span><div><div class="bn">${esc(n)}</div><div class="bd">${esc(d)}</div><button class="heart ${store.get('want', []).includes(n) ? 'on' : ''}" data-want="${esc(n)}">♡ 食べたい</button></div><div class="bp num">${yen(p)}${chk ? '<div class="small muted" style="font-weight:500">要確認</div>' : ''}</div></li>`).join('')}</ol>
+        <div class="btns">${ext(T.ekibenUrl, '駅弁の最新情報（JR九州）')}${ext('https://www.jr-odekake.net/eki/premises?id=0910127', '博多駅の構内図（JRおでかけネット）')}</div>
+      </section>
+
+      <section class="sec">${secH('鉄道トリビア', 'Trivia', 'trivia')}
+        <p class="sec-lead">カードをタップすると答えが開きます。<a class="more" href="#/trivia/rail">出典つきで、トリビアのページで読む →</a></p>
+        ${T.railTrivia.map((g, gi) => `<h3 class="sub">${g.train}<span class="small muted" style="font-family:var(--f-got);font-weight:500">　${g.model}</span></h3>
+          <div class="facts">${g.facts.map(([b, s]) => `<div><b class="num">${b}</b><span>${s}</span></div>`).join('')}</div>
+          <div class="cards">${g.items.map(([q, a], j) => `<button class="flip" data-flip data-tv="rail-${gi}-${j}"><div class="fq">${esc(q)}</div><div class="fa">${esc(a)}</div><div class="fh">タップして読む</div></button>`).join('')}</div>`).join('')}
+        ${window.LINE && LINE.passing ? `<h3 class="sub">${esc(LINE.passing.title)}<span class="small muted" style="font-family:var(--f-got);font-weight:500">　${esc(LINE.passing.sub)}</span></h3>
+          <div class="cards">${LINE.passing.items.map(([q, a], j) => `<button class="flip" data-flip data-tv="pass-${j}"><div class="fq">${esc(q)}</div><div class="fa">${esc(a)}</div><div class="fh">タップして読む</div></button>`).join('')}</div>` : ''}
+      </section></div>`;
+  }
+
+  function liveState(key, t = now()) {
+    const tr = T.trains[key];
+    const st = T.nozomiLine[key].map(([name, pref, a, d, stop]) => ({ name, pref, arr: jst(tr.date, a || d), dep: jst(tr.date, d || a), stop: !!stop }));
+    if (t < st[0].dep) return { st, pos: 0, mode: 'before' };
+    const last = st.length - 1;
+    if (t >= st[last].arr) return { st, pos: last, mode: 'after' };
+    for (let i = 0; i < st.length; i++) {
+      if (t >= st[i].arr && t < st[i].dep) return { st, pos: i, mode: 'stopped', i };
+      if (i < last && t >= st[i].dep && t < st[i + 1].arr) return { st, pos: i + (t - st[i].dep) / (st[i + 1].arr - st[i].dep), mode: 'running', i };
+    }
+    return { st, pos: 0, mode: 'before' };
+  }
+  function viewLive(key, full) {
+    if (!T.nozomiLine[key]) key = 'nozomi28';
+    const tr = T.trains[key], hasMap = window.LINE && window.LiveMap;
+    /* 全画面：地図だけの専用画面（#/ride/live/のぞみ/full で直接開ける） */
+    if (full && hasMap) return liveMapBlock(key, true);
+    return `<div class="wrap">${topbar()}<div class="lm-phead"><div><span class="eyebrow">Live</span><h1>${tr.name}は いまどのへん？</h1><p class="small muted num">${tr.from} ${tr.dep}発 → ${tr.to} ${tr.arr}着・${tr.vehicle}</p></div></div>
+      <div class="segs lm-segs"><button data-live="nozomi28" class="${key === 'nozomi28' ? 'on' : ''}">往路 のぞみ28号</button><button data-live="nozomi17" class="${key === 'nozomi17' ? 'on' : ''}">復路 のぞみ17号</button></div>
+      ${hasMap ? liveMapBlock(key, false) : ''}
+      <div id="live-board"></div>${hasMap ? '' : '<div id="live-alert"></div>'}<div id="live-tip"></div>
+      <ol class="line" id="line">${T.nozomiLine[key].map(([n, p, a, d, s]) => `<li class="${s ? 'stp' : ''} ${T.castles.some(c => c.station === n) ? 'castle' : ''}"><span class="lt num">${s ? (a && d && a !== d ? `${a}<br>${d}` : a || d) : a + '頃'}</span><span class="ld"></span><span class="ln">${n}</span><span class="lp">${p}</span></li>`).join('')}
+      <div class="fill" id="fill"></div>${PIN}</ol>
+      <p class="note">大きい丸の停車駅は公式時刻表の時刻、小さい丸の通過駅は推定時刻（目安）です。実際の運行とはずれることがあります。</p>
+      <div class="btns">${ext(tr.timetable, '公式の時刻表')}<a class="btn quiet" href="#/ride/${key}">指定席券へ</a></div>
+      ${hasMap ? `<section class="sec">${secH('沿線の見どころ一覧', 'Along the line', 'spots')}
+        <p class="sec-lead">通る順に並べています。通り過ぎたものは薄く、次に来るものには印がつきます。「窓から」は車窓から見えるもの、ほかは線路の近くにある名所・名物です。押すと紹介が開きます。</p>
+        <div id="lm-list" class="lm-list"></div></section>` : ''}</div>`;
+  }
+  /* ライブ地図（地図・現在地・お知らせ）。中身は livemap.js が描く */
+  const LMI = {
+    compass: '<svg class="lm-needle" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 15.2 12H8.8z" fill="#d6504c"/><path d="M12 21.5 8.8 12h6.4z" fill="#b9b2a6"/><circle cx="12" cy="12" r="1.4" fill="#fff"/></svg>',
+    base: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 21 9l-9 5-9-5z"/><path d="M3 13.5 12 18.5l9-5"/></svg>',
+    here: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/></svg>',
+    full: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+    exit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>',
+    gear: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M5.5 18.5l1.8-1.8M16.7 7.3l1.8-1.8"/><circle cx="12" cy="12" r="6.6"/></svg>'
+  };
+  const liveMapBlock = (key, full) => `<section class="lm${full ? ' lm-full' : ''}" id="lm" aria-label="いまどのへん？の地図">
+      <div class="lm-mapwrap"><div class="lm-map" id="lm-map"></div>
+        ${full ? `<a class="lm-back" href="#/ride/live/${key}" aria-label="いまどのへん？のページに戻る">‹ 戻る</a>` : ''}
+        <div class="lm-tools" role="toolbar" aria-label="地図の操作">
+          <button type="button" class="lm-tool" data-lm="compass">${LMI.compass}<small>進行方向</small></button>
+          <button type="button" class="lm-tool" data-lm="view"><small>立体</small></button>
+          <button type="button" class="lm-tool" data-lm="base" aria-haspopup="true" aria-expanded="false" aria-label="地図の種類">${LMI.base}<small>地図</small></button>
+          <button type="button" class="lm-tool" data-lm="recenter" aria-label="列車に戻る（追いかけを再開）">${LMI.here}<small>列車へ</small></button>
+          <a class="lm-tool" data-lm="full" href="#/ride/live/${key}${full ? '' : '/full'}" aria-label="${full ? '全画面をやめる' : '全画面で見る'}">${full ? LMI.exit : LMI.full}<small>${full ? '戻す' : '全画面'}</small></a>
+          <button type="button" class="lm-tool" data-lm="settings" aria-haspopup="dialog" aria-label="お知らせと画面の設定">${LMI.gear}<small>設定</small></button>
+          <button type="button" class="lm-tool" data-lm="help" aria-label="使い方を見る"><b aria-hidden="true">？</b><small>使い方</small></button>
+        </div>
+        ${full ? '' : '<button type="button" class="lm-endop" data-lm="endop" hidden>操作を終える</button>'}
+        <div class="lm-basemenu" hidden></div>
+        <div class="lm-legend"></div>
+        <p class="lm-maperr" hidden>地図を読み込めませんでした。${full ? '' : '下の路線図と、'}文字の案内でご覧ください。</p>
+        ${full ? '<div class="lm-ov"><div class="lm-notice" id="lm-notice" aria-live="polite"></div><div class="lm-sheet"><div class="lm-panel" id="lm-panel" aria-live="polite"></div><div class="lm-spd" id="lm-spd" hidden></div></div></div>' : ''}</div>
+      ${full ? '' : `<div class="lm-panel" id="lm-panel" aria-live="polite"></div>
+      <div class="lm-spd" id="lm-spd" hidden></div>
+      <div class="lm-notice" id="lm-notice" aria-live="polite"></div>
+      <div class="lm-ctrl" id="lm-ctrl"></div>
+      <p class="note">位置情報は「現在地を使う」を押したときだけ、このページを開いているあいだ使います。どこにも送りません。GPSが届かないときは時刻表から推定します。</p>
+      <p class="note">地図：地理院タイル（国土地理院）・OpenStreetMap。線路の形：© OpenStreetMap contributors（Overture Maps 経由）。市町村：国土数値情報（行政区域データ）を加工。見どころの紹介文は、このしおり用に書いたものです。</p>`}
+    </section>`;
+  function updateLive() {
+    const line = $('#line'); if (!line) return;
+    const k = T.nozomiLine[location.hash.split('/')[3]] ? location.hash.split('/')[3] : 'nozomi28';
+    const tr = T.trains[k], s = liveState(k), t = now();
+    const lis = $$('li', line);
+    const center = i => lis[i].offsetTop + lis[i].offsetHeight / 2;
+    const i0 = Math.floor(s.pos), fr = s.pos - i0;
+    const y = i0 >= lis.length - 1 ? center(lis.length - 1) : center(i0) + (center(i0 + 1) - center(i0)) * fr;
+    $('.trainpin', line).style.top = y + 'px';
+    const fill = $('#fill'); fill.style.top = center(0) + 'px'; fill.style.height = Math.max(0, y - center(0)) + 'px';
+    lis.forEach((li, i) => li.classList.toggle('passed', s.mode !== 'before' && i <= s.pos));
+    const next = s.st.slice(Math.floor(s.pos) + 1).find(x => x.stop);
+    const mins = d => Math.max(0, Math.round((d - t) / 6e4));
+    let a, b;
+    if (s.mode === 'before') { const m = mins(s.st[0].dep); a = ['まもなく', `${tr.name} ${tr.to}`, tr.dep]; b = m < 1440 ? `発車まで あと${m >= 60 ? Math.floor(m / 60) + '時間' : ''}${m % 60}分` : `${tr.date.slice(5).replace('-', '/')} に発車します`; }
+    else if (s.mode === 'after') { a = ['到着', tr.to, tr.arr]; b = 'おつかれさまでした'; }
+    else if (s.mode === 'stopped') { a = ['停車中', s.st[s.i].name, fmtHM(s.st[s.i].dep)]; b = `${fmtHM(s.st[s.i].dep)}に発車します`; }
+    else { a = ['走行中', `${s.st[s.i].name} → ${s.st[s.i + 1].name}`, '']; b = next ? `つぎは ${next.name}　${fmtHM(next.arr)}着・あと${mins(next.arr)}分` : ''; }
+    $('#live-board').innerHTML = `<section class="board" style="margin-top:0"><div class="board-head"><span>　</span><span>${tr.name}</span><span>${fmtHM(t)}</span></div>
+      <div class="board-row"><span class="k">${a[0]}</span><span class="n">${esc(a[1])}</span><span class="t num">${a[2]}</span></div>
+      <div class="ticker" aria-live="polite"><span style="animation:none;padding-left:0">${esc(b)}</span></div></section>`;
+    const alert = T.castles.map(c => { const st = s.st.find(x => x.name === c.station); if (!st) return ''; const d = (st.arr - t) / 6e4; return d <= 6 && d >= -2 && s.mode !== 'before' && s.mode !== 'after' ? `<div class="alert">まもなく${c.name}。${tr.dir === 'go' ? '左' : '右'}の窓（${c.side}）をチェック</div>` : ''; }).join('');
+    const al = $('#live-alert'); if (al && al.dataset.v !== alert) { al.innerHTML = alert; al.dataset.v = alert; }
+    const tips = T.nozomiTips[k].filter(tp => s.st.findIndex(x => x.name === tp.after) <= Math.floor(s.pos));
+    const tp = s.mode === 'before' ? T.nozomiTips[k][0] : tips[tips.length - 1];
+    $('#live-tip').innerHTML = tp && s.mode !== 'after' ? `<div class="tip"><span class="tg">${tp.tag}</span><b>${tp.title}</b><p>${tp.text}</p></div>` : '';
+  }
+
+  /* ========== ごはん ========== */
+  function shopCard(s) {
+    const votes = store.get('votes', []);
+    const tdow = dowOf(now());
+    const closedToday = s.closedDays && s.closedDays.includes(tdow) && phase() === 'during';
+    return `<article class="shop" id="${s.id}"><div class="shop-top"><span class="code">${s.code}</span><div>
+      <div class="meta">${s.genre}・${s.place}</div><h3>${esc(s.name)}</h3>
+      <div class="tags">${s.cash ? '<span class="tag red">現金のみ</span>' : '<span class="tag blue">カード可</span>'}${s.takeout ? '<span class="tag">持ち帰り</span>' : ''}${s.closed ? `<span class="tag${s.closedDays ? ' red' : ''}">${s.closed}</span>` : ''}${closedToday ? '<span class="tag red">今日は休み</span>' : ''}</div></div></div>
+      <ul class="picks">${s.picks.map(([n, p, d]) => `<li><div>${esc(n)}${d ? `<span>${esc(d)}</span>` : ''}</div><div class="pr num">${yen(p)}</div></li>`).join('')}</ul>
+      ${infoList([['営業', esc(s.hours)], ['支払い', esc(s.pay)], ['住所', esc(s.address)], ['電話', `<a href="${tel(s.tel)}">${s.tel}</a>`]].concat(s.takeout ? [['持ち帰り', esc(s.takeout)]] : []).concat(s.rule ? [['お作法', esc(s.rule)]] : []))}
+      <div class="btns"><button class="vote ${votes.includes(s.id) ? 'on' : ''}" data-vote="${s.id}">${votes.includes(s.id) ? '♥ 行きたい' : '♡ 行きたい'}</button>${ext(gmap(s.name), '地図')}${ext(s.url, 'お店の情報')}</div></article>`;
+  }
+  function viewFood(sub) {
+    const L = T.lunch[0];
+    const filt = session.get('ffilt') || 'all';
+    const fdays = { all: 'すべて', d17: '10/17（土）も営業', d18: '10/18（日）も営業', card: 'カードが使える' };
+    const dayDow = { d17: 6, d18: 0 };
+    const list = T.dinner.filter(s => filt === 'all' ? true : filt === 'card' ? !s.cash : !(s.closedDays || []).includes(dayDow[filt] ?? -1));
+    const votes = store.get('votes', []);
+    return `<div class="wrap">${topbar()}${phead('Food', 'ごはん', '決まっているお昼ごはんと、夕ごはんの候補7店。')}
+      <section class="sec" style="margin-top:8px" id="marukatsu">${secH('10/18 お昼　まるかつ天理店', 'Lunch')}
+        <p class="small muted">${L.when}・${L.sub}</p>
+        <p class="spot-lead">${esc(L.lead)}</p>
+        <ul class="picks">${L.menu.map(([n, p, d, hl]) => `<li class="${hl ? 'hl' : ''}"><div>${esc(n)}${d ? `<span>${esc(d)}</span>` : ''}</div><div class="pr num">${yen(p)}</div></li>`).join('')}</ul>
+        <p class="note">${esc(L.note)}</p>
+        ${infoList([['住所', esc(L.address)], ['電話', `<a href="${tel(L.tel)}">${L.tel}</a>`], ['営業', esc(L.hours)], ['支払い', esc(L.pay)]])}
+        <div class="btns">${ext(gmap('まるかつ天理店'), '地図')}${ext(L.url, 'お店の情報')}</div>
+      </section>
+      <section class="sec" id="joterrace">${secH('10/19 お昼　JO-TERRACE OSAKA', 'Lunch')}
+        <p class="small">大阪城公園の中。お店は現地で決めます。</p><div class="btns">${ext('https://jo-terrace.jp/', 'JO-TERRACE OSAKA（公式）')}<a class="more" href="#/spot/osakajo">大阪城公園のページへ</a></div>
+      </section>
+      <section class="sec" id="dinner">${secH('夕ごはん候補', 'Dinner')}
+        <p class="sec-lead">梅田3店と新大阪4店。気になるお店に「行きたい」を押しておくと、候補を絞るときの目安になります（印はこの端末だけに残ります）。${votes.length ? `<br>いま「行きたい」：<b>${votes.map(v => (T.dinner.find(s => s.id === v) || {}).name).filter(Boolean).join('、')}</b>` : ''}</p>
+        <div class="filters" role="group" aria-label="絞り込み">${Object.entries(fdays).map(([k, l]) => `<button class="fchip ${filt === k ? 'on' : ''}" data-ffilt="${k}">${l}</button>`).join('')}</div>
+        ${['umeda', 'shinosaka'].map(a => { const shops = list.filter(s => s.area === a); const A = T.dinnerAreas[a]; return `<div class="area-h"><h3>${A.name}</h3><span class="small muted">${A.sub}</span></div>${shops.length ? shops.map(shopCard).join('') : '<p class="empty">条件に合うお店はありません。</p>'}`; }).join('')}
+      </section></div>`;
+  }
+
+  /* ========== おでかけ ========== */
+  function triviaBlock(key) {
+    const g = T.trivia[key];
+    return `<h3 class="sub">${g.title}</h3>${g.big ? `<div class="bignum"><b class="num">${g.big[0]}</b><span>${g.big[1]}</span></div>` : ''}
+      <div class="cards">${g.cards.map(([k, q, a], j) => `<button class="flip" data-flip data-tv="${key}-${j}"><div class="fk">${k}</div><div class="fq">${esc(q)}</div><div class="fa">${esc(a)}</div><div class="fh">タップして読む</div></button>`).join('')}</div>${g.note ? `<p class="note">${g.note}</p>` : ''}`;
+  }
+  function stampsBlock() {
+    const st = store.get('stamps', {});
+    const got = T.stamps.filter(s => st[s.id]).length;
+    return `<p class="small muted" style="margin-bottom:14px">行った場所をタップしてスタンプを押します。もう一度タップすると消せます（この端末だけに残ります）。いま <span class="stamp-count num">${got}</span> / ${T.stamps.length}</p>
+      <div class="stamps">${T.stamps.map(s => `<button class="stamp ${st[s.id] ? 'on' : ''}" data-stamp="${s.id}" aria-pressed="${!!st[s.id]}"><span class="sc">${s.mark}</span>${s.name}<span class="num" style="color:var(--sumi-3)">${st[s.id] || `${s.day}日目`}</span></button>`).join('')}</div>`;
+  }
+  function viewSpots(sub) {
+    const s = T.spots.find(x => x.id === sub);
+    if (s) return viewSpot(s);
+    return `<div class="wrap">${topbar()}${phead('Places', 'おでかけ', '4日間で立ち寄る場所と、知ってから歩くと楽しい小ネタ。')}
+      <div>${T.spots.map(p => `<a class="spotrow" href="#/spot/${p.id}" style="--c:${DAYC(p.day)}"><span class="spot-ill">${art(SPOT_ART[p.id])}</span><span><span class="sw">${p.day}日目・${p.when.split('）')[1] || ''}｜${p.area}</span><h3>${esc(p.name)}</h3><p>${esc(p.lead)}</p></span></a>`).join('')}</div>
+      <section class="sec" id="stamps">${secH('スタンプ帳', 'Stamps')}${stampsBlock()}</section></div>`;
+  }
+  function viewSpot(s) {
+    const c = DAYC(s.day);
+    const i = T.spots.indexOf(s), prev = T.spots[i - 1], next = T.spots[i + 1];
+    return `<div class="wrap" style="--c:${c}">${topbar()}
+      <header class="spot-hero"><div><div class="kana">${esc(s.kana)}</div><h1>${esc(s.name)}</h1><div class="when num">${s.day}日目・${s.when}</div></div>${art(SPOT_ART[s.id])}</header>
+      <p class="spot-lead">${esc(s.lead)}</p>
+      ${s.warn ? `<div class="warn"><span>${esc(s.warn)}</span></div>` : ''}
+      ${s.steps ? `<section class="sec">${secH('走るルート', 'Route')}<ol class="walk">${s.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol></section>` : ''}
+      ${s.walk ? `<section class="sec">${secH('おすすめの歩き方', 'Walk')}<ol class="walk">${s.walk.map(x => `<li>${esc(x)}</li>`).join('')}</ol><p class="note">${esc(s.walkNote)}</p></section>` : ''}
+      <section class="sec">${secH('基本情報', 'Info')}${infoList(s.info.map(([k, v]) => [k, k === '電話' ? `<a href="${tel(v)}">${esc(v)}</a>` : esc(v)]))}
+        ${s.fees ? `<h3 class="sub">拝観料</h3>${infoList(s.fees)}` : ''}
+        <div class="btns">${s.map ? ext(gmap(s.map), '地図') : ''}${s.url ? ext(s.url, '公式の情報') : ''}${(s.urls || []).map(([l, u]) => ext(u, `${esc(l)}（公式）`)).join('')}${(s.links || []).map(([l, u]) => ext(u, l)).join('')}${s.id === 'todaiji' ? '<a class="btn quiet" href="#/sos/parking">駐車場の候補</a>' : ''}</div>
+        ${s.maps ? `<h3 class="sub">公式の案内図</h3><div class="btns omap-btns">${s.maps.map(([l, u]) => ext(u, esc(l))).join('')}</div>` : ''}</section>
+      ${s.trivia ? `<section class="sec">${secH('知ってから歩くと、景色が変わる', 'Trivia')}${s.trivia.map(triviaBlock).join('')}<div class="btns"><a class="more" href="#/trivia/${['sakurai', 'todaiji'].includes(s.id) ? 'nara' : 'osaka'}">出典つきで、トリビアのページで読む →</a></div></section>`
+        : `<section class="sec">${secH('トリビア', 'Trivia')}<div class="btns"><a class="more" href="#/trivia/${['sakurai', 'todaiji'].includes(s.id) ? 'nara' : 'osaka'}">${['sakurai', 'todaiji'].includes(s.id) ? '桜井・奈良' : '大阪'}のトリビアを読む →</a></div></section>`}
+      <div class="btns" style="justify-content:space-between;margin-top:36px">${prev ? `<a class="btn quiet" href="#/spot/${prev.id}">← ${esc(prev.name)}</a>` : '<span></span>'}${next ? `<a class="btn quiet" href="#/spot/${next.id}">${esc(next.name)} →</a>` : ''}</div></div>`;
+  }
+
+  /* ========== やど・くるま ========== */
+  function carMeter() {
+    const t = now(), out = new Date(T.car.out), back = new Date(T.car.back);
+    const planned = jst('2026-10-18', T.car.plannedBack);
+    if (t < out) return `<div class="meter"><div class="small muted">受け取り</div><div class="big num">${T.car.outLabel}</div><div class="small">返却の予定は17:50（予約は20:00まで）</div></div>`;
+    if (t >= back) return `<div class="meter"><div class="small muted">レンタカー</div><div class="big">返却ずみ</div></div>`;
+    const m = Math.max(0, Math.round((planned - t) / 6e4)), mm = Math.max(0, Math.round((back - t) / 6e4));
+    return `<div class="meter"><div class="small muted">返却の予定（17:50）まで</div><div class="big num">${Math.floor(m / 60)}時間${m % 60}分</div><div class="small">予約の終わり（20:00）まで ${Math.floor(mm / 60)}時間${mm % 60}分。ガソリンは満タンで返します。</div></div>`;
+  }
+  function viewStay() {
+    const H = T.hotel, C = T.car, f = fam();
+    return `<div class="wrap">${topbar()}${phead('Stay &amp; Drive', 'やど・くるま', `${H.name}に3泊。10/18はレンタカーで奈良へ。`)}
+      <section class="sec" style="margin-top:4px">${secH('ホテル', 'Hotel')}
+        <p class="room-name" style="font-size:18px">${esc(H.name)}</p>
+        ${infoList([['住所', esc(H.address)], ['電話', `<a href="${tel(H.tel)}">${H.tel}</a>`], ['チェックイン', H.checkin], ['チェックアウト', H.checkout], ['行き方', H.access], ['支払い', esc(H.pay)]])}
+        <p class="note">${esc(H.plan)}${esc(H.soine)}</p>
+        <button class="qrmini" data-act="qr"><span><b>自動チェックインQR</b><br><span class="small muted">フロントの端末にかざすだけ。${f ? famName() + 'の分を表示します。' : ''}</span></span><span class="qrthumb" data-qrthumb="${f === 'iizuka' ? 'r1' : 'r3'}">${Lock.get() ? `<img src="${qrSrc(Lock.get()[f === 'iizuka' ? 'r1' : 'r3'].qr)}" alt="">` : ic('key')}</span></button>
+        <div class="btns">${ext(gmap(H.name), '地図')}${ext(H.url, 'ホテルの公式サイト')}</div>
+      </section>
+      <section class="sec">${secH('お部屋', 'Rooms')}
+        ${Object.entries(H.rooms).map(([, r]) => `<div class="roomcard${f && r.family === f ? ' mine' : ''}"><div style="display:flex;gap:10px;align-items:baseline"><span class="room-no">${r.no}</span><div><div class="small muted">${r.who}・${r.nights}</div><div class="room-name">${esc(r.name)}</div></div></div>
+          ${infoList([['広さ', r.size], ['ベッド', esc(r.bed)], ['水まわり', r.bath], ['喫煙', '禁煙']].concat(r.amenity ? [['設備', esc(r.amenity)]] : []))}
+          <div style="margin-top:10px"><div class="price-line"><span>客室料金</span><s class="num">${yen(r.list)}</s></div><div class="price-line"><span>10周年記念 30%オフ</span><span class="num">−${yen(r.off).slice(1)}</span></div><div class="price-line total"><span>お支払い</span><span class="num">${yen(r.price)}</span></div></div></div>`).join('')}
+      </section>
+      <section class="sec">${secH('館内のフロア', 'Floors')}
+        <ul class="floors">${H.floors.map(([fl, d, hl]) => `<li class="${hl ? 'hl' : ''}"><b class="num">${fl}</b><span>${esc(d)}</span></li>`).join('')}</ul>
+        <h3 class="sub">朝ごはん</h3>${infoList([['場所', H.breakfast.place], ['時間', H.breakfast.time]])}<p class="small" style="margin-top:8px">${H.breakfast.text}</p>
+        <h3 class="sub">大浴場・サウナ</h3>${infoList([['場所', H.bath.place], ['時間', H.bath.time.join('／')]])}<p class="small" style="margin-top:8px">${H.bath.text}</p><div class="warn"><span>${H.bath.warn}</span></div>
+        <h3 class="sub">滞在中に便利なこと</h3>${infoList(H.perks)}
+      </section>
+      <section class="sec" id="car">${secH('レンタカー　10/18（日）', 'Rent-a-car')}
+        ${carMeter()}
+        <p class="small muted" style="margin-top:14px">予約番号</p><p>予約メールをご確認ください</p>
+        ${infoList([['お店', esc(C.shop)], ['クラス', `${esc(C.klass)}<br><span class="small muted">${esc(C.klassNote)}</span>`], ['受け取り', C.outLabel], ['返却', `${C.backLabel}（予定は17:50）`], ['住所', esc(C.address)], ['電話', `<a href="${tel(C.tel)}">${C.tel}</a>`], ['行き方', C.access]])}
+        <h3 class="sub">料金</h3>${C.lines.map(([k, v]) => `<div class="price-line"><span>${k}</span><span class="num">${v === 0 ? '¥0' : yen(v)}</span></div>`).join('')}<div class="price-line total"><span>合計（税込）</span><span class="num">${yen(C.total)}</span></div>
+        <div class="tags" style="margin-top:10px">${C.included.map(x => `<span class="tag">${x}</span>`).join('')}</div>
+        <p class="note">${esc(C.pay)}</p>
+        <h3 class="sub">覚えておくこと</h3>${infoList(C.notes)}
+        <div class="btns">${ext(gmap(C.shop), '地図')}</div>
+      </section></div>`;
+  }
+
+  /* ========== もしも ========== */
+  function viewSos() {
+    const S = T.sos, Pk = T.parking;
+    return `<div class="wrap">${topbar()}${phead('Just in case', 'もしものとき', '迷ったら、次の一手だけ確認。番号をタップすると電話をかけられます。')}
+      <div class="dial">${S.urgent.map(([n, l, d], k) => `<a href="tel:${n}" data-sid="sos-u${k}"><b class="num">${n}</b><span>${l}</span><small>${d}</small></a>`).join('')}</div>
+      ${S.consult.map((g, gi) => `<section class="sec">${secH(g.label, g.short)}${g.rows.map(([a, n, t, h], ri) => `<div class="telrow" data-sid="sos-c${gi}-${ri}"><span class="area">${a}</span><span>${n}<br><span class="small muted">${h}</span></span><a href="${tel(t)}" class="num">${t}</a></div>`).join('')}<div class="btns"><a class="btn fill" href="tel:${g.short}">${g.short} に電話</a></div></section>`).join('')}
+      <section class="sec">${secH('近くの病院', 'Hospitals')}
+        ${S.hospitals.map((h, k) => `<div class="hosp" data-sid="hosp-${k}"><div class="small muted">${h.area}側</div><h3 class="room-name" style="font-size:17px">${esc(h.name)}</h3><span class="tag red">${h.badge}</span><p class="small" style="margin-top:6px">${esc(h.text)}</p>
+          ${infoList([['住所', esc(h.address)], ['電話', `<a href="${tel(h.tel)}">${h.tel}</a>${h.tel2 ? `<br><span class="small muted">携帯から</span> <a href="${tel(h.tel2)}">${h.tel2}</a>` : ''}`]])}<div class="btns">${ext(gmap(h.name), '地図')}${ext(h.url, '公式サイト')}</div></div>`).join('')}
+        <div class="btns">${ext(S.navi, 'いま診てもらえる病院を探す（医療情報ネット ナビイ）', 'btn')}</div>
+        <h3 class="sub">受診のときにあると便利</h3><ul class="steps" style="counter-reset:none">${S.bring.map(x => `<li style="padding-left:0">・${esc(x)}</li>`).join('')}</ul>
+      </section>
+      <section class="sec" id="accident">${secH('交通事故のとき', 'Accident')}<ol class="steps">${S.accident.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
+        <div class="btns"><a class="btn quiet" href="${tel(T.car.tel)}">レンタカー会社 ${T.car.tel}</a></div></section>
+      <p class="note">${esc(S.note)}</p>
+      <section class="sec" id="parking">${secH('奈良公園近くの駐車場　10/18', 'Parking')}
+        <p class="memo" style="margin-bottom:6px">${esc(Pk.rule)}</p>
+        ${Pk.list.map((p, k) => `<div class="park${p.first ? ' first' : ''}" data-sid="park-${k}"><div class="park-top"><span class="no">${p.no}</span><h3>${esc(p.name)}</h3><span class="small muted">${p.spaces}・${p.open}</span></div>
+          <p class="small" style="margin-top:4px"><b>${esc(p.fee)}</b></p><p class="small muted">${esc(p.note)}</p>
+          <div class="btns">${ext(p.nav, 'ナビで行く', p.first ? 'btn fill' : 'btn quiet')}${p.live ? ext(p.live, '空き状況') : ''}</div></div>`).join('')}
+        <p class="note">料金・営業時間は Times24・奈良県・興福寺の公式情報（2026年9月14日確認）。現地の表示を優先してください。</p>
+      </section></div>`;
+  }
+
+  /* ========== お金 ========== */
+  const SPLITS = { half: '2家族で折半', people: '人数で割る（4：2）', iizuka: '飯塚家だけ', yamaguchi: '山口家だけ' };
+  function settle(list) {
+    let bal = { iizuka: 0, yamaguchi: 0 };
+    list.forEach(e => {
+      const a = +e.amt || 0;
+      const share = e.split === 'half' ? { iizuka: a / 2, yamaguchi: a / 2 } : e.split === 'people' ? { iizuka: a * 4 / 6, yamaguchi: a * 2 / 6 } : e.split === 'iizuka' ? { iizuka: a, yamaguchi: 0 } : { iizuka: 0, yamaguchi: a };
+      bal[e.payer] += a; bal.iizuka -= share.iizuka; bal.yamaguchi -= share.yamaguchi;
+    });
+    return Math.round(bal.iizuka);
+  }
+  function viewMoney() {
+    const B = T.budget, f = fam();
+    const max = Math.max(...B.groups.map(g => g.sum));
+    const colors = ['var(--ai)', 'var(--yamabuki)', 'var(--moegi)', 'var(--shu)', 'var(--day3)'];
+    const exp = store.get('expenses', []);
+    const net = settle(exp);
+    const msg = exp.length === 0 ? 'まだ記録はありません。' : net === 0 ? 'いまは精算なしで、ぴったりです。' : net > 0 ? `山口家 → 飯塚家へ <b class="num">${yen(net)}</b>` : `飯塚家 → 山口家へ <b class="num">${yen(-net)}</b>`;
+    return `<div class="wrap">${topbar()}${phead('Budget', '予算と割り勘メモ', '3泊4日・飯塚家4名＋山口家2名の積算です。レンタカー代と宿泊費は確定予約の金額です。')}
+      <div class="total"><span>合計</span><b class="num">${yen(B.total)}</b></div>
+      <div class="bars">${B.groups.map((g, i) => `<div class="bar" style="--c:${colors[i]}"><span>${g.name}</span><i style="width:${(g.sum / max * 100).toFixed(1)}%"></i><span class="v num">${yen(g.sum)}</span></div>`).join('')}</div>
+      <section class="sec">${secH('家族ごとの内訳', 'By family')}
+        <div class="tbl"><table class="ledger"><thead><tr><th></th><th class="r${f === 'iizuka' ? ' mine' : ''}">飯塚家</th><th class="r${f === 'yamaguchi' ? ' mine' : ''}">山口家</th></tr></thead><tbody>
+        ${B.families.map(([k, a, b, n]) => `<tr><td>${k}<span class="sm">${n}</span></td><td class="r num${f === 'iizuka' ? ' mine' : ''}">${yen(a)}</td><td class="r num${f === 'yamaguchi' ? ' mine' : ''}">${yen(b)}</td></tr>`).join('')}
+        </tbody><tfoot><tr><td>合計</td><td class="r num${f === 'iizuka' ? ' mine' : ''}">${yen(B.famTotal.iizuka)}</td><td class="r num${f === 'yamaguchi' ? ' mine' : ''}">${yen(B.famTotal.yamaguchi)}</td></tr></tfoot></table></div>
+      </section>
+      <section class="sec">${secH('予算の明細', 'Details')}
+        ${B.groups.map(g => `<div class="group-h"><b>${g.name}</b><span class="num" style="font-weight:700">${yen(g.sum)}</span></div>${g.note ? `<p class="small muted">${g.note}</p>` : ''}
+          <table class="ledger"><tbody>${g.rows.map(([a, b, v]) => `<tr><td>${esc(a)}<span class="sm">${esc(b)}</span></td><td class="r num">${yen(v)}</td></tr>`).join('')}</tbody></table>`).join('')}
+      </section>
+      <section class="sec" id="split">${secH('割り勘メモ', 'Split')}
+        <p class="sec-lead">旅行中に立て替えたお金を記録すると、最後にどちらがいくら払えばいいか計算します。記録はこの端末だけに残るので、記録係を1人決めておくと確実です。</p>
+        <form class="form" id="expform" autocomplete="off">
+          <label>内容<input id="ex-what" required placeholder="例：たこ焼き（はなだこ）"></label>
+          <div class="two"><label>金額（円）<input id="ex-amt" type="number" inputmode="numeric" min="1" required placeholder="1200"></label>
+          <label>払った家族<select id="ex-payer"><option value="iizuka"${f === 'iizuka' ? ' selected' : ''}>飯塚家</option><option value="yamaguchi"${f === 'yamaguchi' ? ' selected' : ''}>山口家</option></select></label></div>
+          <label>分け方<select id="ex-split">${Object.entries(SPLITS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+          <button class="btn fill" type="submit">記録する</button>
+        </form>
+        <p class="settle">${msg}</p>
+        ${exp.length ? `<table class="ledger"><tbody>${exp.map((e, i) => `<tr><td>${esc(e.what)}<span class="sm">${T.families[e.payer].name}が支払い・${SPLITS[e.split]}</span></td><td class="r num">${yen(+e.amt)}</td><td class="r"><button class="del" data-del="${i}" aria-label="${esc(e.what)}を消す">×</button></td></tr>`).join('')}</tbody></table>` : ''}
+      </section></div>`;
+  }
+
+  /* ========== トリビア（#/trivia、#/trivia/分類、#/trivia/d1〜d4 はその日の分類を開く） ==========
+     のりもの・おでかけにあるトリビアと、このページで加えたものを、分類ごとにまとめる（T.triviaCats）。
+     最初は、今日の行程に関係する分類だけを開く。旅行前と旅行のあとは、すべて閉じて分類名と件数だけを見せる。
+     どの項目にも出典（公式サイト・自治体・博物館・鉄道会社など）のリンクを付ける。リンクの無いものは載せない */
+  const TV_SPOT = { rail: [], kyushu: [], nara: ['sakurai1', 'sakurai2', 'nara1', 'nara2'], osaka: ['osaka'], line: [] };
+  function triviaItems(cat) {
+    const src = T.triviaSrc || {}, out = [];
+    if (cat === 'rail') {
+      T.railTrivia.forEach((g, gi) => g.items.forEach(([q, a], j) => out.push({ id: `rail-${gi}-${j}`, k: `${g.train}（${g.model}）`, q, a })));
+      ((window.LINE && LINE.passing && LINE.passing.items) || []).forEach(([q, a], j) => out.push({ id: `pass-${j}`, k: 'すれ違い', q, a }));
+    }
+    (TV_SPOT[cat] || []).forEach(key => T.trivia[key].cards.forEach(([k, q, a], j) => out.push({ id: `${key}-${j}`, k, q, a })));
+    ((T.triviaMore || {})[cat] || []).forEach(([k, q, a, sr], j) => out.push({ id: `${cat}-m${j}`, k, q, a, src: sr }));
+    return out.map(x => ({ ...x, src: x.src || src[x.id] || null })).filter(x => x.src && x.src.some(([, u]) => u));
+  }
+  const triviaDays = n => (T.triviaCats || []).filter(c => c.days.includes(n)).map(c => c.id);
+  /* 今日のトリビア（トップ）・この日のトリビア（行程表）：1件だけ題を出し、押すとトリビアのページのその項目へ。
+     旅行中はその日の行程に関係する分類から、旅行前はすべての分類から、日付で日替わりに選ぶ（同じ日なら同じ1件） */
+  function tvPick(n, t = now()) {
+    const cats = n ? triviaDays(n) : (T.triviaCats || []).map(c => c.id);
+    const pool = cats.flatMap(c => triviaItems(c).map(x => ({ ...x, cat: c })));
+    if (!pool.length) return null;
+    const dayNo = Math.floor((+t + 9 * 36e5) / 864e5);
+    return pool[(dayNo * 7 + (n || 0) * 3) % pool.length];
+  }
+  const tvLine = (x, k, all = '') => x ? `<div class="tv-today"><button type="button" class="tv-today-b" data-go="#/trivia/${x.cat}" data-mark="#tv-${x.id}"><span class="tv-today-k">${ic('book')}${k}</span><span class="tv-today-q">${esc(x.q)}</span><i class="dc-arr" aria-hidden="true">›</i></button>${all ? `<a class="tv-today-all" href="${all}">ほかのトリビアも</a>` : ''}</div>` : '';
+  function viewTrivia(sub) {
+    const day = phase() === 'during' ? todayDay() : null;
+    const want = sub && /^d\d$/.test(sub) ? triviaDays(+sub.slice(1)) : sub ? [sub] : [];
+    const srcHtml = sr => `<p class="tv-src">出典：${sr.filter(([, u]) => u).map(([l, u]) => `<a class="ext" href="${u}" target="_blank" rel="noopener">${esc(l)}</a>`).join('／')}</p>`;
+    return `<div class="wrap">${topbar()}${phead('Trivia', 'トリビア', '行き先の町と、乗る列車にまつわる話を、分類ごとにまとめました。分類の名前を押すと開きます。')}
+      ${day ? `<p class="tv-lead">${day.n}日目（${day.label}）の行程に関係する分類を開いています。</p>` : ''}
+      <div class="tv-list">${(T.triviaCats || []).map(c => {
+        const items = triviaItems(c.id), open = want.includes(c.id) || (!want.length && day && c.days.includes(day.n));
+        return `<details class="tv-g" id="tv-cat-${c.id}"${open ? ' open' : ''}><summary class="tv-h"><span><b>${esc(c.name)}</b><small>${esc(c.sub)}</small></span><em class="num">${items.length}件</em></summary>
+          <div class="tv-items">${items.map(x => `<article class="tv" id="tv-${x.id}"><p class="tv-k">${esc(x.k)}</p><h3>${esc(x.q)}</h3><p class="tv-a">${esc(x.a)}</p>${srcHtml(x.src)}</article>`).join('')}</div></details>`;
+      }).join('')}</div>
+      <p class="note">出典は、公式サイト・自治体・博物館・鉄道会社などのページです（2026年9月に確認）。数字や年は、その時点のものです。</p></div>`;
+  }
+
+  /* 服装のイラスト（旅のワンポイント）：手描き風のやさしい線画。和紙色・朱・藍で、人物は描かず、何を着る・持つかがひと目で分かる形に。
+     インラインSVGなので電波がなくても出る。色は CSS（.wear-art）の変数から取るので、暗い画面でもなじむ */
+  const WEAR_ART = (() => {
+    const L = 'class="l"', F1 = 'class="l f1"', F2 = 'class="l f2"', A = 'class="l fa"';
+    const shirt = (dx, cls) => `<g transform="translate(${dx} 0)"><path ${cls} d="M24 14.5 13.6 18c-3.2 1.2-4.6 3-5.1 6.2L3.8 55.2l7.6 1.6 5.4-26.6.6 32.7c9.6 1.8 20.4 1.8 30 0l.6-32.7 5.4 26.6 7.6-1.6-4.7-30.8c-.5-3.2-1.9-5-5.1-6.2L41 14.5c-2.4 3.6-14.6 3.6-17 0z"/><path ${L} d="M24 14.5c2.8 2.6 14.2 2.6 17 0M4.3 51.8l7.6 1.6M53.4 53.4l7.6-1.6"/></g>`;
+    return {
+      /* 日中：長袖のシャツ＋薄手の羽織りもの（前開き）。お日さま */
+      '日中': `${shirt(0, F1)}
+        <g transform="translate(55.5 0)"><path ${F2} d="M23 14.2 12.8 17.8c-3.2 1.2-4.6 3-5.1 6.2L3 55l7.6 1.6 5.4-26.6.6 32.9 13.6.2-.2-33.6L23 14.2zM42 14.2l10.2 3.6c3.2 1.2 4.6 3 5.1 6.2l4.7 30.8-7.6 1.6-5.4-26.6-.6 32.9-13.6.2.2-33.6L42 14.2z"/><path ${L} d="M23 14.2c4-1.6 15-1.6 19 0M17.4 40h9M38.6 40h9"/></g>
+        <g ${L}><circle class="l fa" cx="61" cy="8" r="3.6"/><path d="M61 1.2v1.6M66.6 3.4l-1.1 1.1M55.4 3.4l1.1 1.1M68.4 8h-1.6M53.6 8h1.6"/></g>`,
+      /* 朝晩：前を留めるカーディガン（Vネック・ボタン）。月と星 */
+      '朝晩': `<g transform="translate(22 0)"><path ${F2} d="M24 14 13.6 17.6c-3.2 1.2-4.6 3-5.1 6.2L3.8 55.4l7.6 1.6 5.4-26.8.6 32.8c9.6 1.8 20.4 1.8 30 0l.6-32.8 5.4 26.8 7.6-1.6-4.7-31.6c-.5-3.2-1.9-5-5.1-6.2L41 14l-8.5 19.5L24 14z"/><path ${L} d="M32.5 33.5v29.6M4.4 52l7.6 1.6M53.2 53.6l7.6-1.6M19.5 52.5h8M37.5 52.5h8"/><g class="fa"><circle cx="32.5" cy="39" r="1.5"/><circle cx="32.5" cy="46" r="1.5"/><circle cx="32.5" cy="53" r="1.5"/></g></g>
+        <path ${A} d="M98 9.5a9 9 0 1 0 9.6 12.4A7.4 7.4 0 0 1 98 9.5z"/><path ${L} d="M110 6.5v4M108 8.5h4M92 26v3M90.5 27.5h3"/>`,
+      /* 新幹線・車の中：座席に置いた上着を、膝掛けがわりに。冷房の風 */
+      '新幹線・車の中': `<path ${F1} d="M16 10.5c-3.4 0-5.4 2.4-5 5.8l4.4 34.2c.4 3 2.4 4.6 5.4 4.6h8.6"/><path ${F1} d="M22.4 47.5h36c3.6 0 5.8 2.2 5.8 5.4v2.8c0 1.6-1.2 2.8-2.8 2.8H22.4c-3.2 0-5.2-1.8-5.2-4.8v-1c0-3 2-5.2 5.2-5.2z"/><path ${L} d="M26 58.5 22.5 70M58 58.5l3.5 11.5M18 70h48"/>
+        <path ${F2} d="M31 40.6c7.5-3.2 20.5-3.6 30.6-.6l4.6 16.4c-10.4 3.4-24.6 3.2-33.6.2z"/><path ${L} d="M34 45c8-2.2 18.8-2.4 27.6-.2M47 43.2l1.8 14.4"/>
+        <g ${L}><path d="M80 12c3-2.4 6-2.4 9 0s6 2.4 9 0 6-2.4 9 0M80 20c3-2.4 6-2.4 9 0s6 2.4 9 0 6-2.4 9 0M80 28c3-2.4 6-2.4 9 0s6 2.4 9 0"/></g><g class="l" style="stroke:var(--ai)"><path d="M100 36v14M94 39.5l12 7M94 46.5l12-7M100 36l-2 2M100 36l2 2M100 50l-2-2M100 50l2-2"/></g>`,
+      /* 足もと：履き慣れたスニーカー（手前と奥の2足） */
+      '足もと': `<g transform="translate(46 -6)" opacity=".75"><path ${F2} d="M10 50c0-7 3.6-11 9.4-12.4l8.4-7.4c2.6-2.2 5.6-2 7.8.4l6.4 7c9.4 1 17.8 4.6 18 11v4.6c0 2.4-1.6 3.8-4 3.8H14c-2.6 0-4-1.6-4-4z"/><path ${L} d="M10.4 52.4h49.6"/></g>
+        <path ${F1} d="M8 52c0-7.4 3.8-11.4 9.8-12.8l8.8-7.8c2.8-2.4 6-2.2 8.2.4l6.8 7.4c10 1 18.8 4.8 19 11.6v4.8c0 2.6-1.8 4-4.2 4H12.2C9.4 59.6 8 58 8 55.4z"/><path ${L} d="M8.4 54.8h52.2M29.2 35.6l4 3.2M26.4 38.4l4 3.2M23.6 41.2l4 3.2"/><path class="l" style="stroke:var(--shu)" d="M40 46.2c5 2 10.4 2.6 16.6 2.2"/>`,
+      /* 雨の日：折りたたみ傘（たたんだ形と、開いた形） */
+      '雨の日': `<g transform="rotate(-38 30 44)"><path ${F2} d="M16 40.4h28.4c2.4 0 3.6 1.6 3.6 3.6s-1.2 3.6-3.6 3.6H16z"/><path ${L} d="M16 40.4l-3.2 3.6 3.2 3.6M48 44h7.4M24 40.4l-1.4 7.2M33 40.4l-1.4 7.2"/><path ${L} d="M55.4 44c2.6 0 4 1.4 4 3.4"/></g>
+        <path ${F1} d="M66 36c3-13 12-21 24.5-21S112 23 115 36c-2.6-2.4-5.4-2.4-8.2 0-2.6-2.4-5.6-2.4-8.2 0-2.6-2.4-5.6-2.4-8.2 0-2.6-2.4-5.6-2.4-8.2 0-2.6-2.4-5.6-2.4-8.2 0-2.6-2.4-5.6-2.4-8.2 0z"/><path ${L} d="M90.5 15v-4M90.5 36v22c0 3-1.8 4.6-4 4.6s-3.6-1.6-3.6-3.6M82.2 36c1.4-9 4.2-16 8.3-21M98.8 36c-1.4-9-4.2-16-8.3-21"/>
+        <g class="l" style="stroke:var(--ai)"><path d="M66 50.5l-1.6 3.6M74 58l-1.6 3.6M108 48l-1.6 3.6M113 58l-1.6 3.6M58 8l-1.6 3.6"/></g>`
+    };
+  })();
+  /* ========== 旅のワンポイント（#/tips、#/tips/d1〜d4 はその日の所へ） ==========
+     気温（気象庁の平年値。10月中旬の値と出典リンク）・服装・行程に沿ったコツ。事実を書くものには公式の出典を付ける。電波がなくても見られる（出典のリンクだけは電波が要る） */
+  function viewTips() {
+    const P = T.tips, byDay = n => P.items.filter(x => x.day.includes(n));
+    const tipCard = x => `<article class="tp" id="tip-${x.id}"><h3>${esc(x.title)}</h3><p>${esc(x.text)}</p>
+      ${x.go || x.src ? `<div class="tp-links">${(x.go || []).map(([l, h]) => `<a class="more" href="${h}">${esc(l)}</a>`).join('')}${(x.src || []).map(([l, u]) => `<a class="tp-src ext" href="${u}" target="_blank" rel="noopener">出典：${esc(l)}</a>`).join('')}</div>` : ''}</article>`;
+    const deg = v => v != null ? `${v.toFixed(1)}<small>℃</small>` : '—';
+    const temps = `<table class="tp-tt"><caption>${esc(P.tempsWhen || '')}の平年値</caption><thead><tr><th scope="col">地点</th><th scope="col" class="hi">最高</th><th scope="col" class="lo">最低</th></tr></thead><tbody>${P.temps.map(t => `<tr><th scope="row"><b>${esc(t.name)}</b><small>${esc(t.when)}</small></th><td class="hi num">${deg(t.hi)}</td><td class="lo num">${deg(t.lo)}</td></tr>`).join('')}</tbody></table>
+      <p class="tp-tsrc">出典：気象庁 平年値（旬ごとの値）　${P.temps.map(t => `<a class="ext" href="${t.url}" target="_blank" rel="noopener">${esc(t.name.replace(/（.*/, ''))}</a>`).join('・')}</p>`;
+    return `<div class="wrap">${topbar()}${phead('Travel tips', '旅のワンポイント', '10/17〜10/20の行程に合わせた、気温・服装と、知っておくと助かることをまとめました。')}
+      <nav class="tp-days" aria-label="日ごとのワンポイント">${T.days.map(d => `<a href="#/tips/d${d.n}" style="--c:${DAYC(d.n)}">${d.n}日目<b>${d.label}</b></a>`).join('')}</nav>
+      <section class="sec" id="tp-temp">${secH('例年の気温', 'Temperature')}
+        <p class="sec-lead">旅の日程（10/17〜10/20）は、どの日も10月中旬。行程で長くいる地点の、気象庁の平年値（旬ごとの日最高・日最低気温）です。</p>
+        ${temps}
+        <p class="note">例年の値で、当日の予報ではありません。当日の天気は、出発の2週間前（10/2ごろ）からトップの「旅先のお天気」に出ます。${P.forecast.map(([l, u]) => `<a class="ext" href="${u}" target="_blank" rel="noopener">${esc(l)}</a>`).join('　')}</p></section>
+      <section class="sec" id="tp-wear">${secH('服装', 'What to wear')}
+        ${infoList(P.wear.map(([k, v]) => [k, `${esc(v)}${WEAR_ART[k] ? `<svg class="wear-art" viewBox="0 0 120 72" aria-hidden="true" focusable="false">${WEAR_ART[k]}</svg>` : ''}`]))}</section>
+      <section class="sec">${secH('旅のワンポイント', 'Tips')}
+        ${T.days.map(d => { const l = byDay(d.n); return l.length ? `<h3 class="sub tp-dh" id="d${d.n}" style="--c:${DAYC(d.n)}">${d.n}日目　${d.label}（${d.dow}）<small>${esc(d.theme)}</small></h3>${l.map(x => tipCard(x)).join('')}` : ''; }).join('')}
+        <p class="note">同じワンポイントが2つの日に関係するときは、両方の日に載せています。時刻と料金は、確かめた時点のものです。現地の案内を優先してください。</p></section></div>`;
+  }
+
+  /* ========== 持ち物 ========== */
+  function viewBag() {
+    const done = store.get('bag', {}), extra = store.get('bagExtra', []);
+    const all = T.bag.flatMap(g => g.items.map(i => i[0])).concat(extra);
+    const cnt = all.filter(n => done[n]).length;
+    const li = ([n, why], custom) => `<li class="${done[n] ? 'done' : ''}"><input type="checkbox" id="b-${esc(n)}" data-bag="${esc(n)}" ${done[n] ? 'checked' : ''}><label for="b-${esc(n)}">${esc(n)}${why ? `<span>${esc(why)}</span>` : ''}</label>${custom ? `<button class="del" data-bagdel="${esc(n)}" aria-label="${esc(n)}を消す">×</button>` : '<span></span>'}</li>`;
+    return `<div class="wrap">${topbar()}${phead('Packing', '持ち物チェック', 'しおりの内容から、この旅で必要になるものを選びました。チェックはこの端末に残ります。')}
+      <div class="progress-line"><i style="width:${all.length ? cnt / all.length * 100 : 0}%"></i></div><p class="small muted num">${cnt} / ${all.length} 準備できた</p>
+      ${T.bag.map(g => `<section class="sec" style="margin-top:28px">${secH(g.cat)}<ul class="check">${g.items.map(i => li(i)).join('')}</ul></section>`).join('')}
+      <section class="sec" style="margin-top:28px">${secH('じぶんで追加')}<ul class="check">${extra.map(n => li([n, ''], 1)).join('')}</ul>
+        <form class="addrow" id="bagform"><input id="bag-new" placeholder="例：カメラ" aria-label="追加する持ち物"><button class="btn" type="submit">追加</button></form></section></div>`;
+  }
+
+  /* ========== 思い出メモ ========== */
+  function viewMemo() {
+    const memo = store.get('memo', {});
+    return `<div class="wrap">${topbar()}${phead('Journal', '思い出メモ', 'その日にあったこと、おいしかったもの、子どもの一言。書いた内容はこの端末に残ります。')}
+      ${T.days.map(d => `<section class="sec" style="margin-top:28px;--c:${DAYC(d.n)}">${secH(`${d.n}日目　${d.label}（${d.dow}）`, d.theme)}<textarea id="memo-${d.n}" data-memo="${d.n}" aria-label="${d.n}日目のメモ" placeholder="きょうのできごと">${esc(memo[d.n] || '')}</textarea></section>`).join('')}
+      <section class="sec">${secH('スタンプ帳', 'Stamps')}${stampsBlock()}</section></div>`;
+  }
+
+  /* ========== ルーター ========== */
+  /* 画面の下のタブバー：きょう／日程／のりもの／まっぷ／その他。どのページも、どれか1つのタブに属する */
+  const NAV = [['today', 'きょう', 'today'], ['trip', '日程', 'route'], ['ride', 'のりもの', 'train'], ['map', 'まっぷ', 'map'], ['more', 'その他', 'more']];
+  const tabOf = (r, sub) => r === 'home' ? 'today' : r === 'trip' ? 'trip' : r === 'ride' || (r === 'stay' && sub === 'car') ? 'ride'
+    : r === 'map' || r === 'spot' && sub !== 'stamps' || r === 'food' || (r === 'sos' && sub === 'parking') ? 'map' : 'more';
+  const navHref = k => ({ today: '#/', trip: '#/trip/' + todayN(), ride: '#/ride', map: '#/map' })[k];
+  function drawNav(route, sub) {
+    const on = tabOf(route, sub);
+    $('#nav').innerHTML = `<ul>${NAV.map(([k, l, i]) => {
+      const a = k === on ? ` class="on" aria-current="page"` : '';
+      return `<li>${k === 'more' ? `<button type="button" data-tab="more" data-act="more" aria-haspopup="dialog"${k === on ? ' class="on"' : ''}>${ic(i)}<span>${l}</span></button>` : `<a href="${navHref(k)}" data-tab="${k}"${a}>${ic(i)}<span>${l}</span></a>`}</li>`;
+    }).join('')}</ul>`;
+  }
+  /* 時計が進んだときの画面の更新（本物は15秒ごと、おためし中は1秒ごと） */
+  let liveKey = null;
+  function liveState0() {
+    const r = location.hash.replace(/^#\/?/, '').split('/')[0] || 'home';
+    const ph = phase();
+    const sh = JSON.stringify(getShift());
+    if (r === 'trip') {
+      const t = now(); const n = +location.hash.split('/')[2] || todayN(); const d = T.days.find(x => x.n === n) || T.days[0]; const ev = events(d); const e = ev.find(x => x.start <= t && t < x.end);
+      const nd = ymd(t) === d.date ? (nudge() || {}).id : '';
+      return `${ph}|trip|${e ? e.i : ''}|${ev.filter(x => x.end < t).length}|${sh}|${nd}|${ymd(t)}`;
+    }
+    /* きょう・のりもの・まっぷ：乗車中カードの出し入れと、日付が変わったときに描き直す */
+    return ph + '|' + r + '|' + liveNowKey() + '|' + ymd(now()) + '|' + sh;
+  }
+  function refreshLive() {
+    simBar();
+    const r = location.hash.replace(/^#\/?/, '').split('/')[0] || 'home';
+    const k = liveState0();
+    if (k !== liveKey) { const y = scrollY; render(); if (r !== 'trip') scrollTo(0, y); return; }
+    if (r === 'home') {
+      if (phase() === 'before') tickCountdown();
+      else { const b = $('#today-top'); if (b) { const html = todayTop(); if (b.dataset.h !== html) { b.innerHTML = html; b.dataset.h = html; applyRuby(b); } } }
+    }
+    if ($('#line')) updateLive();
+    /* のりもの・まっぷの略図の列車の印を進める */
+    $$('svg[data-rmini]').forEach(el => { if (liveState(el.dataset.rmini).pos.toFixed(3) !== el.dataset.p) el.outerHTML = routeMini(el.dataset.rmini); });
+    liveHooks.forEach(fn => fn());
+  }
+  setInterval(() => { const st = Clock.state(); if (!st) refreshLive(); }, 15e3);
+  Clock.on(kind => {
+    if (kind === 'stop' || kind === 'start') shiftMem = null;
+    if (kind === 'tick') return refreshLive();
+    if (kind === 'pos') return;
+    simBar();
+    if (kind === 'play' || kind === 'pause' || kind === 'speed') return;
+    render(); liveHooks.forEach(fn => fn());
+  });
+
+  let lastHash = null;
+  function render() {
+    const parts = location.hash.replace(/^#\/?/, '').split('/');
+    const route = parts[0] || 'home';
+    /* 同じページの描き直し（時計の操作など）か、新しく開いたか */
+    const fresh = lastHash !== location.hash; lastHash = location.hash;
+    const isLive = route === 'ride' && parts[1] === 'live', y0 = scrollY;
+    liveKey = null;
+    window.LiveMap && window.LiveMap.unmount();
+    const views = {
+      home: viewHome, trip: () => viewTrip(+parts[1] || todayN()), ride: () => viewRide(parts[1], parts[2], parts[3]), food: () => viewFood(parts[1]),
+      spot: () => viewSpots(parts[1]), stay: viewStay, sos: viewSos, money: viewMoney, bag: viewBag, memo: viewMemo, map: viewMap, help: () => viewHelp(parts[1]), tips: viewTips, trivia: () => viewTrivia(parts[1])
+    };
+    if (dmMap) { try { dmMap.remove(); } catch { /* noop */ } dmMap = null; }
+    app.innerHTML = (views[route] || viewHome)();
+    applyRuby(app);
+    document.body.classList.toggle('lm-full-on', isLive && parts[3] === 'full' && !!$('#lm.lm-full'));
+    drawNav(views[route] ? route : 'home', parts[1]);
+    simBar();
+    document.title = { home: '旅のしおり｜奈良・大阪 2026', map: 'まっぷ｜旅のしおり', trip: '旅程｜旅のしおり', ride: 'のりもの｜旅のしおり', food: 'ごはん｜旅のしおり', spot: 'おでかけ｜旅のしおり', stay: 'やど・くるま｜旅のしおり', sos: 'もしも｜旅のしおり', money: '予算｜旅のしおり', help: '使い方｜旅のしおり', tips: '旅のワンポイント｜旅のしおり', trivia: 'トリビア｜旅のしおり', bag: '持ち物｜旅のしおり', memo: '思い出メモ｜旅のしおり' }[route] || '旅のしおり｜奈良・大阪 2026';
+    CoverTrain.mount(route === 'home' || !views[route] ? $('.cover:not(.slim)') : null);
+    if (route === 'home') loadWeather($('#weather'));
+    if (route === 'map') mountDriveMap();
+    if (route === 'help') drawMarks();
+    if (route === 'ride' && parts[1] === 'live') {
+      requestAnimationFrame(updateLive);
+      if (!fresh) scrollTo(0, y0);
+      if (window.LiveMap && $('#lm')) window.LiveMap.mount(T.nozomiLine[parts[2]] ? parts[2] : 'nozomi28', { esc, fmtHM, sheet, toast, gmap, ext, full: parts[3] === 'full', fresh });
+    }
+    liveKey = liveState0();
+    // スクロール位置
+    const anchor = parts[1] && document.getElementById(parts[1]);
+    if (route === 'trivia' && parts[1] && !/^d\d$/.test(parts[1])) { const g = $('#tv-cat-' + parts[1]); g && setTimeout(() => g.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120); }
+    else if (route === 'trip') { const n = $('.tl li.now'); n ? setTimeout(() => n.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200) : window.scrollTo(0, 0); }
+    else if (anchor && route !== 'spot') { setTimeout(() => { anchor.scrollIntoView({ behavior: 'smooth', block: 'start' }); const d = $('details', anchor); d && (d.open = true); }, 120); }
+    else if (route === 'spot' && parts[1] === 'stamps') setTimeout(() => $('#stamps').scrollIntoView({ behavior: 'smooth' }), 120);
+    else if (!(isLive && !fresh)) window.scrollTo(0, 0);
+    Onboard.start();
+  }
+
+  /* ========== はじめの案内 ==========
+     次の順に1つずつ出し、同時には出さない：①ホーム画面の案内 → （家族を選ぶ）→ ②画面の案内 → ③いまどのへん？の案内（livemap.js が Onboard.whenDone() を待つ） */
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  function appGuide(force) {
+    if (!window.Guide) return Promise.resolve(false);
+    const t = k => `#nav [data-tab="${k}"]`;
+    return Guide.run('app', [
+      { el: t('today'), title: 'きょう', text: 'しおりを開いたら、まずここ。日付と時刻から、次の列車や次の予定をいちばん上に出します。新幹線に乗る前後は「いまどのへん？」もここに出ます。' },
+      { el: t('trip'), title: '日程', text: '4日間の予定を、時刻の順に見られます。いまの予定には「いま」の印が付きます。' },
+      { el: t('ride'), title: 'のりもの', text: '指定席券と座席表、駅の時刻表など。新幹線の中では「いまどのへん？」で、走っている場所と窓から見えるものが分かります。' },
+      { el: t('map'), title: 'まっぷ', text: '行く場所・お店・駐車場を、日ごとにまとめています。「地図」を押すと、地図のアプリで開きます。' },
+      { el: t('more'), title: 'その他', text: '持ち物・予算・ホテル・もしものときの連絡先と、文字の大きさなどの設定です。旅行中の画面を先に試せる「おためしモード」もここにあります。' },
+      { el: t('more'), title: '使い方の説明書もあります', text: '「その他」の「使い方」に、機能ごとの説明を写真つきでまとめています。この案内も、そこから見直せます。', link: { label: '使い方を開く', go: () => { location.hash = '#/help'; } } }
+    ], { force });
+  }
+  /* ========== お知らせ（中身は assets/news.js） ==========
+     トップ右上のベルに未読の件数。押すと一覧（新しい順・未読は色を変える）→ 詳しい説明 →「その場所を見る」で移動して短く光らせる。
+     既読はこの端末に覚える（覚えられないときは、毎回未読でもよい） */
+  const newsId = n => n.id || `${n.date} ${n.title}`;
+  const newsAll = () => (Array.isArray(window.NEWS) ? window.NEWS : []).filter(n => n && n.date && n.title).slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const newsRead = () => { const r = store.get('newsRead', []); return Array.isArray(r) ? r : []; };
+  const newsUnread = () => { const r = newsRead(); return newsAll().filter(n => !r.includes(newsId(n))).length; };
+  const BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>';
+  function bellBtn() {
+    const u = newsUnread();
+    return `<button class="bell" data-act="news" aria-label="お知らせ${u ? `（未読${u}件）` : ''}">${BELL}${u ? `<b class="bell-n num" aria-hidden="true">${u > 9 ? '9+' : u}</b>` : ''}</button>`;
+  }
+  const syncBell = () => $$('.bell').forEach(b => { b.outerHTML = bellBtn(); });
+  const fmtNewsDate = d => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
+  function newsSheet(openId) {
+    sheet('お知らせ', '<div class="nw" id="nw"></div>', (el, close) => {
+      const box = $('#nw', el);
+      const list = () => {
+        const all = newsAll(), r = newsRead();
+        box.innerHTML = all.length ? `<ul class="nw-list">${all.map(n => `<li><button class="nw-row${r.includes(newsId(n)) ? '' : ' unread'}" data-nid="${esc(newsId(n))}"><span class="nw-d num">${fmtNewsDate(n.date)}</span><span class="nw-t">${esc(n.title)}</span>${r.includes(newsId(n)) ? '' : '<span class="nw-new">未読</span>'}<span class="go" aria-hidden="true">›</span></button></li>`).join('')}</ul>`
+          : '<p class="nw-empty">お知らせはまだありません。<br><span class="small muted">しおりを直したときは、ここでお知らせします。</span></p>';
+      };
+      const detail = id => {
+        const n = newsAll().find(x => newsId(x) === id); if (!n) return list();
+        const r = newsRead(); if (!r.includes(id)) { store.set('newsRead', r.concat(id)); syncBell(); }
+        box.innerHTML = `<button class="nw-back" data-nw="back">‹ お知らせの一覧</button>
+          <p class="nw-date num">${n.date.replace(/-/g, '.')}</p><h4 class="nw-h">${esc(n.title)}</h4>
+          ${n.text ? `<p class="nw-text">${esc(n.text).replace(/\n/g, '<br>')}</p>` : ''}
+          ${n.go ? '<div class="btns"><button class="btn fill" data-nw="go">その場所を見る</button></div>' : ''}`;
+        box.dataset.cur = id;
+      };
+      box.addEventListener('click', e => {
+        const row = e.target.closest('[data-nid]'); if (row) { detail(row.dataset.nid); return; }
+        const b = e.target.closest('[data-nw]'); if (!b) return;
+        if (b.dataset.nw === 'back') list();
+        if (b.dataset.nw === 'go') { const n = newsAll().find(x => newsId(x) === box.dataset.cur); close(); n && newsGo(n); }
+      });
+      openId ? detail(openId) : list();
+    });
+  }
+  /* 移動して、変わった所・探した所を短く光らせる（視差効果を減らす設定では、光らせずに枠だけを少し出す） */
+  function goFlash(go, mark) {
+    if (!go) return;
+    if (/^transfer\.html/.test(go)) { session.set('xferFrom', location.hash || '#/'); location.href = go; return; }
+    const flash = () => {
+      let el = mark && $(mark); if (!el) return;
+      if (el.matches('input')) el = el.closest('li') || el;
+      const d = el.closest('details'); if (d) d.open = true;
+      el.scrollIntoView({ block: 'center', behavior: 'auto' });
+      el.classList.remove('nw-flash'); void el.offsetWidth; el.classList.add('nw-flash');
+      setTimeout(() => el.classList.remove('nw-flash'), 2400);
+    };
+    if (location.hash === go || (!location.hash && go === '#/')) flash();
+    else { location.hash = go; setTimeout(flash, /^#\/ride\/live/.test(go) ? 1300 : 550); }
+  }
+  const newsGo = n => goFlash(n.go, n.mark);
+
+  /* ========== しおり内の検索（目次のいちばん上） ==========
+     しおりの中身（行程・スポット・ごはん・駅・時刻表の駅名・トリビア・使い方・持ち物・緊急連絡先など）を、端末の中だけで探す（電波がなくても使える）。
+     ひらがなでも見つかるように、カタカナはひらがなにそろえ、読みのデータ（T.yomi・T.ruby・スポットの kana）でも探す。
+     予約番号・合言葉で守っている中身（QRの中身）は対象にしない */
+  const k2h = s => s.replace(/[\u30a1-\u30f6]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+  const norm = s => k2h(String(s || '').normalize('NFKC').toLowerCase()).replace(/[\s・、。,.\-－ー―‐（）()「」『』【】〈〉/／:：|｜→←]/g, '');
+  const cssq = s => String(s).replace(/["\\]/g, '\\$&');
+  let SIDX = null;
+  function searchIndex() {
+    if (SIDX) return SIDX;
+    const L = [], add = (t, s, x, go, mark, more = {}) => L.push({ t, s, x: x || '', go, mark, ...more });
+    const J = a => a.filter(Boolean).join(' ');
+    /* ページ：移った先では、その節（なければページの題）を光らせる */
+    const pageMark = href => { const [r, sub] = href.replace(/^#\/?/, '').split('/'); return !r ? '#today-top' : r === 'trip' ? '.dayhead h1' : sub && !/^(live|nozomi|kamome|relay)/.test(sub) && r !== 'help' ? '#' + sub : r === 'ride' && sub === 'live' ? '.lm-phead h1' : 'h1'; };
+    TOC.forEach(([h, list]) => list.forEach(([l, href, sub]) => add(l, `ページ・${h}`, sub, TOC_ACT[href] ? null : href, TOC_ACT[href] ? null : pageMark(href), TOC_ACT[href] ? { act: TOC_ACT[href] } : {})));
+    T.days.forEach(d => {
+      const dl = `${d.n}日目 ${d.label}（${d.dow}）`;
+      d.items.forEach((it, i) => {
+        if (it.t === 'stop') add(it.name, `行程・${dl} ${it.arr || it.dep}`, J([it.note, TYPE_LABEL[it.type], it.type === 'station' ? '駅' : '', it.map]), `#/trip/${d.n}`, `#it-${i}`);
+        else add(it.line, `行程・${dl}・${dur(it.min)}の移動`, J([it.detail, it.dist ? '距離 ' + it.dist : '', it.note]), `#/trip/${d.n}`, `#it-${i}`);
+      });
+      (d.drives || []).forEach(v => add(`ドライブの道順：${v.label}`, `まっぷ・${dl} ${v.when}`, v.via, '#/map/drive', `[data-drive="${v.id}"]`, { k: '車 ルート レンタカー 高速道路 Googleマップ' }));
+    });
+    T.spots.forEach(sp => {
+      add(sp.name, `おでかけ・${sp.day}日目`, J([sp.kana, sp.area, sp.lead, ...(sp.info || []).map(x => x.join(' ')), ...(sp.steps || []), ...(sp.walk || []), sp.walkNote, sp.warn, ...(sp.fees || []).map(x => x.join(' '))]), `#/spot/${sp.id}`, '.spot-hero');
+    });
+    const Lu = T.lunch[0];
+    add(Lu.name, 'ごはん・10/18 お昼', J([Lu.sub, Lu.lead, Lu.address, ...Lu.menu.map(m => m[0])]), '#/food', '#marukatsu');
+    add('JO-TERRACE OSAKA', 'ごはん・10/19 お昼', '大阪城公園の中 お昼ごはん お店は現地で決める', '#/food', '#joterrace');
+    T.dinner.forEach(sh => add(sh.name, `ごはん・夕ごはん候補（${T.dinnerAreas[sh.area].name}）`, J([sh.genre, sh.place, sh.address, sh.hours, sh.closed, sh.pay, sh.takeout, sh.rule, ...sh.picks.map(p => p[0] + ' ' + (p[2] || ''))]), '#/food', `#${sh.id}`, { pre: () => session.set('ffilt', 'all') }));
+    TT.stations.forEach(st => {
+      const dirs = st.lines.flatMap(l => l.dirs), tb = TD();
+      const dests = [...new Set(dirs.flatMap(id => { const t = tb[id]; return t ? [t.dir, ...['weekday', 'holiday'].flatMap(k => (t[k] || []).map(r => r[1]))] : []; }))];
+      add(`${st.name}駅の時刻表`, `時刻表・${st.lines.map(l => TT.lines[l.line].name).join('・')}`, J([st.roma, '行き先：' + dests.filter(Boolean).join('・')]), null, null, { tt: st.id });
+    });
+    const n28 = T.nozomiLine.nozomi28, n17 = T.nozomiLine.nozomi17;
+    n28.forEach(([nm, pref, a, d, stop], k) => { const b = n17.find(x => x[0] === nm) || []; add(`${nm}駅（${pref}県）`, `いまどのへん？・のぞみが${stop ? '止まる' : '通る'}駅`, `往路 ${a || d}${stop ? '' : 'ごろ通過'}　復路 ${b[2] || b[3] || ''}${b[4] ? '' : 'ごろ通過'}`, '#/ride/live/nozomi28', `#line > li:nth-child(${k + 1})`); });
+    ((window.LINE && LINE.spots) || []).forEach(sp => add(sp.name, `沿線の見どころ・${sp.pref}`, J([sp.kana, sp.sum, sp.genre]), '#/ride/live/nozomi28', '#spots'));
+    Object.entries(T.trains).forEach(([k, tr]) => add(tr.name, `のりもの・${MD(tr.date)} ${tr.from} ${tr.dep} → ${tr.to} ${tr.arr}`, J([tr.kind, tr.vehicle]), `#/ride/${k}`, `#${k}`, { k: tr.ticket + ' 指定席 座席表 座席 きっぷ' }));
+    T.castles.forEach((c, j) => add(c.name, `車窓の城・${c.station}駅`, J([c.side, c.text]), '#/ride/castles', `[data-sid="castle-${j}"]`));
+    T.ekiben.forEach(([n, p, d], j) => add(n, '博多駅の駅弁', d, '#/ride/ekiben', `.bento > li:nth-child(${j + 1})`, { k: '駅弁 弁当' }));
+    (T.triviaCats || []).forEach(c => { add(`トリビア：${c.name}`, 'トリビア', c.sub, `#/trivia/${c.id}`, `#tv-cat-${c.id}`, { k: 'トリビア 雑学 豆知識' }); triviaItems(c.id).forEach(x => add(x.q, `トリビア・${c.name}`, J([x.k, x.a]), `#/trivia/${c.id}`, `#tv-${x.id}`, { k: 'トリビア' })); });
+    XFER.forEach(x => add(`${x.title}（3D）`, `駅の乗り換え（3D）・${x.when}`, x.sub, xferHref(x.s), null, { k: '乗り換え 3D 立体 構内 エレベーター 階段' }));
+    MANUAL.forEach(x => add(x.title, `使い方・${x.tab}`, J([x.sub, x.where, ...x.pts.map(p => p.t)]), `#/help/${x.id}`, '.hp-head'));
+    T.bag.forEach(g => g.items.forEach(([n, why]) => add(n, `持ち物・${g.cat}`, why, '#/bag', `[data-bag="${cssq(n)}"]`)));
+    const S = T.sos;
+    S.urgent.forEach(([n, l, d], k) => add(`${n}　${l}`, '緊急連絡先', d, '#/sos', `[data-sid="sos-u${k}"]`));
+    S.consult.forEach((g, gi) => g.rows.forEach(([a, n, tl, h], ri) => add(`${n}（${a}）`, `緊急連絡先・${g.short}`, J([g.label, tl, h]), '#/sos', `[data-sid="sos-c${gi}-${ri}"]`)));
+    S.hospitals.forEach((h, k) => add(h.name, `病院・${h.area}`, J([h.badge, h.text, h.address, h.tel]), '#/sos', `[data-sid="hosp-${k}"]`));
+    add('受診のときにあると便利なもの', '緊急連絡先', S.bring.join(' '), '#/sos');
+    add('交通事故のとき', '緊急連絡先', S.accident.join(' '), '#/sos', '#accident');
+    add('奈良公園近くの駐車場', '駐車場・10/18', T.parking.rule, '#/sos/parking', '#parking', { k: 'パーキング' });
+    T.parking.list.forEach((p, k) => add(`${p.no} ${p.name}`, '駐車場・奈良公園の近く', J([p.fee, p.note, p.spaces, p.open]), '#/sos/parking', `[data-sid="park-${k}"]`, { k: '駐車場 パーキング' }));
+    const H = T.hotel;
+    add(H.name, 'ホテル', J([H.address, H.tel, H.access, 'チェックイン ' + H.checkin, 'チェックアウト ' + H.checkout, H.pay, H.plan, H.soine]), '#/stay');
+    H.perks.forEach(([k, v]) => add(k, 'ホテル・滞在中に便利なこと', v, '#/stay'));
+    H.floors.forEach(([fl, d]) => add(`${fl}　${d}`, 'ホテル・館内のフロア', '', '#/stay', '.floors'));
+    add('朝ごはん（ホテル）', 'ホテル', J([H.breakfast.place, H.breakfast.time, H.breakfast.text]), '#/stay');
+    add('大浴場・サウナ', 'ホテル', J([H.bath.place, H.bath.time.join(' '), H.bath.text, H.bath.warn]), '#/stay');
+    Object.values(H.rooms).forEach(r => add(`${r.no} ${r.name}`, `お部屋・${r.who}`, J([r.nights, r.size, r.bed, r.bath, r.amenity]), '#/stay'));
+    add('チェックインQR', 'ホテル・予約とQR', 'QRコード 自動チェックイン 予約番号 合言葉 画像として保存', null, null, { act: 'qr' });
+    const C = T.car;
+    add(C.shop, 'レンタカー・10/18', J([C.klass, C.klassNote, C.address, C.tel, C.access, C.pay, ...C.notes.map(x => x.join(' ')), ...C.included]), '#/stay/car', '#car');
+    T.budget.groups.forEach(g => add(g.name, '予算', g.rows.map(r => r[0] + ' ' + r[1]).join(' '), '#/money'));
+    add('割り勘メモ', '予算', '立て替え 精算 割り勘', '#/money', '#split');
+    T.stamps.forEach(st => add(`スタンプ：${st.name}`, `スタンプ帳・${st.day}日目`, '', '#/spot/stamps', `[data-stamp="${st.id}"]`));
+    (T.officialMaps || []).forEach(m => add(m.name, `公式の案内図・${m.by}`, m.when, '#/map/official', '#official', { k: '地図 案内図 構内図' }));
+    add('旅先のお天気', 'きょう', '天気 予報 雨 気温', '#/', '#weather');
+    if (T.tips) {
+      add('例年の気温', '旅のワンポイント', '気温 平年値 気象庁 大阪 奈良 福岡 大村 寒い 暑い', '#/tips', '#tp-temp');
+      add('服装', '旅のワンポイント', T.tips.wear.map(w => w.join(' ')).join(' ') + ' 服 上着 靴 何を着る', '#/tips', '#tp-wear');
+      T.tips.items.forEach(x => add(x.title, `旅のワンポイント・${x.day.map(n => n + '日目').join('・')}`, x.text, '#/tips', `#tip-${x.id}`));
+    }
+    add('文字の大きさ', 'その他・設定', '文字を大きく 標準 大 画面の明るさ 暗い', null, null, { act: 'more' });
+    add('ホーム画面に追加', 'その他・設定', 'アプリのように開く アイコン', null, null, { act: 'a2hs' });
+    add('家族を切り替える', 'その他・設定', '山口家 飯塚家', null, null, { act: 'fam' });
+    add('機能紹介', '使い方', 'このしおりで、できること スライド', null, null, { act: 'intro' });
+    newsAll().forEach(n => add(n.title, `お知らせ・${fmtNewsDate(n.date)}`, n.text, n.go, n.mark));
+    /* 読み：漢字のことばに読みを添えておく */
+    const Y = Object.entries({ ...(T.yomi || {}), ...Object.fromEntries(T.ruby || []) });
+    L.forEach(r => {
+      const all = `${r.t} ${r.s} ${r.x} ${r.k || ''}`;
+      r.nt = norm(r.t); r.h = norm(all + ' ' + (r.k || '')) + '\n' + norm(Y.filter(([w]) => all.includes(w)).map(([, y]) => y).join(' '));
+    });
+    return (SIDX = L);
+  }
+  function searchFor(q) {
+    const terms = q.split(/[\s\u3000]+/).map(norm).filter(Boolean);
+    if (!terms.length) return [];
+    return searchIndex().map((r, k) => {
+      if (!terms.every(w => r.h.includes(w))) return null;
+      let sc = 0; terms.forEach(w => { if (r.nt.includes(w)) sc += 4; if (r.nt.startsWith(w)) sc += 2; });
+      return { r, sc, k };
+    }).filter(Boolean).sort((a, b) => b.sc - a.sc || a.k - b.k).map(x => x.r);
+  }
+  function snippet(x, q) {
+    const w = q.split(/[\s\u3000]+/).find(t => t && x.includes(t));
+    if (!w) return x.length > 44 ? x.slice(0, 44) + '…' : x;
+    const i = x.indexOf(w), a = Math.max(0, i - 16);
+    return (a ? '…' : '') + x.slice(a, i + w.length + 26) + (i + w.length + 26 < x.length ? '…' : '');
+  }
+  function searchGo(r) {
+    if (r.pre) r.pre();
+    const ACT = { qr: showQR, sim: simSheet, more: moreSheet, a2hs: () => a2hsSheet(false), fam: () => pickFamily(), intro: () => introSlides(true) };
+    if (r.act) return setTimeout(ACT[r.act], 50);
+    if (r.tt) { if (!/^#\/ride/.test(location.hash)) location.hash = '#/ride/tt'; setTimeout(() => openTT({ station: r.tt }), 400); return; }
+    goFlash(r.go, r.mark);
+  }
+
+  /* ========== ルビ（読みにくい地名・駅名。T.ruby） ==========
+     画面ごとに、それぞれのことばの最初の1回だけに振る。時刻表の一覧・発車標・地図の中など、狭い所には振らない */
+  const RUBY = (T.ruby || []).slice().sort((a, b) => b[0].length - a[0].length);
+  const RUBY_Y = Object.fromEntries(RUBY);
+  const RUBY_RE = RUBY.length ? new RegExp(RUBY.map(r => r[0]).join('|'), 'g') : null;
+  const NO_RUBY = 'script,style,textarea,input,select,option,svg,ruby,.tt-grid,.board,.tt-legs,.lm-mapwrap,.dm-map,.simbar,.srch-box,.here,.sb-r,.nw-t';
+  function applyRuby(root) {
+    if (!RUBY_RE || !root) return;
+    const seen = new Set($$('ruby[data-rb]').filter(r => !root.contains(r)).map(r => r.dataset.rb));
+    const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n => (n.parentElement && n.parentElement.closest(NO_RUBY) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
+    const nodes = []; while (tw.nextNode()) nodes.push(tw.currentNode);
+    nodes.forEach(n => {
+      const t = n.nodeValue; RUBY_RE.lastIndex = 0;
+      if (!RUBY_RE.test(t)) return;
+      RUBY_RE.lastIndex = 0;
+      const frag = document.createDocumentFragment(); let last = 0, m, hit = false;
+      while ((m = RUBY_RE.exec(t))) {
+        const w = m[0]; if (seen.has(w)) continue;
+        seen.add(w); hit = true;
+        frag.append(t.slice(last, m.index));
+        const rb = document.createElement('ruby'); rb.dataset.rb = w; rb.append(w); const rt = document.createElement('rt'); rt.textContent = RUBY_Y[w]; rb.append(rt); frag.append(rb);
+        last = m.index + w.length;
+      }
+      if (!hit) return;
+      frag.append(t.slice(last)); n.replaceWith(frag);
+    });
+  }
+
+  /* ========== 機能紹介（初回ガイドの前に出すスライド） ==========
+     「このしおりで何ができるか」を、横にめくるスライドで紹介する。一度見たら出さない（guide:intro）。使い方ページから見直せる。
+     動画はスライドを開いたときに読み込む（トップの表示を重くしない）。視差効果を減らす設定では再生せず、止まった1コマを出す */
+  /* 並びは「まず入口（トップ）→ そこから使う機能」 */
+  const INTRO = [
+    { img: 'today', name: '今日の予定機能', text: '旅行中は、いまの予定と次に乗る列車を、開いてすぐに確かめることができます。' },
+    { v: 'live', name: 'いまどのへん？機能', text: '新幹線の車内で、いまどこを走っているか、窓から何が見えるかを地図で確かめることができます。' },
+    { v: 'xfer', name: '3D乗換機能', text: '博多と新大阪での乗り換えの道順を、立体の図を回しながらたどることができます。' },
+    { img: 'shift', name: 'いまここ機能', text: '予定からずれたら、行程表で「いまここ」を押すと、この先の時刻を合わせて表示することができます。' },
+    { img: 'qr', name: '予約・QR機能', text: 'ホテルの予約番号とチェックインQRを、合言葉を入れて表示することができます。' },
+    { img: 'offline', name: 'オフライン機能', text: '一度開いておけば、電波のないトンネルや機内モードでも、しおりを見ることができます。' }
+  ];
+  const INTRO_V = 12;
+  function introSlides(force) {
+    if (!force && window.Guide && Guide.seen('intro')) return Promise.resolve(false);
+    const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    return new Promise(done => {
+      const ov = document.createElement('div');
+      ov.className = 'in-ov'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'このしおりで、できること');
+      const media = (x, k) => x.v
+        ? (RM ? `<img src="assets/intro/${x.v}.webp?v=${INTRO_V}" alt="" decoding="async">`
+          : `<video muted playsinline loop preload="none" poster="assets/intro/${x.v}.webp?v=${INTRO_V}" data-src="assets/intro/${x.v}.mp4?v=${INTRO_V}" aria-hidden="true"></video>`)
+        : `<img ${k ? 'data-' : ''}src="assets/manual/${x.img}.webp?v=${MAN_V}" alt="" decoding="async">`;
+      ov.innerHTML = `<div class="in-top"><p class="in-h">このしおりで、できること</p><button type="button" class="in-skip">スキップ</button></div>
+        <div class="in-track" tabindex="-1">${INTRO.map((x, k) => `<section class="in-slide" role="group" aria-roledescription="スライド" aria-label="${k + 1} / ${INTRO.length}">
+          <div class="in-media${x.v ? ' mv' : ''}">${media(x, k)}</div>
+          <p class="in-no lat num">Feature ${String(k + 1).padStart(2, '0')}</p>
+          <p class="in-t"><b>${esc(x.name)}</b>：${esc(x.text)}</p></section>`).join('')}</div>
+        <div class="in-dots" role="tablist" aria-label="スライドの位置">${INTRO.map((x, k) => `<button type="button" role="tab" data-k="${k}" aria-label="${k + 1}枚目：${esc(x.name)}"><i></i></button>`).join('')}</div>
+        <div class="in-btns"><button type="button" class="in-prev">戻る</button><button type="button" class="in-next">次へ</button></div>`;
+      const track = $('.in-track', ov), slides = $$('.in-slide', ov), dots = $$('.in-dots button', ov);
+      let cur = -1, closed = false;
+      const show = k => {
+        if (k === cur) return; cur = k;
+        dots.forEach((d, i) => d.setAttribute('aria-selected', String(i === k)));
+        $('.in-prev', ov).disabled = k === 0;
+        $('.in-next', ov).textContent = k === INTRO.length - 1 ? (force ? '閉じる' : '画面の案内へ') : '次へ';
+        slides.forEach((sl, i) => {
+          /* 画像は隣まで先に読む。動画は開いたスライドだけ読み込んで再生し、ほかは止める */
+          $$('img[data-src]', sl).forEach(im => { if (Math.abs(i - k) <= 1) { im.src = im.dataset.src; im.removeAttribute('data-src'); } });
+          const v = $('video', sl); if (!v) return;
+          if (i === k) {
+            if (!v.getAttribute('src')) { v.src = v.dataset.src; v.muted = true; v.playsInline = true; }
+            const pr = v.play(); pr && pr.catch(() => {});
+          } else if (!v.paused) v.pause();
+        });
+      };
+      const go = k => { k = Math.max(0, Math.min(INTRO.length - 1, k)); track.scrollTo({ left: k * track.clientWidth, behavior: RM ? 'auto' : 'smooth' }); show(k); };
+      const close = () => {
+        if (closed) return; closed = true;
+        $$('video', ov).forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); });
+        try { localStorage.setItem('guide:intro', '1'); } catch { /* 覚えられなくても続行 */ }
+        ov.remove(); document.removeEventListener('keydown', onKey); removeEventListener('resize', onResize);
+        done(true);
+      };
+      let st = 0;
+      track.addEventListener('scroll', () => { clearTimeout(st); st = setTimeout(() => show(Math.round(track.scrollLeft / Math.max(1, track.clientWidth))), 60); }, { passive: true });
+      const onKey = e => { if (e.key === 'Escape') close(); if (e.key === 'ArrowRight') go(cur + 1); if (e.key === 'ArrowLeft') go(cur - 1); };
+      const onResize = () => { track.scrollLeft = cur * track.clientWidth; };
+      ov.addEventListener('click', e => {
+        if (e.target.closest('.in-skip')) close();
+        else if (e.target.closest('.in-next')) cur >= INTRO.length - 1 ? close() : go(cur + 1);
+        else if (e.target.closest('.in-prev')) go(cur - 1);
+        else { const d = e.target.closest('.in-dots button'); d && go(+d.dataset.k); }
+      });
+      document.addEventListener('keydown', onKey); addEventListener('resize', onResize);
+      document.body.appendChild(ov);
+      show(0);
+      $('.in-next', ov).focus({ preventScroll: true });
+    });
+  }
+  const Onboard = (() => {
+    let started = false, finish;
+    const done = new Promise(r => (finish = r));
+    const full = () => document.body.classList.contains('lm-full-on');
+    async function start() {
+      if (started) return; started = true;
+      try {
+        await sleep(900);
+        if (a2hsDue()) await a2hsSheet(true);
+        if (!fam() && !session.get('askedFam')) { session.set('askedFam', '1'); await pickFamily(true); }
+        if (window.Guide && !(Guide.seen('app') && Guide.seen('intro'))) {
+          /* 全画面の地図ではタブバーが隠れているので、戻るまで待つ */
+          while (full()) await new Promise(r => addEventListener('hashchange', r, { once: true }));
+          await sleep(300);
+          /* 機能紹介 → 画面の案内の順。前の版で画面の案内を見た人にも、機能紹介は一度だけ出す */
+          if (!Guide.seen('intro')) { await introSlides(false); await sleep(250); }
+          await appGuide(false);
+        }
+      } catch (e) { console.error(e); }
+      finish();
+    }
+    return { start, whenDone: () => done };
+  })();
+  window.Onboard = Onboard;
+
+  /* ========== 操作 ========== */
+  document.addEventListener('click', e => {
+    /* 駅の乗り換え（3D）を開く前の画面を覚えておく（図の左上の「しおりに戻る」で、ここへ戻る） */
+    if (e.target.closest('a[href^="transfer.html"]')) session.set('xferFrom', location.hash || '#/');
+    const a = e.target.closest('[data-act]');
+    if (a) {
+      e.preventDefault();
+      const act = a.dataset.act;
+      if (act === 'fam') pickFamily();
+      if (act === 'qr') showQR();
+      if (act === 'sim') simSheet();
+      if (act === 'toc') showToc();
+      if (act === 'more') moreSheet();
+      if (act === 'a2hs') a2hsSheet(false);
+      if (act === 'help') location.hash = '#/help';
+      if (act === 'guide-app') replayGuide('app');
+      if (act === 'guide-live') replayGuide('live');
+      if (act === 'intro') introSlides(true);
+      if (act === 'news') newsSheet();
+      if (act === 'lockforget') {
+        if (!Lock.saved()) toast('この端末には、合言葉が入っていません');
+        else { Lock.forget(); updateQrThumbs(); toast('この端末の合言葉を消しました。次に表示するときに、もう一度入れてください'); }
+      }
+      if (act === 'theme') {
+        const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const nx = cur === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = nx; store.set('theme', nx);
+      }
+      return;
+    }
+    const q = s => e.target.closest(s);
+    let el;
+    if ((el = q('.cover:not(.slim)')) && !q('button, a')) { CoverTrain.run(); return; }
+    if ((el = q('[data-sim]'))) {
+      const k = el.dataset.sim;
+      if (k === 'toggle') Clock.toggle();
+      if (k === 'speed') Clock.cycleSpeed();
+      if (k === 'seek') seekSheet();
+      if (k === 'stop') { Clock.stop(); toast('本物の時刻に戻りました'); }
+      return;
+    }
+    if ((el = q('[data-here]'))) { const [d, i] = el.dataset.here.split(':'); setHere(d, +i); return; }
+    if ((el = q('[data-unshift]'))) { setShift(null); toast('予定どおりの時刻に戻しました'); const y = scrollY; render(); scrollTo(0, y); return; }
+    if ((el = q('[data-nudge]'))) {
+      let st = store.get('nudge'); const id = el.dataset.nudge;
+      if (!st || st.date !== id.split(':')[0]) st = { date: id.split(':')[0], seen: [id], closed: [] };
+      st.closed.push(id); store.set('nudge', st); el.closest('.nudge').remove(); return;
+    }
+    if ((el = q('[data-try]'))) return startScene(sceneById(el.dataset.try));
+    if ((el = q('.dc-go[data-go], .tv-today-b[data-go]'))) return goFlash(el.dataset.go, el.dataset.mark);
+    if ((el = q('[data-tt]'))) return openTT({ leg: el.dataset.tt });
+    if ((el = q('[data-tts]'))) return openTT({ station: el.dataset.tts });
+    if ((el = q('[data-copy]'))) return copy(el.dataset.copy);
+    if ((el = q('[data-dir]'))) { session.set('dir', el.dataset.dir); render(); return; }
+    if ((el = q('[data-live]'))) { location.hash = '#/ride/live/' + el.dataset.live; return; }
+    if ((el = q('[data-flip]'))) { el.classList.toggle('open'); return; }
+    if ((el = q('[data-ffilt]'))) { session.set('ffilt', el.dataset.ffilt); const y = scrollY; render(); scrollTo(0, y); return; }
+    if ((el = q('[data-want]'))) {
+      const list = store.get('want', []), n = el.dataset.want, i = list.indexOf(n);
+      i < 0 ? list.push(n) : list.splice(i, 1); store.set('want', list); el.classList.toggle('on', i < 0); return;
+    }
+    if ((el = q('[data-vote]'))) {
+      const list = store.get('votes', []), n = el.dataset.vote, i = list.indexOf(n);
+      i < 0 ? list.push(n) : list.splice(i, 1); store.set('votes', list); const y = scrollY; render(); scrollTo(0, y); return;
+    }
+    if ((el = q('[data-stamp]'))) {
+      const st = store.get('stamps', {}), id = el.dataset.stamp;
+      if (st[id]) delete st[id]; else st[id] = now().toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' });
+      store.set('stamps', st);
+      const y = scrollY; render(); scrollTo(0, y);
+      if (st[id]) { const sc = $(`[data-stamp="${id}"] .sc`); sc && sc.classList.add('pop'); }
+      return;
+    }
+    if ((el = q('[data-del]'))) { const l = store.get('expenses', []); l.splice(+el.dataset.del, 1); store.set('expenses', l); const y = scrollY; render(); scrollTo(0, y); return; }
+    if ((el = q('[data-bagdel]'))) { store.set('bagExtra', store.get('bagExtra', []).filter(x => x !== el.dataset.bagdel)); const y = scrollY; render(); scrollTo(0, y); }
+  });
+  document.addEventListener('change', e => {
+    const b = e.target.closest('[data-bag]');
+    if (b) { const d = store.get('bag', {}); b.checked ? (d[b.dataset.bag] = 1) : delete d[b.dataset.bag]; store.set('bag', d); const y = scrollY; render(); scrollTo(0, y); }
+  });
+  document.addEventListener('input', e => {
+    const m = e.target.closest('[data-memo]');
+    if (m) { const memo = store.get('memo', {}); memo[m.dataset.memo] = m.value; store.set('memo', memo); }
+  });
+  document.addEventListener('submit', e => {
+    e.preventDefault();
+    if (e.target.id === 'expform') {
+      const l = store.get('expenses', []);
+      l.push({ what: $('#ex-what').value.trim(), amt: +$('#ex-amt').value, payer: $('#ex-payer').value, split: $('#ex-split').value });
+      store.set('expenses', l); render(); setTimeout(() => $('#split') && $('#split').scrollIntoView(), 50); toast('記録しました');
+    }
+    if (e.target.id === 'bagform') {
+      const v = $('#bag-new').value.trim(); if (!v) return;
+      const l = store.get('bagExtra', []); if (!l.includes(v)) l.push(v); store.set('bagExtra', l); const y = scrollY; render(); scrollTo(0, y);
+    }
+  });
+
+  const th = store.get('theme'); if (th) document.documentElement.dataset.theme = th;
+  window.addEventListener('hashchange', render);
+  window.addEventListener('resize', () => $('#line') && updateLive());
+  render();
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
