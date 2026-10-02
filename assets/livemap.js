@@ -12,7 +12,7 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const MIN = 6e4;
   const MAPLIBRE = 'assets/vendor/maplibre-gl/maplibre-gl.mjs';
-  const LINE_URL = 'assets/line-sanyo.json?v=21';
+  const LINE_URL = 'assets/line-sanyo.json?v=22';
   const GPS_MAX_OFF = 0.5, GPS_MAX_ACC = 1000, GPS_MAX_AGE = 30e3, V_MAX = 330;
 
   /* ========== 線路の形（km ⇔ 緯度経度） ========== */
@@ -369,7 +369,9 @@
       pitch: Math.max(0, Math.min(70, +(ls.get('lm-pitch') ?? legacyPitch) || 0)),
       orient: ls.get('lm-orient') === 'north' ? 'north' : 'head', free: false,
       base: BASES[ls.get('lm-base')] ? ls.get('lm-base') : 'pale', tmpBase: null,
-      eco: ls.get('lm-eco') === '1', docVisible: document.visibilityState !== 'hidden', mapVisible: true, pins: [], camAt: 0, nearCur: null, nearSeen: new Set()
+      eco: ls.get('lm-eco') === '1', docVisible: document.visibilityState !== 'hidden', mapVisible: true, pins: [], camAt: 0, nearCur: null, nearSeen: new Set(),
+      /* 縮尺：zAuto＝速さに合わせる設定（初めはオン。端末に覚える）／zMan＝手で決めた縮尺（このタブのあいだ保つ）／arr＝到着モード */
+      zAuto: ls.get('lm-autozoom') !== '0', zMan: (z => (z && isFinite(+z) ? +z : null))(ss.get('lm-zman')), band: null, bandCand: null, bandSince: 0, arr: false
     };
     if (c.eco) { c.pitch = 0; c.wakeWant = false; if (c.base === 'photo') c.base = 'pale'; }
     setTools(ls.get('lm-tools') === '1', false);
@@ -423,6 +425,7 @@
       }
       if (k === 'view') setPitch(c.map ? (c.map.getPitch() >= 5 ? 0 : PITCH_3D) : (c.pitch >= 5 ? 0 : PITCH_3D));
       if (k === 'recenter') { c.follow = true; drawCtrl(); camera(true); }
+      if (k === 'zauto') { setManualZoom(null); c.follow = true; c.camAt = 0; drawCtrl(); camera(true); ui.toast('縮尺を自動に戻しました'); }
       if (k === 'settings') openSettings();
       if (k === 'endop') setActive(false);
       if (k === 'compass') compass();
@@ -434,6 +437,7 @@
     const onChange = e => {
       if (e.target.matches('[data-lm="wake"]')) { c.wakeWant = e.target.checked; ss.set('lm-wake', c.wakeWant ? '1' : null); wake(); }
       if (e.target.matches('[data-lm="eco"]')) { setEco(e.target.checked); ss.set('lm-eco-manual', e.target.checked ? 'on' : 'off'); }
+      if (e.target.matches('[data-lm="autozoom"]')) { c.zAuto = e.target.checked; ls.set('lm-autozoom', c.zAuto ? null : '0'); if (c.zAuto) setManualZoom(null); c.camAt = 0; drawCtrl(); }
     };
     root.addEventListener('click', onClick); root.addEventListener('change', onChange);
     c.onClick = onClick; c.onChange = onChange;
@@ -494,7 +498,7 @@
     function tick() {
       if (cur !== c) return;
       const r = tk.compute(); c.last = r;
-      drawPanel(r); drawSpeed(r); drawNotice(r); drawAlarm(r); drawList(r); drawPins(r); mapTick(r); drawTools();
+      drawPanel(r); drawSpeed(r); drawNotice(r); drawAlarm(r); drawList(r); drawPins(r); zoomBand(r); mapTick(r); drawTools();
     }
     c.tick = tick;
 
@@ -918,6 +922,9 @@
           <p class="lm-desc lm-warn">${hasWake() ? '画面を消すと、お知らせが届かないことがあります。確実にするには「画面を自動で消さない」をオンにして、画面を点けたままにしてください。' : '画面を消すと、お知らせが届かないことがあります。確実にするには、画面を点けたままにしてください。'}</p></div>
         ${hasWake() ? `<label class="lm-sw"><input type="checkbox" role="switch" data-lm="wake"${c.wakeWant ? ' checked' : ''}${c.eco ? ' disabled' : ''}><span>画面を自動で消さない</span></label>
           <p class="lm-desc">スマホは、しばらく触らないと暗くなって消えます。オンにすると、このページを開いている間は消えなくなります。そのぶん電池を多く使います。${c.eco ? '省電力中は使えません。' : ''}</p>` : ''}
+        <label class="lm-sw"><input type="checkbox" role="switch" data-lm="autozoom"${c.zAuto ? ' checked' : ''}><span>速さに合わせて、地図を自動で拡大・縮小</span></label>
+        <p class="lm-desc">速く走っているときは広く、駅の前後で速度が落ちたら拡大して、街の様子が分かるようにします。手で拡大・縮小すると、その縮尺のまま止まり、地図の右下の「自動」を押すまで戻りません。</p>
+        <p class="lm-desc">到着モード：終点（${ui.esc(c.S.tr.end || dest)}）が地図に映ったら、終点を画面の上にして、近づくにつれて拡大します。この設定にかかわらず働き、着いて止まると元の表示に戻ります。</p>
         <label class="lm-sw"><input type="checkbox" role="switch" data-lm="eco"${c.eco ? ' checked' : ''}><span>省電力</span></label>
         <p class="lm-desc">地図の更新を10秒に1回にし、平面・淡色の地図にします。航空写真と「画面を自動で消さない」は使いません。${c.hasBattery ? '電池が20%以下になると、自動でオンになります。' : ''}</p>
         ${c.full ? JR_INFO : ''}`;
@@ -947,6 +954,7 @@
       needle();
     }
     const rc = $('[data-lm="recenter"]', c.root); rc && rc.classList.toggle('on', !c.follow && !!c.map);
+    drawZoom();
     const gm = $('[data-lm-gm]', c.root); if (gm && c.last) { const p = pointAt(c.last.km); gm.href = gmapAt(p[1], p[0]); }
   }
   function needle() { const c = cur; const n = c && $('.lm-needle', c.root); if (n && c.map) n.style.transform = `rotate(${-c.map.getBearing()}deg)`; }
@@ -1025,7 +1033,7 @@
     let map;
     try {
       map = new ml.Map({
-        container: box, center: p, zoom: c.pitch >= 5 ? 11.3 : 10.3, pitch: c.pitch, bearing: c.orient === 'north' ? 0 : headingAt(r.km),
+        container: box, center: p, zoom: c.zMan ?? (c.zAuto ? baseZoom(c.pitch) + BAND_DZ[bandOf(r)] : baseZoom(c.pitch)), pitch: c.pitch, bearing: c.orient === 'north' ? 0 : headingAt(r.km),
         maxPitch: 70, minZoom: 5, maxZoom: 16, attributionControl: false, fadeDuration: 0,
         /* ふだんは1本指でページをスクロールし、地図は2本指の拡大・縮小だけ。地図を1回押すと「操作中」になり、1本指で動かせる（setActive）。
            全画面は最初から操作中。傾きは MapLibre の判定が甘いため、自前の判定（pitchGesture）で行う */
@@ -1076,12 +1084,21 @@
     map.on('movestart', e => { if (e.originalEvent) c.gest = true; });
     map.on('moveend', () => { if (!c.pg) c.gest = false; layoutLabels(); });
     map.on('rotate', needle);
-    map.on('pitchend', () => { const v = Math.round(map.getPitch()); c.pitch = v; ls.set('lm-pitch', String(v)); drawTools(); });
-    /* 駅名 */
-    L.stations.forEach(s => {
+    map.on('pitchend', () => { if (c.arr) return; const v = Math.round(map.getPitch()); c.pitch = v; ls.set('lm-pitch', String(v)); drawTools(); });   // 到着モードで平面にしたのは覚えない
+    /* 指で拡大・縮小したら、自動をやめてその縮尺を保つ（到着モードのあいだは、到着モードを優先）
+       （拡大・縮小のイベントには指の操作が付かないことがあるので、ホイール・ダブルタップ・2本指の操作のすぐあとの拡大・縮小を、手の操作とみなす） */
+    const zUser = () => { c.zUserAt = performance.now(); };
+    map.on('wheel', () => { zUser(); if (!c.arr) setManualZoom(map.getZoom()); });
+    map.on('dblclick', zUser);
+    map.on('touchstart', e => { const t = e.originalEvent && e.originalEvent.touches; if (t && t.length >= 2) zUser(); });
+    map.on('zoomstart', e => { if (e.originalEvent) zUser(); });
+    map.on('zoomend', () => { if (!c.arr && performance.now() - (c.zUserAt || -1e9) < 2500) setManualZoom(map.getZoom()); });
+    /* 駅名（ふだんは駅の点の下。列車の印と重なるときは、上・右・左へずらす。placeLabels） */
+    c.stns = L.stations.map(s => {
       const stop = c.S.st.some(x => x.name === s[0] && x.stop);
       const el = document.createElement('div'); el.className = 'lm-stn' + (stop ? ' stop' : ''); el.textContent = s[0];
-      new ml.Marker({ element: el, anchor: 'top', offset: [0, 6], pitchAlignment: 'viewport', rotationAlignment: 'viewport' }).setLngLat([s[2], s[1]]).addTo(map);
+      const mk = new ml.Marker({ element: el, anchor: 'top', offset: [0, 6], pitchAlignment: 'viewport', rotationAlignment: 'viewport' }).setLngLat([s[2], s[1]]).addTo(map);
+      return { s, el, mk, stop, lp: 'b' };
     });
     /* 見どころ：ピンを立てて横に名前。地図を傾けても、画面に向かって立てる */
     c.pins = L.spots.map(s => {
@@ -1179,11 +1196,20 @@
     obst.push({ l: 0, t: 0, r: 80, b: 46 }, { l: 0, t: H - 22, r: Math.min(W, 300), b: H });
     const ov = c.full && $('.lm-ov', c.root);
     if (ov) { const bt = box.getBoundingClientRect().top; obst.push({ l: 0, t: ov.getBoundingClientRect().top - bt - 4, r: W, b: H }); }
-    if (c.train && c.disp != null) { const q = map.project(pointAt(c.disp)); obst.push({ l: q.x - 28, t: q.y - 30, r: q.x + 28, b: q.y + 22 }); }
-    L.stations.forEach(st => {
-      const stop = c.S.st.some(x => x.name === st[0] && x.stop); if (!stop) return;
-      const q = map.project([st[2], st[1]]), w = st[0].length * 13 + 8;
-      obst.push({ l: q.x - w / 2, t: q.y + 4, r: q.x + w / 2, b: q.y + 24 });
+    let tb = null;
+    if (c.train && c.disp != null) { const q = map.project(pointAt(c.disp)); tb = { l: q.x - 28, t: q.y - 30, r: q.x + 28, b: q.y + 22 }; obst.push(tb); }
+    /* 駅名：列車の印と重ならない向きを選ぶ（下→上→右→左）。どこも重なるなら、名前を列車の印より上に出す */
+    (c.stns || []).forEach(st => {
+      const q = map.project([st.s[2], st.s[1]]);
+      if (q.x < -150 || q.x > W + 150 || q.y < -60 || q.y > H + 60) return;
+      if (!st.w) { st.w = st.el.offsetWidth || st.s[0].length * 13 + 8; st.h = st.el.offsetHeight || 18; }
+      const { w, h } = st, OFF = { b: [0, 6], t: [0, -6 - h], r: [w / 2 + 9, -h / 2], l: [-(w / 2 + 9), -h / 2] };
+      const rect = k => { const [ox, oy] = OFF[k]; return { l: q.x + ox - w / 2, t: q.y + oy, r: q.x + ox + w / 2, b: q.y + oy + h }; };
+      const free = k => !tb || !hit(tb, { l: rect(k).l - 2, t: rect(k).t - 2, r: rect(k).r + 2, b: rect(k).b + 2 });
+      const k = ['b', 't', 'r', 'l'].find(free) || 'b';
+      if (st.lp !== k) { st.lp = k; st.mk.setOffset(OFF[k]); }
+      st.el.classList.toggle('lm-over', !free(k));
+      if (st.stop) obst.push(rect(k));
     });
     /* ピンの位置と優先度 */
     const ps = c.pins.map(p => {
@@ -1201,7 +1227,7 @@
     const placed = [], max = labelMax(map.getZoom());
     let shown = 0;
     ps.forEach(p => {
-      let pos = null;
+      let pos = null, lab = null;
       if (p.forced || (p.tier < 9 && shown < max)) {
         const sc = p.sc, fs = (p.lv === 'hot' ? 13.5 : 12) * sc, w = p.w * fs + 6, h = 18 * sc, { x, y } = p;
         const cand = {
@@ -1217,9 +1243,12 @@
         }
         /* いちばん大事な名前と、押したピンの名前は、重なっても出す */
         if (!pos && (p.forced || p.tier === 0)) { pos = 'r'; placed.push(cand.r); }
+        lab = pos && cand[pos];
       }
       if (pos && !p.forced) shown++;
       p.el.classList.toggle('nolabel', !pos);
+      /* 重なっても出す名前が列車の印にかかるときは、ピンごと列車の印より上に */
+      p.el.classList.toggle('lm-over', !!(lab && tb && hit(tb, lab)));
       if (pos && p.el.dataset.lp !== pos) p.el.dataset.lp = pos;
     });
   }
@@ -1316,7 +1345,11 @@
     if (c.map) {
       const z = c.map.getZoom();
       c.holdUntil = performance.now() + 800;   // 角度を変えているあいだは、追いかけるカメラで止めない
-      c.map.easeTo({ pitch: v, zoom: v >= 5 && z < 10.8 ? 11.3 : v < 5 && z > 11 ? 10.3 : z, duration: 700 });
+      if (c.arr) { ui.toast('到着モードのあいだは平面で表示します。着いたら立体に戻ります'); drawTools(); return; }
+      /* 自動のときは、立体・平面それぞれの標準に速さの分を足す。手動のときは今までどおり（立体は1段大きく） */
+      const nz = c.zAuto && c.zMan == null ? baseZoom(v) + BAND_DZ[c.band || 'fast'] : v >= 5 && z < 10.8 ? z + 1 : v < 5 && z > 11 ? z - 1 : z;
+      if (c.zMan != null) setManualZoom(nz);
+      c.map.easeTo({ pitch: v, zoom: nz, duration: 700 });
     }
     drawTools();
   }
@@ -1354,6 +1387,7 @@
     if (!c.eco || due) animTrain(force || Math.abs(r.km - (c.disp ?? r.km)) > 60);
     if (!due) return;
     c.camAt = performance.now();
+    arrCheck(r);
     camera(false);
     if (c.loaded) {
       const src = c.map.getSource('done');
@@ -1373,6 +1407,7 @@
       c.disp = from + (to - from) * f;
       c.train.setLngLat(pointAt(c.disp)); trainFace(c);
       c.anim = f < 1 ? requestAnimationFrame(step) : null;
+      if (f >= 1) layoutLabels();   // 列車の印が動いたので、名前の置き場所を選び直す
     };
     c.anim = requestAnimationFrame(step);
   }
@@ -1381,11 +1416,103 @@
     const c = cur; if (!c || !c.map || !c.follow || c.gest) return;
     if (performance.now() < (c.holdUntil || 0)) { c.camAt = 0; return; }
     const km = c.tgt ?? c.disp;
+    if (c.arr) return arrCamera(km, ease);
     const opt = { center: pointAt(km) };
     if (c.full && c.pad) opt.padding = c.pad;
     if (!c.free) opt.bearing = c.orient === 'north' ? 0 : headingAt(km);
+    /* 速さに合わせた縮尺へ、1回に少しずつ近づける（ゆっくり・なめらかに） */
+    let slow = false;
+    if (c.zAuto && c.zMan == null && c.band) {
+      const z = c.map.getZoom(), dz = baseZoom(c.map.getPitch()) + BAND_DZ[c.band] - z;
+      if (Math.abs(dz) > 0.02) { opt.zoom = z + Math.max(-Z_STEP, Math.min(Z_STEP, dz)); slow = true; }
+    }
     if (ease) c.map.easeTo({ ...opt, duration: 800 });
-    else c.map.easeTo({ ...opt, duration: Math.min(700, camInterval() * 0.5), easing: t => t });
+    else c.map.easeTo({ ...opt, duration: slow ? Math.min(2500, camInterval() * 0.9) : Math.min(700, camInterval() * 0.5), easing: t => t });
+  }
+
+  /* ---------- 縮尺（速さで自動ズーム） ----------
+     200km/h以上＝標準／100〜200＝少し拡大／40〜100＝かなり拡大／停車・徐行＝街が分かるくらい。
+     速さは GPS の値（なければ時刻表からの推定）。ふらつかないよう、同じ速さの帯が BAND_HOLD 続いたら切り替える */
+  const baseZoom = pitch => (pitch >= 5 ? 11.3 : 10.3);
+  const BAND_DZ = { fast: 0, mid: 0.7, slow: 1.5, stop: 2.6 };
+  const BAND_NAME = { fast: '高速', mid: '中速', slow: '減速中', stop: '停車・徐行' };
+  const BAND_HOLD = 10e3, Z_STEP = 0.3;      // 帯の切り替え：（時計の）10秒続いたら／1回のカメラ移動で動かす縮尺の上限
+  const bandOf = r => {
+    if (!r || r.mode !== 'running') return 'stop';
+    const v = r.speed == null ? 250 : r.speed;
+    return v >= 200 ? 'fast' : v >= 100 ? 'mid' : v >= 40 ? 'slow' : 'stop';
+  };
+  function zoomBand(r) {
+    const c = cur; if (!c) return;
+    const b = bandOf(r);
+    if (c.band == null) { c.band = b; c.bandCand = null; return; }
+    if (b === c.band) { c.bandCand = null; return; }
+    if (c.bandCand !== b) { c.bandCand = b; c.bandSince = r.now; return; }
+    if (r.now - c.bandSince >= BAND_HOLD || r.now < c.bandSince) { c.band = b; c.bandCand = null; c.camAt = 0; drawZoom(); }
+  }
+  function setManualZoom(z) {
+    const c = cur; if (!c) return;
+    c.zMan = z == null ? null : Math.round(z * 100) / 100;
+    ss.set('lm-zman', c.zMan == null ? null : String(c.zMan));
+    drawZoom();
+  }
+  /* 地図の右下の札：自動（いまの速さの帯）／手動（「自動」で戻す）／到着モード */
+  function drawZoom() {
+    const c = cur; if (!c) return;
+    const box = $('.lm-mapwrap', c.root); if (!box || !c.map) return;
+    let el = $('.lm-zoom', box);
+    if (!el) { el = document.createElement('div'); el.className = 'lm-zoom'; box.appendChild(el); }
+    const dest = c.S.tr.end || c.S.last.name;
+    const html = c.arr ? `<span class="lm-zchip arr" role="status"><b>到着モード</b>${ui.esc(dest)}を上に</span>`
+      : !c.zAuto ? ''
+      : c.zMan != null ? `<span class="lm-zchip man"><b>縮尺：手動</b></span><button type="button" class="lm-zbtn" data-lm="zauto" aria-label="縮尺を自動に戻す">自動</button>`
+      : `<span class="lm-zchip"><b>縮尺：自動</b>${BAND_NAME[c.band || 'fast']}</span>`;
+    if (el.dataset.v !== html) { el.innerHTML = html; el.dataset.v = html; el.hidden = !html; }
+  }
+
+  /* ---------- 到着モード ----------
+     終点（便ごとのデータ T.trains[key].end。なければ時刻表の最後の駅）が地図に映り込んだら入る。距離では決めない。
+     終点を画面の上の端に置き、列車を下に置いて、近づくにつれて拡大する（終点より先は見せないよう、平面で、終点の方向を上に）。
+     速さの自動ズーム・手動の縮尺より優先する。終点に着いて止まったら、ふだんの表示に戻す */
+  const endKm = c => { const k = stationKm(c.S.tr.end || c.S.last.name); return k == null ? c.S.last.km : k; };
+  function arrCheck(r) {
+    const c = cur; if (!c || !c.map || !c.loaded) return;
+    const ek = endKm(c);
+    const done = r.mode === 'after' || (r.mode === 'stopped' && Math.abs(r.km - ek) < 0.3);
+    if (c.arr) { if (done || r.mode === 'before') arrExit(); return; }
+    if (done || r.mode === 'before' || !c.follow || c.gest) return;
+    const map = c.map, box = map.getContainer(), W = box.clientWidth, H = box.clientHeight - (c.full && c.pad ? c.pad.bottom : 0);
+    const q = map.project(pointAt(ek));
+    if (Number.isFinite(q.x) && Number.isFinite(q.y) && q.x >= 0 && q.x <= W && q.y >= 0 && q.y <= H) {
+      c.arr = true; c.arrFirst = true; c.camAt = 0; drawZoom();
+    }
+  }
+  function arrExit() {
+    const c = cur; if (!c || !c.arr) return;
+    c.arr = false; c.camAt = 0; drawZoom();
+    if (c.map) {
+      const opt = { pitch: c.pitch, duration: 1200 };
+      if (c.zAuto && c.zMan == null) opt.zoom = baseZoom(c.pitch) + BAND_DZ[c.band || 'stop'];
+      else if (c.zMan != null) opt.zoom = c.zMan;
+      if (c.full && c.pad) opt.padding = c.pad;
+      if (!c.free) opt.bearing = c.orient === 'north' ? 0 : headingAt(c.tgt ?? c.disp);
+      c.holdUntil = performance.now() + 1300;
+      c.map.easeTo(opt);
+    }
+  }
+  function arrCamera(km, ease) {
+    const c = cur, map = c.map, M = c.ml.MercatorCoordinate;
+    const a = M.fromLngLat(pointAt(km)), b = M.fromLngLat(pointAt(endKm(c)));
+    const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy);
+    const box = map.getContainer(), H = box.clientHeight, padB = c.full && c.pad ? c.pad.bottom : 0, Hv = H - padB;
+    const yB = 44, yA = Math.max(yB + 60, Hv - 72);           // 終点は上の端から44px（駅名が下に出る）、列車は下から72px
+    const z = dist > 0 ? Math.max(5, Math.min(15.5, Math.log2((yA - yB) / (dist * 512)))) : 15.5;
+    const f = (yA - Hv / 2) / (yA - yB);                      // 画面の真ん中に来る点（列車→終点の割合）
+    const center = new M(a.x + dx * f, a.y + dy * f).toLngLat();
+    const brg = dist > 0 ? Math.atan2(dx, -dy) * 180 / Math.PI : map.getBearing();
+    const opt = { center, zoom: z, bearing: brg, pitch: 0, padding: { top: 0, bottom: padB, left: 0, right: 0 } };
+    if (ease || c.arrFirst) { c.arrFirst = false; map.easeTo({ ...opt, duration: 1500 }); }
+    else map.easeTo({ ...opt, duration: Math.min(1500, camInterval() * 0.9), easing: t => t });
   }
 
   /* ---------- このページ専用の初回ガイド ---------- */
@@ -1425,6 +1552,7 @@
     _debug: () => cur && {
       last: cur.last, fix: cur.tk.fix, reject: cur.tk.reject, follow: cur.follow, map: !!cur.map, loaded: !!cur.loaded, gpsOn: !!cur.unGeo, gpsWant: cur.gpsWant, geomFallback: !!geom.fallback && !lineGeo,
       pitch: cur.map ? cur.map.getPitch() : cur.pitch, bearing: cur.map ? cur.map.getBearing() : null, orient: cur.orient, free: cur.free, base: cur.tmpBase || cur.base, eco: cur.eco,
+      zoom: cur.map ? cur.map.getZoom() : null, zAuto: cur.zAuto, zMan: cur.zMan, band: cur.band, arr: cur.arr,
       camInterval: camInterval(), mapVisible: cur.mapVisible, active: cur.active(), alarms: { ...cur.alarms }, pins: cur.pins.map(p => [p.s.id, p.lv, !p.el.classList.contains('nolabel')])
     },
     _map: () => cur && cur.map

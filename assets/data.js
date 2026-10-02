@@ -18,12 +18,13 @@ window.TRIP = {
     kamome33: { yamaguchi: ['19A', '19B'], iizuka: ['18C', '18D', '19C', '19D'] }
   },
 
+  /* end：終点（いまどのへん？の到着モードで、画面の上に置く駅）。便ごとにデータで持つ */
   trains: {
     kamome92: { dir: 'go', date: '2026-10-17', name: 'かもめ92号', short: 'かもめ', kind: '西九州新幹線', ticket: '指定席特急券', car: 2, layout: 'AB|CD', rows: [2, 3], dep: '10:22', from: '新大村', arr: '10:37', to: '武雄温泉', min: 15, vehicle: 'N700S（6両）', timetable: 'https://t.ly/mF31l', carNote: '1・2号車には特大荷物スペース付きの座席があります。' },
-    relay92: { dir: 'go', date: '2026-10-17', name: 'リレーかもめ92号', short: 'リレーかもめ', kind: 'JR特急（在来線）', ticket: '指定席特急券', car: 4, layout: 'AB|CD', rows: [2, 3], dep: '10:40', from: '武雄温泉', arr: '11:42', to: '博多', min: 62, vehicle: '787系', timetable: 'https://t.ly/mF31l', carNote: '885系で運転される日は座席の配置が変わります。当日の案内を優先してください。' },
-    nozomi28: { dir: 'go', date: '2026-10-17', name: 'のぞみ28号', short: 'のぞみ', kind: '山陽新幹線', ticket: '新幹線指定席特急券', car: 13, layout: 'ABC|DE', rows: [1, 2, 3], dep: '12:15', from: '博多', arr: '14:43', to: '新大阪', min: 148, vehicle: 'N700S（予定）', timetable: 'https://www.jrkyushu-timetable.jp/jr-k_time/2610/0030/00306001.html?c=11227&ym=202610&d=17', carNote: 'D・E席は2人掛け。E席が窓側です。' },
-    nozomi17: { dir: 'back', date: '2026-10-20', name: 'のぞみ17号', short: 'のぞみ', kind: '山陽新幹線', ticket: '新幹線指定席特急券', car: 12, layout: 'ABC|DE', rows: [17, 18, 19, 20], dep: '11:02', from: '新大阪', arr: '13:30', to: '博多', min: 148, vehicle: 'N700A（予定）', timetable: 'https://www.jrkyushu-timetable.jp/jr-k_time/2610/0019/00190001.html?c=28283&ym=202610&d=20', carNote: '往路とは号車も座る位置も変わります。' },
-    relay33: { dir: 'back', date: '2026-10-20', name: 'リレーかもめ33号', short: 'リレーかもめ', kind: 'JR特急（在来線）', ticket: '指定席特急券', car: 4, layout: 'AB|CD', rows: [5, 6], dep: '13:54', from: '博多', arr: '14:54', to: '武雄温泉', min: 60, vehicle: '787系', timetable: 'https://t.ly/hbZQc', carNote: '885系で運転される日は座席の配置が変わります。' },
+    relay92: { end: '博多', dir: 'go', date: '2026-10-17', name: 'リレーかもめ92号', short: 'リレーかもめ', kind: 'JR特急（在来線）', ticket: '指定席特急券', car: 4, layout: 'AB|CD', rows: [2, 3], dep: '10:40', from: '武雄温泉', arr: '11:42', to: '博多', min: 62, vehicle: '787系', timetable: 'https://t.ly/mF31l', carNote: '885系で運転される日は座席の配置が変わります。当日の案内を優先してください。' },
+    nozomi28: { end: '新大阪', dir: 'go', date: '2026-10-17', name: 'のぞみ28号', short: 'のぞみ', kind: '山陽新幹線', ticket: '新幹線指定席特急券', car: 13, layout: 'ABC|DE', rows: [1, 2, 3], dep: '12:15', from: '博多', arr: '14:43', to: '新大阪', min: 148, vehicle: 'N700S（予定）', timetable: 'https://www.jrkyushu-timetable.jp/jr-k_time/2610/0030/00306001.html?c=11227&ym=202610&d=17', carNote: 'D・E席は2人掛け。E席が窓側です。' },
+    nozomi17: { end: '博多', dir: 'back', date: '2026-10-20', name: 'のぞみ17号', short: 'のぞみ', kind: '山陽新幹線', ticket: '新幹線指定席特急券', car: 12, layout: 'ABC|DE', rows: [17, 18, 19, 20], dep: '11:02', from: '新大阪', arr: '13:30', to: '博多', min: 148, vehicle: 'N700A（予定）', timetable: 'https://www.jrkyushu-timetable.jp/jr-k_time/2610/0019/00190001.html?c=28283&ym=202610&d=20', carNote: '往路とは号車も座る位置も変わります。' },
+    relay33: { end: '武雄温泉', dir: 'back', date: '2026-10-20', name: 'リレーかもめ33号', short: 'リレーかもめ', kind: 'JR特急（在来線）', ticket: '指定席特急券', car: 4, layout: 'AB|CD', rows: [5, 6], dep: '13:54', from: '博多', arr: '14:54', to: '武雄温泉', min: 60, vehicle: '787系', timetable: 'https://t.ly/hbZQc', carNote: '885系で運転される日は座席の配置が変わります。' },
     kamome33: { dir: 'back', date: '2026-10-20', name: 'かもめ33号', short: 'かもめ', kind: '西九州新幹線', ticket: '指定席特急券', car: 2, layout: 'AB|CD', rows: [18, 19], dep: '14:57', from: '武雄温泉', arr: '15:08', to: '新大村', min: 11, vehicle: 'N700S（6両）', timetable: 'https://t.ly/hbZQc', carNote: '往路と同じ2号車。今度は後ろ寄りの18・19番です。' }
   },
 
@@ -750,6 +751,21 @@ window.TRIP = {
         src: [['大阪堂島浜タワー WowUs（公式）', 'https://www.wow-us.jp/']], go: [['WowUs', '#/spot/wowus']] },
       { id: 'checkout', day: [4], title: 'お弁当とおみやげは、新大阪で', text: 'チェックアウトは11:00まで、ホテルを出るのは10:20の予定です。新大阪ではのぞみ17号の発車まで約30分あるので、車内で食べるお弁当やおみやげはここで。',
         go: [['4日目の行程', '#/trip/4'], ['新大阪での乗り方（3D）', 'transfer.html#s3']] }
+    ]
+  },
+
+  /* 雨の日の候補（2日目・3日目）。その日の降水確率が50%以上の予報になったら、日程に「雨の日はこちら」を出す。
+     sure: false は公式ページを開いて確かめられていないもの（検索結果の文面による。2026-10-02 調べ）。
+     move：予定地からの移動の目安（地図アプリでは確かめていない） */
+  rainPlans: {
+    2: [
+      { name: '東大寺ミュージアム', kind: '屋内の展示', move: '東大寺の境内。大仏殿から徒歩数分（南大門の近く）', hours: '9:30〜17:30（最終入館17:00）。無休（臨時休館あり）', fee: '大人800円・小学生400円。大仏殿との共通券は大人1,200円', links: [['東大寺（公式）', 'https://www.todaiji.or.jp/'], ['るるぶ&more.（出典）', 'https://rurubu.jp/andmore/spot/80080919']], sure: false },
+      { name: '春日大社 国宝殿', kind: '屋内の展示', move: '奈良公園近くの駐車場から徒歩15〜20分。車なら数分', hours: '10:00〜17:00（入館16:30まで）。2026年秋の特別展は10/3〜11/9（前期）', fee: '一般700円ほか（特別展は料金が変わることがある）', links: [['春日大社 国宝殿（公式）', 'https://www.kasugataisha.or.jp/museum/'], ['秋の特別展（公式）', 'https://www.kasugataisha.or.jp/museum_exhibitions/14204/']], sure: false, note: '特別展の名称と会期は、案内によって書き方が違います。' }
+    ],
+    3: [
+      { name: '大阪歴史博物館', kind: '屋内の展示', move: '大阪城（11:01〜）から徒歩約10分。谷町四丁目駅に直結', hours: '9:30〜17:00（入館16:30まで）。火曜休み（10/19は月曜で開館）', fee: '常設展 大人600円・高校大学生400円・中学生以下無料（特別展は別料金）', links: [['大阪歴史博物館（公式）', 'https://www.osakamushis.jp/visit/fee.html']], sure: false },
+      { name: '黒門市場', kind: '屋根のある商店街', move: '道頓堀（9:40〜10:10）から徒歩約10分', hours: '9:30〜18:00ごろ（店ごとに違う）。日曜は休みの店が多い（10/19は月曜）', fee: '入場無料（食べ歩きは各店で）', links: [['黒門市場（公式）', 'https://kuromon.com/jp/']], sure: false, note: '店ごとの定休日と営業時間は、各店でご確認ください。' },
+      { name: 'HEP FIVE の観覧車', kind: 'ゴンドラは屋根つき', move: 'ホテルへ戻る途中の大阪駅（13:11着）で降りて、徒歩約8分。乗って戻ると40〜50分ほど', hours: '11:00〜23:00（最終搭乗22:45）。1周約15分。強風・雷のときは止まることがある', fee: '1,000円（2026年4月から。5歳以下は無料）', links: [['HEP FIVE 観覧車（公式）', 'https://www.hepfive.jp/ferriswheel/'], ['じゃらんnet（出典）', 'https://www.jalan.net/kankou/spt_27127aj2202003684/']], sure: false, note: '2025年10月〜2026年4月の改修休業のあと、料金が改定されたとの案内です。雨や強風での運休の決まりは、公式で確かめられていません。' }
     ]
   },
 

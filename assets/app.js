@@ -78,7 +78,8 @@
     here: '<path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.6" fill="currentColor"/>',
     search: '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/>',
     tip: '<path d="M9 17.5h6M9.8 20.5h4.4M12 3.5a5.5 5.5 0 0 0-3.3 9.9c.7.6 1.1 1.3 1.2 2.1h4.2c.1-.8.5-1.5 1.2-2.1A5.5 5.5 0 0 0 12 3.5z"/>',
-    book: '<path d="M4.5 5.5c2.6-.8 5.1-.6 7.5.9v13c-2.4-1.5-4.9-1.7-7.5-.9zM19.5 5.5c-2.6-.8-5.1-.6-7.5.9v13c2.4-1.5 4.9-1.7 7.5-.9z"/>'
+    book: '<path d="M4.5 5.5c2.6-.8 5.1-.6 7.5.9v13c-2.4-1.5-4.9-1.7-7.5-.9zM19.5 5.5c-2.6-.8-5.1-.6-7.5.9v13c2.4-1.5 4.9-1.7 7.5-.9z"/>',
+    rain: '<path d="M3.5 12a8.5 8.5 0 0 1 17 0z"/><path d="M12 12v6.5a2 2 0 0 1-4 0"/><path d="M12 3.5v-1"/>'
   };
   const ic = (n, cls = 'ic') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`;
 
@@ -724,6 +725,10 @@
       { id: 'nozomi17', title: '10/20 11:24　のぞみ17号・姫路の手前', t: '2026-10-20T11:24', go: '#/ride/live/nozomi17', pos: { track: 'nozomi17' } },
       { id: 'after', title: '10/20 18:00　旅行のあと', t: '2026-10-20T18:00', go: '#/' }
     ]],
+    ['雨の日の表示（降水確率を仮に80%にする）', [
+      { id: 'rain2', title: '10/18（日）8:00　雨の予報の日（奈良）', text: '日程の見出しの下に「雨の日はこちら」が出ます。押すと屋内の候補の一覧です。', t: '2026-10-18T08:00', go: '#/trip/2', rain: 80 },
+      { id: 'rain3', title: '10/19（月）8:30　雨の予報の日（大阪）', t: '2026-10-19T08:30', go: '#/trip/3', rain: 80 }
+    ]],
     ['いまどのへん？（のぞみの車内）', [
       { id: 'lm28', title: '10/17 12:13　のぞみ28号・博多を発車（往路）', text: '作り物のGPSが線路を進みます。上の帯の「×1」を押すと×10・×60に早送りできます。', t: '2026-10-17T12:13', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28' } },
       { id: 'lm28-kanmon', title: '10/17 12:34　のぞみ28号・関門トンネルの手前', text: 'トンネルでGPSが途切れ、時刻表からの推定に切り替わります。', t: '2026-10-17T12:34', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28' } },
@@ -735,6 +740,7 @@
   ];
   const sceneById = id => SCENES.flatMap(([, l]) => l).find(s => s.id === id);
   function startScene(sc) {
+    session.set('simRain', sc.rain ? String(sc.rain) : null);
     Clock.start(sc.t, { scenario: { id: sc.id, title: sc.title }, pos: sc.pos || null });
     if (sc.go && location.hash !== sc.go) location.hash = sc.go; else render();
     if (sc.tt) setTimeout(() => openTT({ leg: sc.tt, preview: false }), 350);
@@ -747,6 +753,7 @@
       ${SCENES.map(([h, list]) => `<h4 class="sim-h">${h}</h4><div class="pick sim-pick">${list.map(sc => `<button data-scene="${sc.id}"><span><b>${esc(sc.title)}</b>${sc.text ? `<br><span class="small muted">${esc(sc.text)}</span>` : ''}</span><span aria-hidden="true">→</span></button>`).join('')}</div>`).join('')}
       <h4 class="sim-h">日時を指定</h4>
       <form class="sim-form" id="simform"><input type="datetime-local" id="sim-at" value="${local}" min="2026-09-01T00:00" max="2026-11-30T23:59" aria-label="おためしの日時"><button class="btn fill" type="submit">この日時で始める</button></form>
+      ${cur ? `<h4 class="sim-h">雨の日の表示</h4><p class="small muted">降水確率を仮に80%にして、日程の「雨の日はこちら」（2日目・3日目）を確かめられます。おためしを終えると元に戻ります。</p><div class="btns"><button class="btn quiet" data-sim="rain">${simRain() ? '予報どおりの降水確率に戻す' : '降水確率を80%にする'}</button></div>` : ''}
       ${cur ? '<div class="btns"><button class="btn quiet" data-sim="stop">おためしを終了して、本物の時刻に戻す</button></div>' : ''}`,
       (el, close) => {
         $$('[data-scene]', el).forEach(b => b.addEventListener('click', () => { close(); startScene(sceneById(b.dataset.scene)); }));
@@ -879,37 +886,70 @@
       <tbody>${S.rows.map(r => `<tr><th scope="row">${esc(r.name)}</th><td class="num">${r.rise}</td><td class="num">${r.set}</td></tr>`).join('')}</tbody></table>
       <p class="note">${S.date}の時刻です。旅行中は毎日1分ほどずれます。出典：${S.rows.map(r => `<a href="${r.url}" target="_blank" rel="noopener">国立天文台 暦計算室（${esc(r.name)}）</a>`).join('・')}</p></div>`;
   }
+  /* 予報（Open-Meteo）は、ホームの天気と日程の「雨の日はこちら」で使う。開いている間は30分ずつ使い回す */
+  let wxJob = null;
+  function getForecast() {
+    if (wxJob && Date.now() - wxJob.at < 30 * 6e4) return wxJob.p;
+    const url = (lat, lon, end) => `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FTokyo&start_date=2026-10-17&end_date=${end}`;
+    /* 予報は、出発の日が近づくと少しずつ先まで取れる。取れる範囲を超えたと言われたら、取れる所までを使う */
+    const get = async end => {
+      const [osaka, nara] = await Promise.all([url(34.70, 135.50, end), url(34.685, 135.84, end)].map(u => fetch(u).then(async r => {
+        if (r.ok) return r.json();
+        const j = await r.json().catch(() => ({})), m = /to (\d{4}-\d{2}-\d{2})/.exec(j.reason || '');
+        return Promise.reject(m ? { max: m[1] } : r.status);
+      })));
+      return { osaka, nara };
+    };
+    const p = get('2026-10-20').catch(e => { if (e && e.max && e.max >= '2026-10-17') return get(e.max); throw e; });
+    wxJob = { at: Date.now(), p };
+    p.catch(() => { if (wxJob && wxJob.p === p) wxJob = null; });
+    return p;
+  }
+  /* その日の予報（2日目は奈良、ほかは大阪）。取れない日は null */
+  const wxDay = (fc, d) => {
+    const dd = fc && (d.n === 2 ? fc.nara : fc.osaka).daily, i = dd && dd.time ? dd.time.indexOf(d.date) : -1;
+    if (i < 0 || !Number.isFinite(dd.temperature_2m_max[i]) || !Number.isFinite(dd.temperature_2m_min[i]) || !Number.isFinite(dd.weather_code[i])) return null;
+    return { code: dd.weather_code[i], hi: dd.temperature_2m_max[i], lo: dd.temperature_2m_min[i], pp: Number.isFinite(dd.precipitation_probability_max[i]) ? dd.precipitation_probability_max[i] : null };
+  };
+  /* おためし中だけ、降水確率を仮に上げられる（雨の日の表示を確かめるため。おためしを終えると消える） */
+  const simRain = () => (Clock.active() ? +session.get('simRain') || 0 : 0);
+  const rainPP = (w) => simRain() || (w ? w.pp : null);
   async function loadWeather(el) {
     if (!el) return;
     /* 予報が取れるまでは、例年の気温を出しておく */
     el.innerHTML = wxNormalGrid();
     try {
-      const url = (lat, lon, end) => `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FTokyo&start_date=2026-10-17&end_date=${end}`;
-      /* 予報は、出発の日が近づくと少しずつ先まで取れる。取れる範囲を超えたと言われたら、取れる所までを使う */
-      const get = async end => {
-        const [osaka, nara] = await Promise.all([url(34.70, 135.50, end), url(34.685, 135.84, end)].map(u => fetch(u).then(async r => {
-          if (r.ok) return r.json();
-          const j = await r.json().catch(() => ({})), m = /to (\d{4}-\d{2}-\d{2})/.exec(j.reason || '');
-          return Promise.reject(m ? { max: m[1] } : r.status);
-        })));
-        return [osaka, nara];
-      };
-      let osaka, nara;
-      try { [osaka, nara] = await get('2026-10-20'); }
-      catch (e) { if (e && e.max && e.max >= '2026-10-17') [osaka, nara] = await get(e.max); else throw e; }
-      const ok = (dd, i) => dd && Number.isFinite(dd.temperature_2m_max[i]) && Number.isFinite(dd.temperature_2m_min[i]) && Number.isFinite(dd.weather_code[i]);
-      el.innerHTML = `<div class="weather">${T.days.map((d, i) => {
-        const dd = (d.n === 2 ? nara : osaka).daily, place = d.n === 2 ? '奈良' : '大阪';
-        if (!ok(dd, i)) return `<div><div class="wd">${d.label}（${d.dow}）</div><div class="wk wait">予報<br>まち</div>${normalTemp(d)}<div class="wp">${place}</div></div>`;
-        const [k, cls] = WX(dd.weather_code[i]);
-        return `<div><div class="wd">${d.label}（${d.dow}）</div><div class="wk ${cls}">${k}</div><div class="wt num"><span class="hi">${Math.round(dd.temperature_2m_max[i])}°</span> / <span class="lo">${Math.round(dd.temperature_2m_min[i])}°</span></div><div class="wp">降水 ${dd.precipitation_probability_max[i] ?? '-'}%・${place}</div></div>`;
-      }).join('')}</div><p class="note">予報：Open-Meteo。2日目は奈良、ほかの日は大阪の予報です。「例年」は気象庁の平年値（10月中旬）で、予報が出るまでの目安です。</p>`;
+      const fc = await getForecast();
+      el.innerHTML = `<div class="weather">${T.days.map(d => {
+        const w = wxDay(fc, d), place = d.n === 2 ? '奈良' : '大阪';
+        if (!w) return `<div><div class="wd">${d.label}（${d.dow}）</div><div class="wk wait">予報<br>まち</div>${normalTemp(d)}<div class="wp">${place}${simRain() ? `<br>降水 ${simRain()}%（おためし）` : ''}</div></div>`;
+        const [k, cls] = WX(w.code), pp = rainPP(w);
+        return `<div><div class="wd">${d.label}（${d.dow}）</div><div class="wk ${cls}">${k}</div><div class="wt num"><span class="hi">${Math.round(w.hi)}°</span> / <span class="lo">${Math.round(w.lo)}°</span></div><div class="wp">降水 ${pp ?? '-'}%${simRain() ? '（おためし）' : ''}・${place}</div></div>`;
+      }).join('')}</div><p class="note">予報：Open-Meteo。2日目は奈良、ほかの日は大阪の予報です。「例年」は気象庁の平年値（10月中旬）で、予報が出るまでの目安です。降水確率が50%以上の日は、日程に「雨の日はこちら」が出ます（2日目・3日目）。</p>`;
       window.__restoreScrollAgain && window.__restoreScrollAgain();
     } catch {
       el.innerHTML = `${wxNormalGrid()}
         <p class="note">出発のおよそ2週間前（10/2ごろ）から、大阪と奈良の天気予報が自動で表示されます。「例年」は気象庁の平年値（10月中旬）です。</p>`;
       window.__restoreScrollAgain && window.__restoreScrollAgain();
     }
+  }
+  /* 雨の日の候補：日程の見出しの下に「雨の日はこちら」を出す（その日の降水確率が50%以上の予報のときだけ。予報が取れない日は出さない） */
+  async function loadRain(day) {
+    const slot = $('#rain-slot'); if (!slot || !(T.rainPlans || {})[day.n]) return;
+    let pp = simRain();
+    if (!pp) { try { pp = rainPP(wxDay(await getForecast(), day)); } catch { pp = null; } }
+    if (!Number.isFinite(pp) || pp < 50 || !slot.isConnected) return;
+    slot.innerHTML = `<button type="button" class="rain-btn" data-rain="${day.n}">${ic('rain')}<span><b>雨の日はこちら</b><small>降水確率 ${pp}%${simRain() ? '（おためし）' : ''}・屋内の候補 ${T.rainPlans[day.n].length}か所</small></span><i aria-hidden="true">›</i></button>`;
+    window.__restoreScrollAgain && window.__restoreScrollAgain();
+  }
+  function rainSheet(n) {
+    const day = T.days.find(d => d.n === +n), list = (T.rainPlans || {})[n]; if (!day || !list) return;
+    sheet(`雨の日の候補　${day.label}（${day.dow}）`, `<p class="small muted">予定の近くで、雨でも過ごしやすい所です。どれも予約はいりません。移動の時間は目安です。</p>
+      <ol class="rain-list">${list.map(r => `<li><div class="rain-h"><b>${esc(r.name)}</b><span class="rain-kind">${esc(r.kind)}</span>${r.sure ? '' : '<span class="unsure">公式未確認</span>'}</div>
+        ${infoList([['予定地から', esc(r.move)], ['営業時間', esc(r.hours)], ['料金', esc(r.fee)], ['確認', r.sure ? '公式ページで確認ずみ' : '検索結果による（公式ページは未確認）。行く前に公式でご確認ください']])}
+        ${r.note ? `<p class="small muted">${esc(r.note)}</p>` : ''}
+        <p class="rain-links">${r.links.map(([l, u]) => `<a class="ext" href="${u}" target="_blank" rel="noopener">${esc(l)}</a>`).join('　')}</p></li>`).join('')}</ol>
+      <p class="note">2026年10月2日に調べた内容です。臨時休館・貸切・料金の変更は、各施設の公式ページでご確認ください。</p>`);
   }
 
   /* ========== 旅先の最新情報（中身は assets/latest.js） ==========
@@ -1185,7 +1225,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=21').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=22').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -1606,6 +1646,7 @@
       <header class="dayhead"><div class="eyebrow">Day ${day.n} — ${day.label} (${day.dow})・${day.theme}</div><h1>${esc(day.title)}</h1><p class="route">${esc(day.route)}｜${day.summary}</p>
       <div class="acts">${day.drives ? actA('#/map/drive', 'road', 'ドライブの道順（地図とGoogleマップ）') : ''}${T.tips && T.tips.items.some(x => x.day.includes(day.n)) ? actA(`#/tips/d${day.n}`, 'tip', 'この日のワンポイント') : ''}</div>
       ${tvLine(tvPick(day.n), 'この日のトリビア', `#/trivia/d${day.n}`)}</header>
+      ${(T.rainPlans || {})[day.n] ? '<div class="rain-slot" id="rain-slot"></div>' : ''}
       ${isToday ? `<div class="trip-sync">${nudgeHtml(nudge())}${shiftBar(day) || `<p class="sync-hint">${ic('here')}<span>予定からずれたら、いまいる地点の「いまここ」を押すと、この先の時刻を合わせて表示します。</span></p>`}</div>` : ''}
       <ol class="tl">${lis}</ol>
       ${day.dinner ? `<div class="dinner-note"><p class="memo">${esc(day.dinner)}</p><div class="btns"><a class="btn" href="#/food/dinner">夕ごはん候補を見る</a></div></div>` : ''}
@@ -2286,6 +2327,7 @@
   setInterval(() => { const st = Clock.state(); if (!st) refreshLive(); }, 15e3);
   Clock.on(kind => {
     if (kind === 'stop' || kind === 'start') shiftMem = null;
+    if (kind === 'stop') session.set('simRain', null);
     if (kind === 'tick') return refreshLive();
     if (kind === 'pos') return;
     simBar();
@@ -2370,6 +2412,7 @@
     if (route === 'map' && parts[1] === 'outing') document.title = 'おでかけマップ｜旅のしおり';
     CoverTrain.mount(route === 'home' || !views[route] ? $('.cover:not(.slim)') : null);
     if (route === 'home') loadWeather($('#weather'));
+    if (route === 'trip') loadRain(T.days.find(d => d.n === (+parts[1] || todayN())) || T.days[0]);
     if (route === 'map') parts[1] === 'outing' ? mountOutingMap() : mountDriveMap();
     if (route === 'help') drawMarks();
     if (route === 'ride' && parts[1] === 'live') {
@@ -2741,8 +2784,10 @@
       if (k === 'speed') Clock.cycleSpeed();
       if (k === 'seek') seekSheet();
       if (k === 'stop') { Clock.stop(); toast('本物の時刻に戻りました'); }
+      if (k === 'rain') { session.set('simRain', simRain() ? null : '80'); render(); toast(simRain() ? '降水確率を80%にしました（おためし）' : '予報どおりの降水確率に戻しました'); }
       return;
     }
+    if ((el = q('[data-rain]'))) return rainSheet(el.dataset.rain);
     if ((el = q('[data-here]'))) { const [d, i] = el.dataset.here.split(':'); setHere(d, +i); return; }
     if ((el = q('[data-unshift]'))) { setShift(null); toast('予定どおりの時刻に戻しました'); const y = scrollY; render(); scrollTo(0, y); return; }
     if ((el = q('[data-nudge]'))) {

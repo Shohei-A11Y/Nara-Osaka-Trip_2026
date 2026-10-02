@@ -304,6 +304,24 @@ h3.sub { font-family: var(--f-min); font-size: calc(17px * var(--fs)); letter-sp
 .tl > li.now .pin::before { border-color: var(--shu); background: var(--shu); box-shadow: 0 0 0 5px color-mix(in srgb, var(--shu) 22%, transparent); }
 .tl > li.done .row { opacity: .45; }
 .now-tag { display: inline-block; font-size: calc(10px * var(--fs)); font-weight: 700; color: #fff; background: var(--shu); border-radius: 3px; padding: 0 6px; margin-right: 6px; vertical-align: 3px; letter-spacing: .12em; font-family: var(--f-got); }
+/* 雨の日はこちら（降水確率50%以上の日だけ、日程の見出しの下に出る） */
+.rain-slot:empty { display: none; }
+.rain-slot { margin: 14px 0 10px; }
+.rain-btn { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 10px 14px; border: 1px solid var(--ai); border-radius: 12px; background: var(--ai-tint); color: var(--ai); text-align: left; font: inherit; cursor: pointer; }
+.rain-btn .ic { width: 26px; height: 26px; flex: none; }
+.rain-btn span { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.rain-btn b { font-family: var(--f-min); font-size: calc(16px * var(--fs)); }
+.rain-btn small { font-size: calc(12px * var(--fs)); color: var(--sumi-2); }
+.rain-btn > i { font-style: normal; font-size: 22px; }
+.rain-list { list-style: none; margin: 14px 0 0; padding: 0; }
+.rain-list > li { padding: 14px 0 16px; border-top: 1px solid var(--rule); }
+.rain-list > li .info { margin-top: 8px; }
+.rain-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.rain-h b { font-family: var(--f-min); font-size: calc(17px * var(--fs)); }
+.rain-kind { font-size: calc(12px * var(--fs)); color: var(--sumi-2); }
+.unsure { font-size: calc(11px * var(--fs)); font-weight: 700; color: var(--shu-ink, var(--shu)); border: 1px solid currentColor; border-radius: 4px; padding: 0 6px; line-height: 1.6; }
+.rain-links { margin-top: 8px; font-size: calc(13px * var(--fs)); line-height: 2; }
+
 .dinner-note { margin-top: 6px; padding: 16px 0 0; border-top: 1px dashed var(--rule); }
 
 /* 駅名標 */
@@ -724,6 +742,7 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 .lm-map .maplibregl-ctrl-bottom-left .maplibregl-ctrl { margin: 0; }
 .lm-mapwrap .lm-map .maplibregl-ctrl-attrib a { color: var(--sumi-2); }
 .lm-stn { font-family: var(--f-min); font-size: calc(11px * var(--fs)); font-weight: 700; color: var(--sumi); line-height: 1; padding: 2px 4px; border-radius: 3px; background: rgba(253, 252, 249, .82); background: color-mix(in srgb, var(--paper) 82%, transparent); white-space: nowrap; pointer-events: none; }
+.lm-stn.lm-over, .lm-pin.lm-over { z-index: 7 !important; }   /* 列車の印（6）より上。ピンは濃さで z-index を直接付けるので !important */
 .lm-stn.stop { font-size: calc(13px * var(--fs)); color: var(--ai); }
 
 /* 右上のボタン群（押しやすい大きさで縦に） */
@@ -755,6 +774,17 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 .lm-basemenu button:disabled { opacity: .4; }
 .lm-menu-n { font-size: calc(11.5px * var(--fs)); line-height: 1.6; color: var(--sumi-2); padding: 6px 6px 2px; border-top: 1px solid var(--rule); margin-top: 4px; }
 /* 凡例（開閉できる） */
+/* 縮尺の札（右下）：自動・手動（「自動」で戻す）・到着モード */
+.lm-zoom { position: absolute; z-index: 4; right: 10px; bottom: 10px; display: flex; align-items: center; gap: 6px; pointer-events: none; }
+.lm-zoom[hidden] { display: none; }
+.lm-full .lm-zoom { bottom: calc(var(--ov-h, 0px) + 10px); }
+.lm-zchip { display: inline-flex; align-items: baseline; gap: 6px; height: 30px; padding: 0 10px; line-height: 30px; border-radius: 999px; background: var(--paper); background: color-mix(in srgb, var(--paper) 90%, transparent); border: 1px solid var(--rule); font-size: calc(11px * var(--fs)); color: var(--sumi-2); white-space: nowrap; box-shadow: 0 2px 6px rgba(28, 24, 20, .15); }
+.lm-zchip b { font-size: calc(11.5px * var(--fs)); color: var(--sumi); }
+.lm-zchip.man { border-color: var(--shu); }
+.lm-zchip.man b { color: var(--shu-ink); }
+.lm-zchip.arr { border-color: var(--ai); background: var(--ai-tint); color: var(--ai); }
+.lm-zchip.arr b { color: var(--ai); }
+.lm-zbtn { pointer-events: auto; height: 36px; min-width: 56px; padding: 0 14px; border-radius: 999px; background: var(--shu); color: #fff; font-weight: 700; font-size: calc(13px * var(--fs)); box-shadow: 0 2px 8px rgba(28, 24, 20, .28); }
 .lm-legend { position: absolute; top: 10px; left: 10px; z-index: 4; font-size: calc(11.5px * var(--fs)); }
 .lm-legend > button { height: 30px; padding: 0 10px; border-radius: 999px; background: var(--paper); border: 1px solid var(--rule); font-weight: 700; font-size: calc(11.5px * var(--fs)); box-shadow: 0 2px 6px rgba(28, 24, 20, .15); }
 .lm-legend > button::after { content: " ＋"; color: var(--sumi-3); }
