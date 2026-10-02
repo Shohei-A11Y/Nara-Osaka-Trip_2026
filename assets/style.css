@@ -825,20 +825,23 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 .lm-basemenu button:disabled { opacity: .4; }
 .lm-menu-n { font-size: calc(11.5px * var(--fs)); line-height: 1.6; color: var(--sumi-2); padding: 6px 6px 2px; border-top: 1px solid var(--rule); margin-top: 4px; }
 /* 凡例（開閉できる） */
-/* 縮尺のボタン（右下）：「縮尺：自動」／「縮尺：手動（自動に戻す）」。自動のときの補足は左に小さく */
+/* 自動ズームのボタン（右下）：「自動ズーム：オン／オフ」。左に小さな札（知らせ・いま寄っている理由）か「元の縮尺に戻す」 */
 .lm-zoom { position: absolute; z-index: 4; right: 10px; left: calc(var(--ov-w, 0px) + 84px); bottom: 28px; display: flex; align-items: center; justify-content: flex-end; gap: 6px; pointer-events: none; }   /* 左下の出典（地理院タイル…）より上。左は凡例の分をあける */
 .lm-zoom[hidden] { display: none; }
 .lm-full .lm-zoom { bottom: calc(var(--ov-h, 0px) + 26px); }
-.lm-zbtn { flex: none; pointer-events: auto; display: inline-flex; align-items: center; height: 38px; padding: 0 14px; border-radius: 999px; background: var(--paper); border: 1.5px solid var(--sumi-3); color: var(--sumi); font-size: calc(12.5px * var(--fs)); white-space: nowrap; box-shadow: 0 2px 8px rgba(28, 24, 20, .22); touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: transform .12s, background-color .2s, border-color .2s; }
+.lm-zbtn { flex: none; pointer-events: auto; display: inline-flex; align-items: center; height: 38px; padding: 0 13px; border-radius: 999px; background: var(--paper); border: 1.5px solid var(--sumi-3); color: var(--sumi); font-size: calc(12.5px * var(--fs)); white-space: nowrap; box-shadow: 0 2px 8px rgba(28, 24, 20, .22); touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: transform .12s, background-color .2s, border-color .2s; }
 .lm-zbtn .lm-zk { color: var(--sumi-2); }
-.lm-zbtn b { font-weight: 700; }
-.lm-zbtn.man { background: var(--shu); border-color: var(--shu); color: #fff; }
-.lm-zbtn.man .lm-zk { color: rgba(255, 255, 255, .85); }
+.lm-zbtn b { font-weight: 700; color: var(--ai); }
+/* オフ：点線の枠と薄い地で、止まっていることが一目で分かるように */
+.lm-zbtn.off { background: var(--paper-2); border-style: dashed; color: var(--sumi-2); }
+.lm-zbtn.off b { color: var(--sumi-2); }
 /* 押した感じ：押しているあいだは少し縮み、押したあとは短く色が変わる */
-.lm-zbtn:active { transform: scale(.94); }
+.lm-zbtn:active, .lm-zreset:active { transform: scale(.94); }
 .lm-zbtn.tap { animation: lmztap .26s ease-out; }
 @keyframes lmztap { from { box-shadow: 0 0 0 6px color-mix(in srgb, var(--shu) 35%, transparent), 0 2px 8px rgba(28, 24, 20, .22); } }
-.lm-znote { min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 3px 8px; border-radius: 6px; background: var(--paper); background: color-mix(in srgb, var(--paper) 88%, transparent); font-size: calc(11px * var(--fs)); color: var(--sumi-2); white-space: nowrap; }
+.lm-zreset { flex: none; pointer-events: auto; height: 32px; padding: 0 11px; border-radius: 999px; background: var(--paper); border: 1.5px solid var(--shu); color: var(--shu-ink); font-size: calc(11.5px * var(--fs)); font-weight: 700; white-space: nowrap; box-shadow: 0 2px 6px rgba(28, 24, 20, .18); touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: transform .12s; }
+.lm-zreset[hidden] { display: none; }
+.lm-znote { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; padding: 3px 8px; border-radius: 6px; background: var(--paper); background: color-mix(in srgb, var(--paper) 88%, transparent); font-size: calc(11px * var(--fs)); line-height: 1.35; color: var(--sumi-2); text-wrap: balance; }
 .lm-znote[hidden] { display: none; }
 .lm-legend { position: absolute; top: 10px; left: 10px; z-index: 4; font-size: calc(11.5px * var(--fs)); }
 .lm-legend > button { height: 30px; padding: 0 10px; border-radius: 999px; background: var(--paper); border: 1px solid var(--rule); font-weight: 700; font-size: calc(11.5px * var(--fs)); box-shadow: 0 2px 6px rgba(28, 24, 20, .15); }

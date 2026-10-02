@@ -638,7 +638,7 @@
       { m: 1, t: '次の停車駅と、到着までの時間です。' },
       { m: 1, t: '時速です。下の線は速さの目安で、時速300kmでいっぱいになります。全画面では、この札が画面の下に出ます。' },
       { t: '地図は1回押すと、指で動かせるようになります。動かしたあとは、操作ボタンの「列車へ」で列車の位置に戻ります。' },
-      { t: '地図の右下の「縮尺：自動」は、速さや降りる駅に合わせて、縮尺を自動で変えている印です。指で拡大・縮小すると「縮尺：手動（自動に戻す）」に変わり、その縮尺のまま止まります。押すと、すぐ自動に戻ります。' },
+      { t: '地図の右下の「自動ズーム：オン」のあいだは、停車駅に近づくと着く前から少しずつ拡大し、駅前の建物や道が分かるくらいまで寄ります。駅を出ると少しずつ戻ります。押すとオフになり、縮尺を自動では変えません。指で拡大・縮小しても自動は止まらず、その縮尺を「走行中の縮尺」として覚えます。「元の縮尺に戻す」で最初の縮尺に戻ります。' },
       { t: '「現在地を使う」を押していないときは、時刻表どおりの位置です。遅れているときは押すと、GPSで遅れを測って「約○分遅れ」と出し、時刻をずらします。運行の状況は、地図の下の「JR公式の運行情報」で確かめられます。' }] },
     { id: 'search', tab: 'すべての画面', where: '右上の「目次」か、〈その他〉のいちばん下の「しおりの目次」から開く、目次と検索の説明です。', ic: 'search', title: '目次と検索', sub: 'あの情報はどこ？', pts: [
       { m: 1, t: 'ことばを入れると、しおりの中から探します。ひらがなでも探せます。電波がなくても使えます。' },
@@ -1294,7 +1294,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=25').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=26').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';

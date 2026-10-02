@@ -12,7 +12,7 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const MIN = 6e4;
   const MAPLIBRE = 'assets/vendor/maplibre-gl/maplibre-gl.mjs';
-  const LINE_URL = 'assets/line-sanyo.json?v=25';
+  const LINE_URL = 'assets/line-sanyo.json?v=26';
   const GPS_MAX_OFF = 0.5, GPS_MAX_ACC = 1000, GPS_MAX_AGE = 30e3, V_MAX = 330;
 
   /* ========== 線路の形（km ⇔ 緯度経度） ========== */
@@ -583,8 +583,9 @@
       orient: ls.get('lm-orient') === 'north' ? 'north' : 'head', free: false,
       base: BASES[ls.get('lm-base')] ? ls.get('lm-base') : 'pale', tmpBase: null,
       eco: ls.get('lm-eco') === '1', docVisible: document.visibilityState !== 'hidden', mapVisible: true, pins: [], camAt: 0, nearCur: null, nearSeen: new Set(),
-      /* 縮尺：zAuto＝速さに合わせる設定（初めはオン。端末に覚える）／zMan＝手で決めた縮尺（このタブのあいだ保つ）／arr＝到着モード */
-      zAuto: ls.get('lm-autozoom') !== '0', zMan: (z => (z && isFinite(+z) ? +z : null))(ss.get('lm-zman')), band: null, bandCand: null, bandSince: 0, arr: false
+      /* 縮尺：zAuto＝自動ズーム（停車駅の近くで寄る。初めはオン。端末に覚える）／zOff＝手で決めた走行中の縮尺（標準からの差。端末に覚える）／
+         zHold＝駅の近く・到着モードで手で止めた縮尺（その駅のあいだだけ）／zd＝前後の停車駅までの距離／arr＝到着モード */
+      zAuto: ls.get('lm-autozoom') !== '0', zOff: (z => (z && isFinite(+z) ? +z : null))(ls.get('lm-zoff')), zHold: null, zd: null, zone: null, arr: false
     };
     if (c.eco) { c.pitch = 0; c.wakeWant = false; if (c.base === 'photo') c.base = 'pale'; }
     setTools(ls.get('lm-tools') === '1', false);
@@ -639,6 +640,7 @@
       if (k === 'view') setPitch(c.map ? (c.map.getPitch() >= 5 ? 0 : PITCH_3D) : (c.pitch >= 5 ? 0 : PITCH_3D));
       if (k === 'recenter') recenter();
       if (k === 'zoom') toggleZoom(b);
+      if (k === 'zreset') resetZoom();
       if (k === 'settings') openSettings();
       if (k === 'endop') setActive(false);
       if (k === 'compass') compass();
@@ -650,7 +652,7 @@
     const onChange = e => {
       if (e.target.matches('[data-lm="wake"]')) { c.wakeWant = e.target.checked; ss.set('lm-wake', c.wakeWant ? '1' : null); wake(); }
       if (e.target.matches('[data-lm="eco"]')) { setEco(e.target.checked); ss.set('lm-eco-manual', e.target.checked ? 'on' : 'off'); }
-      if (e.target.matches('[data-lm="autozoom"]')) { c.zAuto = e.target.checked; ls.set('lm-autozoom', c.zAuto ? null : '0'); setManualZoom(null); c.camAt = 0; drawCtrl(); camera(true, true); }
+      if (e.target.matches('[data-lm="autozoom"]')) setAutoZoom(e.target.checked);
     };
     root.addEventListener('click', onClick); root.addEventListener('change', onChange);
     c.onClick = onClick; c.onChange = onChange;
@@ -711,7 +713,7 @@
     function tick() {
       if (cur !== c) return;
       const r = tk.compute(); c.last = r;
-      drawPanel(r); drawSpeed(r); drawNotice(r); drawAlarm(r); drawList(r); drawPins(r); zoomBand(r); mapTick(r); drawTools();
+      drawPanel(r); drawSpeed(r); drawNotice(r); drawAlarm(r); drawList(r); drawPins(r); zoomTick(r); mapTick(r); drawTools();
     }
     c.tick = tick;
 
@@ -1140,9 +1142,9 @@
           <p class="lm-desc lm-warn">${hasWake() ? '画面を消すと、お知らせが届かないことがあります。確実にするには「画面を自動で消さない」をオンにして、画面を点けたままにしてください。' : '画面を消すと、お知らせが届かないことがあります。確実にするには、画面を点けたままにしてください。'}</p></div>
         ${hasWake() ? `<label class="lm-sw"><input type="checkbox" role="switch" data-lm="wake"${c.wakeWant ? ' checked' : ''}${c.eco ? ' disabled' : ''}><span>画面を自動で消さない</span></label>
           <p class="lm-desc">スマホは、しばらく触らないと暗くなって消えます。オンにすると、このページを開いている間は消えなくなります。そのぶん電池を多く使います。${c.eco ? '省電力中は使えません。' : ''}</p>` : ''}
-        <label class="lm-sw"><input type="checkbox" role="switch" data-lm="autozoom"${c.zAuto ? ' checked' : ''}><span>速さに合わせて、地図を自動で拡大・縮小</span></label>
-        <p class="lm-desc">速く走っているときは広く、駅の前後で速度が落ちたら拡大して、街の様子が分かるようにします。オフにすると、速さにかかわらず標準の縮尺です。</p>
-        <p class="lm-desc">地図の右下の「縮尺：自動」は、自動で縮尺を変えている印です。指で拡大・縮小すると「縮尺：手動（自動に戻す）」に変わり、その縮尺のまま止まります。押すと、すぐ自動に戻ります。</p>
+        <label class="lm-sw"><input type="checkbox" role="switch" data-lm="autozoom"${c.zAuto ? ' checked' : ''}><span>自動ズーム（停車駅の近くで、地図を自動で拡大）</span></label>
+        <p class="lm-desc">停車駅に近づくと、着く前から少しずつ拡大し、駅前の建物や道が分かるくらいまで寄ります。駅を出ると、走っているときの縮尺へ少しずつ戻ります。通過駅では寄りません。オフにすると、縮尺を自動では変えません。地図の右下の「自動ズーム：オン／オフ」でも切り替えられます。</p>
+        <p class="lm-desc">指で拡大・縮小しても、自動ズームは止まりません。走っているときに変えた縮尺は「走行中の縮尺」として覚え、駅で寄ったあとはその縮尺に戻ります（停車駅の近くで変えたときは、その駅を離れるまでの間だけ）。右下の「元の縮尺に戻す」で、最初の縮尺に戻ります。</p>
         <p class="lm-desc">到着モード：終点（${ui.esc(c.S.tr.end || dest)}）が地図に映ったら、終点を画面の上にして、列車と終点が両方入る縮尺で、近づくにつれて拡大します。見下ろす角度は変えません（立体なら斜めのまま、平面なら真上から）。この設定にかかわらず働き、着いて止まると元の表示に戻ります。</p>
         <label class="lm-sw"><input type="checkbox" role="switch" data-lm="eco"${c.eco ? ' checked' : ''}><span>省電力</span></label>
         <p class="lm-desc">地図の更新を10秒に1回にし、平面・淡色の地図にします。航空写真と「画面を自動で消さない」は使いません。${c.hasBattery ? '電池が20%以下になると、自動でオンになります。' : ''}</p>
@@ -1239,7 +1241,9 @@
     const r = c.last || c.tk.compute();
     const p = pointAt(r.km);
     const split = tunnelSplit(L.tunnels, sliceLine, 0, geom.cum[geom.cum.length - 1]);   // 地表の線はトンネルの外だけ。トンネルの中は点線（平面）か立体の線
-    const stations = { type: 'FeatureCollection', features: L.stations.map(s => ({ type: 'Feature', properties: { stop: c.S.st.some(x => x.name === s[0] && x.stop) ? 1 : 0 }, geometry: { type: 'Point', coordinates: [s[2], s[1]] } })) };
+    /* 駅の点と名前は、線路の上の列車が止まる位置（pointAt(駅のkm)）に置く。駅の座標は線路から数十mずれることがあり、駅の近くで寄ると、止まった列車の横に離れて見えるため */
+    const stnLL = s => (geom.fallback && !lineGeo ? [s[2], s[1]] : pointAt(s[3]));
+    const stations = { type: 'FeatureCollection', features: L.stations.map(s => ({ type: 'Feature', properties: { stop: c.S.st.some(x => x.name === s[0] && x.stop) ? 1 : 0 }, geometry: { type: 'Point', coordinates: stnLL(s) } })) };
     /* 電波が弱い・通信を節約する設定なら、航空写真は使わない */
     const conn = navigator.connection;
     if (c.base === 'photo' && conn && (conn.saveData || /(^|-)2g$/.test(conn.effectiveType || ''))) { c.tmpBase = 'std'; ui.toast('電波が弱いため、標準地図で表示します'); }
@@ -1253,8 +1257,8 @@
     let map;
     try {
       map = new ml.Map({
-        container: box, center: p, zoom: c.zMan ?? baseZoom(c.pitch) + (c.zAuto ? BAND_DZ[bandOf(r)] : 0), pitch: c.pitch, bearing: c.orient === 'north' ? 0 : headingAt(r.km),
-        maxPitch: 70, minZoom: 5, maxZoom: 16, attributionControl: false, fadeDuration: 0,
+        container: box, center: p, zoom: (zoomTick(r), zoomTarget(c, c.pitch)), pitch: c.pitch, bearing: c.orient === 'north' ? 0 : headingAt(r.km),
+        maxPitch: 70, minZoom: 5, maxZoom: maxZ(c), attributionControl: false, fadeDuration: 0,
         /* ふだんは1本指でページをスクロールし、地図は2本指の拡大・縮小だけ。地図を1回押すと「操作中」になり、1本指で動かせる（setActive）。
            全画面は最初から操作中。傾きは MapLibre の判定が甘いため、自前の判定（pitchGesture）で行う */
         dragPan: c.act, dragRotate: c.act, scrollZoom: c.act, doubleClickZoom: c.act, keyboard: c.act, boxZoom: false, touchPitch: false, touchZoomRotate: true, pitchWithRotate: true,
@@ -1311,8 +1315,8 @@
     map.on('moveend', () => { if (!c.pg) c.gest = false; layoutLabels(); });
     map.on('rotate', needle);
     map.on('pitchend', () => { const v = Math.round(map.getPitch()); c.pitch = v; ls.set('lm-pitch', String(v)); drawTools(); });
-    /* 指で拡大・縮小したら、自動をやめてその縮尺を保つ（到着モードのあいだも同じ。「縮尺：手動（自動に戻す）」で戻る）。
-       手の操作かどうかは、拡大・縮小が始まったときに決める：こちらで動かしたもの（camEase。自動・「自動に戻す」・到着など）は手動にしない。
+    /* 指で拡大・縮小したら、その縮尺を覚える（自動ズームは止めない。userZoom：走行中の縮尺／駅のあいだだけ／到着モードを止める。「元の縮尺に戻す」で戻る）。
+       手の操作かどうかは、拡大・縮小が始まったときに決める：こちらで動かしたもの（camEase。自動ズーム・「元の縮尺に戻す」・到着など）は手の操作にしない。
        それ以外で、指の操作が付いている・2本指で触れている・ホイールかダブルタップのあと最初の拡大・縮小なら、手の操作とみなす
        （時間で区切らない。重い場面で拡大の始まりが遅れても取りこぼさない） */
     const zUser = () => { c.zPend = performance.now(); };
@@ -1325,13 +1329,13 @@
     const byUser = e => !c.prog && (!!e.originalEvent || !!c.touch2 || performance.now() - (c.zPend || -1e9) < 5000);
     map.on('zoomstart', e => { c.zByUser = byUser(e); });
     map.on('zoom', e => { if (!c.zByUser && byUser(e)) c.zByUser = true; });
-    map.on('zoomend', () => { c.zPend = 0; if (c.zByUser) { c.zByUser = false; setManualZoom(map.getZoom()); } });
+    map.on('zoomend', () => { c.zPend = 0; if (c.zByUser) { c.zByUser = false; userZoom(map.getZoom()); } });
     /* 駅名（ふだんは駅の点の下。列車の印と重なるときは、上・右・左へずらす。placeLabels） */
     c.stns = L.stations.map(s => {
       const stop = c.S.st.some(x => x.name === s[0] && x.stop);
       const el = document.createElement('div'); el.className = 'lm-stn' + (stop ? ' stop' : ''); el.textContent = s[0];
-      const mk = new ml.Marker({ element: el, anchor: 'top', offset: [0, 6], pitchAlignment: 'viewport', rotationAlignment: 'viewport' }).setLngLat([s[2], s[1]]).addTo(map);
-      return { s, el, mk, stop, lp: 'b' };
+      const mk = new ml.Marker({ element: el, anchor: 'top', offset: [0, 6], pitchAlignment: 'viewport', rotationAlignment: 'viewport' }).setLngLat(stnLL(s)).addTo(map);
+      return { s, el, mk, stop, lp: 'b', ll: stnLL(s) };
     });
     /* 見どころ：ピンを立てて横に名前。地図を傾けても、画面に向かって立てる */
     c.pins = L.spots.map(s => {
@@ -1437,13 +1441,16 @@
     const tools = $('.lm-tools', c.root);
     if (tools) obst.push({ l: W - (tools.offsetWidth + 16), t: 0, r: W, b: tools.offsetTop + tools.offsetHeight + 6 });
     obst.push({ l: 0, t: 0, r: 80, b: 46 }, { l: 0, t: H - 22, r: Math.min(W, 300), b: H });
+    /* 右下の自動ズームのボタンと、その左の札（見えているものだけ） */
+    const zr = box.getBoundingClientRect();
+    $$('.lm-zoom > :not([hidden])', c.wrap).forEach(e => { const r = e.getBoundingClientRect(); r.width && obst.push({ l: r.left - zr.left - 4, t: r.top - zr.top - 4, r: r.right - zr.left + 4, b: r.bottom - zr.top + 4 }); });
     const ov = c.full && $('.lm-ov', c.root);
     if (ov) { const br = box.getBoundingClientRect(), or = ov.getBoundingClientRect(); obst.push({ l: or.left - br.left - 4, t: or.top - br.top - 4, r: or.right - br.left + 4, b: H }); }
     let tb = null;
     if (c.train && c.disp != null) { const q = map.project(pointAt(c.disp)); q.x += c.tdx || 0; q.y += c.tdy || 0; tb = { l: q.x - 28, t: q.y - 30, r: q.x + 28, b: q.y + 22 }; obst.push(tb); }
     /* 駅名：列車の印と重ならない向きを選ぶ（下→上→右→左）。どこも重なるなら、名前を列車の印より上に出す */
     (c.stns || []).forEach(st => {
-      const q = map.project([st.s[2], st.s[1]]);
+      const q = map.project(st.ll);
       if (q.x < -150 || q.x > W + 150 || q.y < -60 || q.y > H + 60) return;
       if (!st.w) { st.w = st.el.offsetWidth || st.s[0].length * 13 + 8; st.h = st.el.offsetHeight || 18; }
       const { w, h } = st, OFF = { b: [0, 6], t: [0, -6 - h], r: [w / 2 + 9, -h / 2], l: [-(w / 2 + 9), -h / 2] };
@@ -1579,6 +1586,8 @@
     const c = cur; if (!c || !c.map) return;
     const b = c.tmpBase || c.base;
     try { Object.keys(BASES).forEach(id => c.map.setLayoutProperty(id, 'visibility', id === b ? 'visible' : 'none')); } catch { /* 地図の準備前 */ }
+    try { c.map.setMaxZoom(maxZ(c)); } catch { /* noop */ }   // 地図の種類ごとの、ぼやけない縮尺の上限
+    c.camAt = 0;
   }
   function setPitch(v) {
     const c = cur; if (!c) return;
@@ -1586,9 +1595,10 @@
     if (c.map) {
       const z = c.map.getZoom();
       c.holdUntil = performance.now() + 800;   // 角度を変えているあいだは、追いかけるカメラで止めない
-      /* 自動のときは、立体・平面それぞれの標準に速さの分を足す。手動のときは今までどおり（立体は1段大きく） */
-      const nz = c.zMan == null ? (c.arr ? z : autoZoom(c, v)) : v >= 5 && z < 10.8 ? z + 1 : v < 5 && z > 11 ? z - 1 : z;   // 到着モードの縮尺は、角度を変えたあとに arrCamera が決める
-      if (c.zMan != null) setManualZoom(nz);
+      /* 立体・平面それぞれの自動の縮尺へ（走行中の縮尺は、手で決めた分を保ったまま立体で1段寄る）。手で止めていた駅の縮尺は、角度を変えたら自動に戻す。
+         到着モードの縮尺は、角度を変えたあとに arrCamera が決める */
+      if (c.zHold) c.zHold = null;
+      const nz = c.arr ? z : zoomTarget(c, v);
       if (v >= 5) syncTerrain(c, true);   // 立体へは、傾け始めから地形を出す（平面へは傾け終わってから消す）
       camEase(c, { pitch: v, zoom: nz, duration: 700 });
     }
@@ -1621,7 +1631,8 @@
 
   /* ---------- 地図の更新 ----------
      地図の描き直し（カメラの移動）は4秒に1回（省電力は10秒・おためしの早送りは1秒）。列車の印は、その合間になめらかに動かす */
-  const camInterval = () => { const c = cur, st = Clock.state(); return c.eco ? 10e3 : st && st.speed >= 10 && !st.paused ? 1e3 : 4e3; };
+  /* 寄っていて列車が画面の上で速く動くとき・縮尺が大きく変わるとき（c.fast。zoomTick が決める）は1秒に1回 */
+  const camInterval = () => { const c = cur, st = Clock.state(); return c.eco ? 10e3 : (st && st.speed >= 10 && !st.paused) || c.fast ? 1e3 : 4e3; };
   function mapTick(r, force) {
     const c = cur; if (!c || !c.map || !c.train || !c.active()) return;
     const due = force || performance.now() - c.camAt >= camInterval() - 60;
@@ -1669,94 +1680,173 @@
     c.prog = true;
     try { pad ? c.map.setPadding(pad) : c.map.easeTo(opt); } finally { c.prog = false; }
   }
-  /* カメラ：追いかけるときは中心だけを動かす。傾きはそのまま。向きは「北が上」なら0、「進行方向」なら線路の向き、回したあとはそのまま */
-  /* snap：縮尺を少しずつではなく、一度で自動の縮尺へ（「自動に戻す」を押したとき） */
+  /* カメラ：追いかけるときは中心だけを動かす。傾きはそのまま。向きは「北が上」なら0、「進行方向」なら線路の向き、回したあとはそのまま。
+     次のカメラの更新まで（I）の列車の動きを先取りして、中心と縮尺をそのころの位置に合わせ、I のあいだ一定の速さで動かす（途切れずに追い、縮尺も段にならずに変わる）。
+     先取りは次の停車駅を越えない。縮尺の変わる速さには上限（Z_RATE）をつけ、時刻が大きく飛んだときもゆっくり変える */
+  /* snap：縮尺を少しずつではなく、一度で自動の縮尺へ（自動ズームの切り替え・「元の縮尺に戻す」を押したとき） */
+  const Z_RATE = 1.5;   // 縮尺の変わる速さの上限（時計の1秒に。早送りでも、列車の位置と縮尺の関係は同じ）
   function camera(ease, snap) {
     const c = cur; if (!c || !c.map || !c.follow || c.gest) return;
     if (performance.now() < (c.holdUntil || 0)) { c.camAt = 0; return; }
     const km = c.tgt ?? c.disp;
-    if (c.arr && c.zMan == null) return arrCamera(km, ease || snap);
-    const opt = { center: pointAt(km) };
-    if (c.full && c.pad) opt.padding = c.pad;
-    if (!c.free) opt.bearing = c.orient === 'north' ? 0 : headingAt(km);
-    /* 速さに合わせた縮尺へ、1回に少しずつ近づける（ゆっくり・なめらかに） */
-    let slow = false;
-    if (c.zMan == null) {
-      const z = c.map.getZoom(), dz = autoZoom(c) - z;
-      if (snap) opt.zoom = z + dz;
-      else if (Math.abs(dz) > 0.02) { opt.zoom = z + Math.max(-Z_STEP, Math.min(Z_STEP, dz)); slow = true; }
+    if (c.arr && !c.zHold) return arrCamera(km, ease || snap);
+    const I = camInterval(), r = c.last, st = Clock.state(), k = st ? (st.paused ? 0 : st.speed) : 1;   // k：時計の進む速さ（おためしの早送り）
+    let lead = 0;
+    if (!ease && !snap && r && r.mode === 'running') {
+      lead = Math.max(0, (r.speed || 0) * I * k / 3.6e6);
+      if (c.zd && isFinite(c.zd.dn)) lead = Math.min(lead, c.zd.dn);
     }
+    const kc = km + c.S.dir * lead;
+    const opt = { center: pointAt(kc) };
+    if (c.full && c.pad) opt.padding = c.pad;
+    if (!c.free) opt.bearing = c.orient === 'north' ? 0 : headingAt(kc);
+    const z = c.map.getZoom(), dz = zoomTarget(c, c.map.getPitch(), lead) - z;
+    let zooming = false;
+    if (snap) opt.zoom = z + dz;
+    else if (Math.abs(dz) > 0.01) { const lim = Z_RATE * (ease ? 0.8 : I / 1000) * Math.max(1, k); opt.zoom = z + Math.max(-lim, Math.min(lim, dz)); zooming = true; }
     if (ease) camEase(c, { ...opt, duration: 800 });
-    else camEase(c, { ...opt, duration: slow ? Math.min(2500, camInterval() * 0.9) : Math.min(700, camInterval() * 0.5), easing: t => t });
+    else camEase(c, { ...opt, duration: zooming || c.fast ? I + 150 : Math.min(700, I * 0.5), easing: t => t });
   }
 
-  /* ---------- 縮尺（速さで自動ズーム） ----------
-     200km/h以上＝標準／100〜200＝少し拡大／40〜100＝かなり拡大／停車・徐行＝街が分かるくらい。
-     速さは GPS の値（なければ時刻表からの推定）。ふらつかないよう、同じ速さの帯が BAND_HOLD 続いたら切り替える */
-  const baseZoom = pitch => (pitch >= 5 ? 11.3 : 10.3);
-  const BAND_DZ = { fast: 0, mid: 0.7, slow: 1.5, stop: 2.6 };
-  const BAND_NOTE = { fast: '', mid: '少し拡大中', slow: '減速中は拡大', stop: '停車・徐行中は拡大' };
-  /* 自動のときの縮尺：立体・平面それぞれの標準に、速さの分を足す（設定で速さの自動ズームを切ったときは標準のまま） */
-  const autoZoom = (c, pitch) => baseZoom(pitch ?? (c.map ? c.map.getPitch() : c.pitch)) + (c.zAuto ? BAND_DZ[c.band || 'fast'] : 0);
-  const BAND_HOLD = 10e3, Z_STEP = 0.3;      // 帯の切り替え：（時計の）10秒続いたら／1回のカメラ移動で動かす縮尺の上限
-  const bandOf = r => {
-    if (!r || r.mode !== 'running') return 'stop';
-    const v = r.speed == null ? 250 : r.speed;
-    return v >= 200 ? 'fast' : v >= 100 ? 'mid' : v >= 40 ? 'slow' : 'stop';
-  };
-  function zoomBand(r) {
-    const c = cur; if (!c) return;
-    const b = bandOf(r);
-    if (c.band == null) { c.band = b; c.bandCand = null; return; }
-    if (b === c.band) { c.bandCand = null; return; }
-    if (c.bandCand !== b) { c.bandCand = b; c.bandSince = r.now; return; }
-    if (r.now - c.bandSince >= BAND_HOLD || r.now < c.bandSince) { c.band = b; c.bandCand = null; c.camAt = 0; drawZoom(); }
+  /* ---------- 縮尺（停車駅への距離で先回りする自動ズーム） ----------
+     速さの帯で段を決めるのはやめ、次（と、いま出た）停車駅までの線路沿いの距離から、縮尺を毎回なめらかに計算する（連続した値・待ち時間なし）。
+       寄る縮尺 z(d) = 駅の縮尺 Zs − log2(d / dk)。dk は、縮尺 Zs のとき駅が列車から R px（地図の短い辺の 0.3）に見える距離。
+       → 近づくあいだ、駅はいつも画面の同じくらいの所に見えたまま、少しずつ寄っていき、dk より内側（着く前）で寄りきる。出たあとは同じ形で引く。
+     走っているときの縮尺（標準＋手で決めた分）より寄るときだけ使う。通過駅では寄らない（停車駅だけ）。時刻表から推定・GPS・おためしで同じ（どれも r.km で動く）。
+     GPSの揺れでふらつかないよう、同じ区間のあいだは「次の駅までの距離は縮むだけ・出た駅からの距離は伸びるだけ」にする（大きく飛んだら測り直す）。
+     列車の路線を問わない作り：使うのは時刻表の停車駅（c.S.st の stop と km）と線路の形（pointAt）だけ */
+  const baseZoom = pitch => (pitch >= 5 ? 11.3 : 10.3);   // 走っているときの標準（立体は1段寄せる）
+  /* 地図の縮尺の上限。MapLibre の縮尺 z では、256pxのタイルは z+1 の段を読む（地理院のタイルは18段まで → 縮尺17、OSM は19段まで → 縮尺18）。これより寄るとぼやける */
+  const MAX_Z = { std: 17, pale: 17, photo: 17, osm: 18 };
+  const maxZ = c => MAX_Z[c.tmpBase || c.base] || 17;
+  /* 駅の縮尺（駅前の建物や道が見分けられるくらい）。新大阪・新神戸・岡山・広島・小倉・博多で、立体・平面・地図の種類ごとに撮り比べて決めた。
+     - 地理院の標準・淡色：17段のタイルの描き方の範囲（縮尺16.5より手前）。18段は線路の斜線と大きな文字でごちゃつき、新神戸のような山あいでは建物がほとんど描かれないため
+     - 航空写真・OSM：16.6で建物・駐車場の車・店まで見分けられる。17は寄りすぎ（画面が建物1つ分ほど）
+     立体（斜め）は遠くまで写るぶん、少し控える */
+  const STN_Z = { flat: { std: 16.2, pale: 16.2, photo: 16.6, osm: 16.6 }, d3: { std: 15.8, pale: 15.8, photo: 16.2, osm: 16.2 } };
+  /* 航空写真の細かさが足りない駅（寄るとぼやける所）は、ここで控える。駅名 → 縮尺の上限。
+     のぞみの停車駅（新大阪〜博多）は、どこも18段の写真に細かさがあり（引き伸ばしでない）、控える駅はない。リレーかもめの駅は16で確かめる */
+  const PHOTO_CAP = {};
+  const ECO_Z = 14.5;   // 省電力（地図の更新が10秒に1回）では、列車が画面から外れないよう控えめに
+  function stationZoom(c, pitch, name) {
+    const b = c.tmpBase || c.base;
+    let z = STN_Z[pitch >= 5 ? 'd3' : 'flat'][b] || 16;
+    if (b === 'photo' && PHOTO_CAP[name] != null) z = Math.min(z, PHOTO_CAP[name]);
+    if (c.eco) z = Math.min(z, ECO_Z);
+    return Math.min(z, maxZ(c));
   }
-  function setManualZoom(z) {
-    const c = cur; if (!c) return;
-    c.zMan = z == null ? null : Math.round(z * 100) / 100;
-    ss.set('lm-zman', c.zMan == null ? null : String(c.zMan));
+  /* 走っているときの縮尺：標準＋手で決めた分（zOff。端末に覚える）。立体・平面を切り替えても、手で決めた分はそのまま */
+  const runZoom = (c, pitch) => Math.max(5, Math.min(maxZ(c), baseZoom(pitch) + (c.zOff || 0)));
+  const mpp = (z, lat) => 40075016.686 * Math.cos(rad(lat)) / (512 * 2 ** z);   // 縮尺 z の1px が何m か
+  /* 停車駅の前後の「寄る」縮尺。lead（km）だけ先へ進んだときの値も出せる（カメラは次の更新までの動きを先取りする） */
+  function stationPull(c, pitch, lead = 0) {
+    const zd = c.zd; if (!zd || !c.zAuto) return null;
+    const box = c.map ? c.map.getContainer() : c.wrap;
+    const pad = c.full && c.pad ? c.pad : { bottom: 0 };
+    const W = (box && box.clientWidth) || 360, H = Math.max(160, ((box && box.clientHeight) || 400) - (pad.bottom || 0));
+    const Rpx = 0.3 * Math.min(W, H) / (pitch >= 5 ? Math.max(0.45, Math.cos(rad(pitch))) : 1);   // 斜めのときは奥行きが縮んで見えるぶん遠くまで
+    const one = (s, d) => {
+      if (!s || !isFinite(d)) return null;
+      const zs = stationZoom(c, pitch, s.name), dk = Rpx * mpp(zs, pointAt(s.km)[1]) / 1000;
+      return { z: zs - Math.log2(Math.max(d, dk) / dk), zs, name: s.name, at: d <= dk };
+    };
+    const a = one(zd.next, Math.max(0, zd.dn - lead)), b = one(zd.prev, zd.dp + lead);
+    const p = !a ? b : !b ? a : a.z >= b.z ? a : b;
+    return p && { ...p, side: p === a ? 'next' : 'prev' };
+  }
+  /* いまの自動の縮尺。到着モード（手で止めていない）では arrCamera が決めるので、ここでは使わない */
+  function zoomTarget(c, pitch, lead = 0) {
+    if (c.zHold) return c.zHold.z;
+    const zr = runZoom(c, pitch), p = stationPull(c, pitch, lead);
+    return p && p.z > zr ? Math.min(p.z, p.zs) : zr;
+  }
+  const curPitch = c => (c.map ? c.map.getPitch() : c.pitch);
+  /* 毎秒：前後の停車駅までの距離（揺れを抑えたもの）を求め、駅の手前で手で止めた縮尺を、駅を離れたら戻す */
+  function zoomTick(r) {
+    const c = cur; if (!c || !r) return;
+    const S = c.S, stops = S.st.filter(x => x.stop);
+    let pi = -1, ni = -1;
+    for (let i = 0; i < stops.length; i++) { if (S.ahead(r.km, stops[i].km) > 0.0005) { ni = i; break; } pi = i; }
+    let dn = ni >= 0 ? S.ahead(r.km, stops[ni].km) : Infinity, dp = pi >= 0 ? -S.ahead(r.km, stops[pi].km) : Infinity;
+    const f = c.zd;
+    if (f && f.pi === pi && f.ni === ni && Math.abs(r.km - f.km) < 3 && r.mode === 'running') { dn = Math.min(dn, f.dn); dp = Math.max(dp, f.dp); }   // 止まっているときは、そのままの距離（駅では0）
+    c.zd = { pi, ni, prev: stops[pi] || null, next: stops[ni] || null, dn, dp, km: r.km };
+    const pitch = curPitch(c), p = stationPull(c, pitch), zone = p && p.z > runZoom(c, pitch) ? p : null;
+    /* 駅の近くで手で変えた縮尺は、その駅のあいだだけ。駅を離れたら（寄る範囲を出たら）走っているときの縮尺に戻す */
+    if (c.zHold && !c.zHold.arr && (!zone || zone.name !== c.zHold.stn)) { c.zHold = null; c.camAt = 0; }
+    c.zone = zone;
+    /* 列車が画面の上で速く動く（寄っている）ときは、カメラを1秒ごとに動かして、なめらかに追う */
+    const zNow = c.map ? c.map.getZoom() : runZoom(c, pitch), v = r.mode === 'running' ? r.speed || 0 : 0;
+    c.fast = v / 3.6 / mpp(zNow, pointAt(r.km)[1]) > 3 || Math.abs(zoomTarget(c, pitch) - zNow) > 0.25;
     drawZoom();
   }
-  /* 地図の右下の縮尺のボタン。表示は2つだけ：「縮尺：自動」／「縮尺：手動（自動に戻す）」。
-     ボタンは一度作ったら作り直さない（押しているあいだに差し替わって、押したのが消えないように）。文字と色だけ変える。
-     自動のときの補足（減速中は拡大・到着駅に向けて拡大）は、ボタンの左に小さく出す */
+  /* 指で拡大・縮小したとき：自動は止めない。
+     ふだん（駅の近くでない）なら、その縮尺を「走っているときの縮尺」として覚える。
+     停車駅の近く（寄っているあいだ）なら、その駅のあいだだけその縮尺にして、駅を離れたら走っているときの縮尺に戻す。
+     到着モードのあいだなら、到着モードのカメラを止めてその縮尺で列車を追う（「元の縮尺に戻す」で到着モードに戻る） */
+  function userZoom(z) {
+    const c = cur; if (!c) return;
+    const pitch = curPitch(c);
+    z = Math.round(z * 100) / 100;
+    if (c.arr) { c.zHold = { z, arr: true }; zoomMsg('いまの縮尺で列車を追います'); }
+    else if (c.zone && c.zAuto) { c.zHold = { z, stn: c.zone.name }; zoomMsg(`${c.zone.name}を離れたら、走行中の縮尺に戻ります`); }
+    else { c.zHold = null; setRunZoom(z - baseZoom(pitch)); zoomMsg('走行中の縮尺を変更しました'); }
+    drawZoom();
+  }
+  function setRunZoom(off) {
+    const c = cur; if (!c) return;
+    c.zOff = off == null || Math.abs(off) < 0.05 ? null : Math.round(off * 100) / 100;
+    ls.set('lm-zoff', c.zOff == null ? null : String(c.zOff));
+  }
+  /* 縮尺のボタンの左に、短い知らせを数秒だけ出す（そのあとは「元の縮尺に戻す」） */
+  function zoomMsg(t) { const c = cur; if (!c) return; c.zMsg = t; clearTimeout(c.zMsgT); c.zMsgT = setTimeout(() => { if (cur === c) { c.zMsg = null; drawZoom(); } }, 4000); drawZoom(); }
+  /* 地図の右下の縮尺のボタン「自動ズーム：オン／オフ」と、その左の小さな札（知らせ・「元の縮尺に戻す」・いま寄っている理由）。
+     ボタンは一度作ったら作り直さない（押しているあいだに差し替わって、押したのが消えないように）。文字と色だけ変える */
   function drawZoom() {
     const c = cur; if (!c || !c.map || !c.wrap) return;
     let el = $('.lm-zoom', c.wrap);
     if (!el) {
       el = document.createElement('div'); el.className = 'lm-zoom';
-      el.innerHTML = '<span class="lm-znote" aria-hidden="true" hidden></span><button type="button" class="lm-zbtn" data-lm="zoom"><span class="lm-zk">縮尺：</span><b></b></button>';
+      el.innerHTML = '<span class="lm-znote" aria-live="polite" hidden></span><button type="button" class="lm-zreset" data-lm="zreset" hidden>元の縮尺に戻す</button><button type="button" class="lm-zbtn" data-lm="zoom"><span class="lm-zk">自動ズーム：</span><b></b></button>';
       c.wrap.appendChild(el);
     }
-    const man = c.zMan != null;
-    const note = man ? '' : c.arr ? `${c.S.tr.end || c.S.last.name}へ向けて拡大` : c.zAuto ? BAND_NOTE[c.band || 'fast'] : '';
-    const v = `${man}|${note}`;
+    const custom = c.zOff != null || !!c.zHold;
+    const note = c.zMsg || (custom ? '' : c.arr ? `${c.S.tr.end || c.S.last.name}へ向けて拡大` : c.zAuto && c.zone ? (c.zone.side === 'next' && !c.zone.at ? `${c.zone.name}に近づくので拡大` : c.zone.side === 'prev' && !c.zone.at ? `${c.zone.name}を出たので縮小` : `${c.zone.name}のまわりを拡大`) : '');
+    const v = `${c.zAuto}|${custom}|${note}`;
     if (el.dataset.v === v) return;
     el.dataset.v = v;
-    const b = $('.lm-zbtn', el), n = $('.lm-znote', el);
-    b.classList.toggle('man', man);
-    $('b', b).textContent = man ? '手動（自動に戻す）' : '自動';
-    b.setAttribute('aria-label', man ? '縮尺：手動。押すと自動に戻します' : '縮尺：自動。押すと、いまの縮尺で止めます');
+    const b = $('.lm-zbtn', el), n = $('.lm-znote', el), rs = $('.lm-zreset', el);
+    b.classList.toggle('off', !c.zAuto);
+    $('b', b).textContent = c.zAuto ? 'オン' : 'オフ';
+    b.setAttribute('aria-pressed', String(c.zAuto));
+    b.setAttribute('aria-label', c.zAuto ? '自動ズーム：オン。停車駅の近くで自動で拡大します。押すとオフ' : '自動ズーム：オフ。縮尺を変えません。押すとオン');
     n.textContent = note; n.hidden = !note;
+    rs.hidden = !custom || !!c.zMsg;
     fitTools();
   }
-  /* 縮尺のボタン：1回押すたびに必ず切り替える（手動 → すぐ自動の縮尺へ／自動 → いまの縮尺で止める）。
-     押した印（短く色が変わる）を出す。続けて押しても、そのたびに切り替わるだけで状態は崩れない */
+  /* 「自動ズーム」のボタン：押すたびにオン・オフを切り替える（設定のスイッチと同じ。端末に覚える）。押した印（短く色が変わる）を出す */
+  function setAutoZoom(on) {
+    const c = cur; if (!c) return;
+    c.zAuto = on; ls.set('lm-autozoom', on ? null : '0');
+    if (c.zHold && !c.zHold.arr) c.zHold = null;
+    if (c.map) { const r = c.last; r && zoomTick(r); c.follow = true; c.gest = c.pg = false; c.holdUntil = 0; c.camAt = performance.now(); camera(true, true); }
+    drawCtrl(); drawZoom();
+  }
   function toggleZoom(b) {
-    const c = cur; if (!c || !c.map) return;
+    const c = cur; if (!c) return;
     c.zPend = 0; c.zByUser = false;
     if (b) { b.classList.remove('tap'); void b.offsetWidth; b.classList.add('tap'); clearTimeout(c.tapT); c.tapT = setTimeout(() => b.classList.remove('tap'), 260); }
-    if (c.zMan != null) {
-      setManualZoom(null);
-      c.follow = true; c.gest = c.pg = false; c.holdUntil = 0; c.camAt = performance.now();
-      drawTools(); camera(true, true);
-      ui.toast('縮尺を自動に戻しました');
-    } else {
-      c.map.stop();
-      setManualZoom(c.map.getZoom());
-      ui.toast('いまの縮尺で止めました（もう一度押すと自動）');
-    }
+    setAutoZoom(!c.zAuto);
+    ui.toast(c.zAuto ? '自動ズームをオンにしました（停車駅の近くで拡大）' : '自動ズームをオフにしました（縮尺はそのまま）');
+  }
+  /* 「元の縮尺に戻す」：手で決めた走行中の縮尺と、駅・到着モードで手で止めた縮尺を消して、すぐ自動の縮尺へ */
+  function resetZoom() {
+    const c = cur; if (!c) return;
+    c.zPend = 0; c.zByUser = false;
+    setRunZoom(null); c.zHold = null; c.zMsg = null; clearTimeout(c.zMsgT);
+    if (c.map) { c.last && zoomTick(c.last); c.follow = true; c.gest = c.pg = false; c.holdUntil = 0; c.camAt = performance.now(); c.arr && (c.arrFirst = true); camera(true, true); }
+    drawZoom();
+    ui.toast('元の縮尺に戻しました');
   }
 
   /* ---------- 到着モード ----------
@@ -1776,7 +1866,7 @@
     const q = map.project(pointAt(ek));
     if (Number.isFinite(q.x) && Number.isFinite(q.y) && q.x >= pad.left && q.x <= W && q.y >= 0 && q.y <= H) {
       c.arr = true; c.arrFirst = true; c.camAt = 0;
-      if (c.zMan != null) setManualZoom(null);   // 手動の縮尺で終点が映ったときも、ここから自動（到着駅に向けた拡大）にする
+      c.zHold = null;   // 駅の近くで手で止めた縮尺のまま終点が映ったときも、ここから到着モード（到着駅に向けた拡大）にする
       drawZoom();
     }
   }
@@ -1785,7 +1875,9 @@
     c.arr = false; c.camAt = 0; drawZoom();
     if (c.map) {
       const opt = { pitch: c.pitch, duration: 1200 };
-      opt.zoom = c.zMan ?? autoZoom(c, c.pitch);
+      if (c.zHold && c.zHold.arr) c.zHold = null;
+      c.last && zoomTick(c.last);
+      opt.zoom = zoomTarget(c, c.pitch);
       if (c.full && c.pad) opt.padding = c.pad;
       if (!c.free) opt.bearing = c.orient === 'north' ? 0 : headingAt(c.tgt ?? c.disp);
       c.holdUntil = performance.now() + 1300;
@@ -1805,7 +1897,8 @@
     const fov = rad((map.getVerticalFieldOfView && map.getVerticalFieldOfView()) || 36.87), D = H / 2 / Math.tan(fov / 2);
     const ground = u => u * D / Math.max(1e-3, D * Math.cos(p) - u * Math.sin(p));
     const sA = ground(Hv / 2 - yA), sB = ground(Hv / 2 - yB);  // 列車（中心より下＝負）と終点（中心より上＝正）
-    const z = dist > 0 ? Math.max(5, Math.min(15.5, Math.log2((sB - sA) / (dist * 512)))) : 15.5;
+    const zEnd = stationZoom(c, pitch, c.S.tr.end || c.S.last.name);   // 着いたときは、ほかの停車駅と同じ駅の縮尺まで
+    const z = dist > 0 ? Math.max(5, Math.min(zEnd, Math.log2((sB - sA) / (dist * 512)))) : zEnd;
     const f = -sA / (sB - sA);                                 // 画面の中心に来る点（列車→終点の割合）
     const center = new M(a.x + dx * f, a.y + dy * f).toLngLat();
     const brg = dist > 0 ? Math.atan2(dx, -dy) * 180 / Math.PI : map.getBearing();
@@ -1837,7 +1930,7 @@
       { el: () => pinTarget() || $('#lm-map', root), title: '見どころのピン', text: '名前を押すと、紹介が下から開きます。ピンの色と記号は種類（城・寺社・自然・川・街）を表します。', before: toMap },
       { el: '#spots', title: '見どころの紹介と一覧', text: '紹介には、ところ・ひとこと・くわしい説明が載っています。地図の下へスクロールすると「沿線の見どころ一覧」を通る順に見られます。', before: async () => { const h = $('#spots'); if (h) { h.scrollIntoView({ block: 'start' }); await sleep(150); } }, after: toMap },
       { el: '#lm-map', title: c.full ? '地図の操作' : '押して地図を操作', text: c.full ? '1本指で地図を動かし、2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。動かすと列車を追いかけるのを止めます。「列車へ」を押すと、列車の位置と元の向きに戻ります。' : 'ふだんは1本指でページをスクロールします。地図を1回押すと枠が朱色になり、1本指で動かす・2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。「操作を終える」を押すか、地図の外を押すと戻ります。' },
-      { el: () => $('.lm-zbtn', root), title: '縮尺のボタン', text: '「縮尺：自動」のあいだは、速さや降りる駅に合わせて縮尺が自動で変わります。指で拡大・縮小すると「縮尺：手動（自動に戻す）」に変わり、その縮尺のまま止まります。押すと、すぐ自動に戻ります。' },
+      { el: () => $('.lm-zbtn', root), title: '自動ズームのボタン', text: '「自動ズーム：オン」のあいだは、停車駅に近づくと着く前から少しずつ拡大し、駅を出ると少しずつ戻ります。押すとオフ（縮尺を自動では変えない）になります。指で拡大・縮小しても自動は止まらず、その縮尺を走行中の縮尺として覚えます。「元の縮尺に戻す」で最初の縮尺に戻ります。' },
       { el: () => $('[data-lm="tools"]', root), title: '地図の操作ボタン', text: '押すと開きます（もう一度押すと閉じます）。開くと、方位磁針（押すと北が上に、もう一度押すと進行方向が上。赤い側が北）・立体・地図の種類（標準・淡色・航空写真・OpenStreetMap）・列車へ・全画面・設定・使い方のボタンが並びます。' },
       { el: () => c.full ? $('[data-lm="tools"]', root) : $('.lm-sum', root), title: 'お知らせと画面の設定', text: `${c.full ? '「操作」を押して開き、⚙' : 'この1行か、「操作」を開いた中の ⚙'}を押すと設定が開きます。お知らせをONにすると、降りる駅の5分前と1分前にバイブと画面でお知らせします。画面を自動で消さない・省電力もここで切り替えます。`, after: toMap }
     ], { force });
@@ -1852,7 +1945,7 @@
     _debug: () => cur && {
       last: cur.last, fix: cur.tk.fix, reject: cur.tk.reject, follow: cur.follow, map: !!cur.map, loaded: !!cur.loaded, gpsOn: !!cur.unGeo, gpsWant: cur.gpsWant, geomFallback: !!geom.fallback && !lineGeo,
       pitch: cur.map ? cur.map.getPitch() : cur.pitch, bearing: cur.map ? cur.map.getBearing() : null, orient: cur.orient, free: cur.free, base: cur.tmpBase || cur.base, eco: cur.eco,
-      zoom: cur.map ? cur.map.getZoom() : null, zAuto: cur.zAuto, zMan: cur.zMan, band: cur.band, arr: cur.arr,
+      zoom: cur.map ? cur.map.getZoom() : null, zAuto: cur.zAuto, zOff: cur.zOff, zHold: cur.zHold, zone: cur.zone && { ...cur.zone }, zd: cur.zd && { dn: cur.zd.dn, dp: cur.zd.dp, next: cur.zd.next && cur.zd.next.name, prev: cur.zd.prev && cur.zd.prev.name }, fast: cur.fast, target: cur.map ? zoomTarget(cur, cur.map.getPitch()) : null, arr: cur.arr,
       camInterval: camInterval(), mapVisible: cur.mapVisible, active: cur.active(), alarms: { ...cur.alarms }, pins: cur.pins.map(p => [p.s.id, p.lv, !p.el.classList.contains('nolabel')])
     },
     _map: () => cur && cur.map
