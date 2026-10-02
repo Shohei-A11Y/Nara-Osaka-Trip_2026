@@ -74,6 +74,7 @@
     save: '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/>',
     cube: '<path d="M12 3.5 19.5 7.8v8.4L12 20.5l-7.5-4.3V7.8z"/><path d="M4.5 7.8 12 12l7.5-4.2M12 12v8.5"/>',
     out: '<path d="M13.5 4.5h6v6M19.5 4.5 11 13"/><path d="M17 14v4.5a1 1 0 0 1-1 1H5.5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1H10"/>',
+    wc: '<circle cx="7.5" cy="4.8" r="1.6"/><circle cx="16.5" cy="4.8" r="1.6"/><path d="M5.6 8.5h3.8l.6 5.5H9v6H6v-6H5zM14.6 8.5h3.8l1.6 7h-2v4.5h-3V15.5h-2z"/><path d="M12 3v18"/>',
     here: '<path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.6" fill="currentColor"/>',
     search: '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/>',
     tip: '<path d="M9 17.5h6M9.8 20.5h4.4M12 3.5a5.5 5.5 0 0 0-3.3 9.9c.7.6 1.1 1.3 1.2 2.1h4.2c.1-.8.5-1.5 1.2-2.1A5.5 5.5 0 0 0 12 3.5z"/>',
@@ -458,7 +459,7 @@
     ['きょう', [['きょう（いま・つぎ）', '#/', ''], ['チェックインQR', '#qr', '']]],
     ['日程', [['1日目　10/17（土）', '#/trip/1', ''], ['2日目　10/18（日）', '#/trip/2', ''], ['3日目　10/19（月）', '#/trip/3', ''], ['4日目　10/20（火）', '#/trip/4', '']]],
     ['のりもの', [['いまどのへん？（のぞみ）', '#/ride/live/nozomi28', ''], ['指定席券と座席表', '#/ride', ''], ['駅の乗り換え（3D）', '#/ride/transfer', '博多・新大阪'], ['駅の時刻表（大阪市内）', '#/ride/tt', '7駅'], ['車窓から見える城', '#/ride/castles', ''], ['博多駅の駅弁', '#/ride/ekiben', ''], ['鉄道トリビア', '#/ride/trivia', ''], ['レンタカー', '#/stay/car', '10/18']]],
-    ['まっぷ', [['行く場所の地図', '#/map', ''], ['ドライブの道順', '#/map/drive', '10/18'], ['公式の案内図', '#/map/official', ''], ['おでかけ', '#/spot', '7か所'], ['ごはん', '#/food', ''], ['奈良公園近くの駐車場', '#/sos/parking', '10/18']]],
+    ['まっぷ', [['おでかけマップ', '#/map/outing', '1枚の地図で'], ['行く場所の地図', '#/map', ''], ['ドライブの道順', '#/map/drive', '10/18'], ['公式の案内図', '#/map/official', ''], ['おでかけ', '#/spot', '7か所'], ['ごはん', '#/food', ''], ['奈良公園近くの駐車場', '#/sos/parking', '10/18']]],
     ['その他', [['旅のワンポイント', '#/tips', '気温・服装・コツ'], ['トリビア', '#/trivia', '5つの分類'], ['持ち物チェック', '#/bag', ''], ['予算と割り勘メモ', '#/money', ''], ['ホテルとお部屋', '#/stay', ''], ['緊急連絡先・病院', '#/sos', ''], ['思い出メモ', '#/memo', ''], ['スタンプ帳', '#/spot/stamps', ''], ['おためしモード', '#sim', '旅行中の画面を先に体験'], ['使い方', '#/help', '機能ごとの説明書']]]
   ];
   const TOC_ACT = { '#qr': 'qr', '#sim': 'sim' };
@@ -1151,6 +1152,7 @@
     });
     return `<div class="wrap">${topbar()}${phead('Map', 'まっぷ', '行く場所を日ごとにまとめました。「地図」を押すと、地図のアプリで開きます。')}
       <a class="map-live" href="#/ride/live/${ymd(now()) >= '2026-10-20' ? 'nozomi17' : 'nozomi28'}">${routeMini(ymd(now()) >= '2026-10-20' ? 'nozomi17' : 'nozomi28', { demo: !liveNowKey() })}<span><b>新幹線の中は「いまどのへん？」</b><small>走っている場所と、窓から見えるものを地図で</small></span></a>
+      <a class="map-om" href="#/map/outing">${ic('map')}<span><b>おでかけマップ</b><small>4日間で訪れる場所を1枚の地図に。日にち・種類で切り替え</small></span><span aria-hidden="true">→</span></a>
       ${days.map(({ d, rows }) => `<section class="sec map-day" style="--c:${DAYC(d.n)}">${secH(`${d.n}日目　${d.label}（${d.dow}）`, d.theme)}
         <ul class="map-list">${rows.map(r => `<li><span class="map-ic">${ic(r.ic)}</span><span class="map-n">${r.kind ? `<small>${r.kind}${r.when ? '・' + r.when : ''}</small>` : ''}${r.to ? `<a href="${r.to}">${esc(r.name)}</a>` : esc(r.name)}</span>${r.q ? ext(gmap(r.q), '地図', 'btn quiet map-go') : ''}</li>`).join('')}</ul>
         ${d.drives ? driveBlock(d) : ''}</section>`).join('')}
@@ -1183,7 +1185,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=17').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=18').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -1224,6 +1226,231 @@
     const zc = () => box.classList.toggle('zin', map.getZoom() >= 11.5);
     map.on('zoom', zc); zc();
     map.on('error', () => { /* 下地のタイルが取れないときも、線はそのまま */ });
+  }
+
+  /* ========== おでかけマップ（新大阪に着いてから、最終日に新大阪を出るまで） ==========
+     地点は行程表（T.days）と夕ごはん候補（T.dinner）から拾い、位置は T.geo。位置のない地点は一覧だけに出す。
+     地図は MapLibre ＋ 地理院タイル（ドライブの道順と同じ）。電波がないときは、地図の代わりに一覧を出す。
+     現在地は、この端末の中で地図に出すだけで、どこにも送らない */
+  const OM_CAT = [['stay', '宿', 'var(--day3)', 'bed'], ['see', '観光', 'var(--shu)', 'spot'], ['eat', 'グルメ', 'var(--yamabuki)', 'bowl'], ['move', '交通', 'var(--ai)', 'train'], ['rest', 'トイレ・休憩', 'var(--moegi)', 'wc', 1]];   // 5つ目の印（1）は、最初は出さない
+  const OM_TYPE = { station: 'move', car: 'move', parking: 'move', spot: 'see', visit: 'see', food: 'eat', hotel: 'stay' };
+  const omCatOf = k => OM_CAT.find(c => c[0] === k);
+  const omDefault = () => OM_CAT.filter(c => !c[4]).map(c => c[0]);
+  const omDay = () => { const v = session.get('omDay'); return v && (v === 'all' || T.days.some(d => String(d.n) === v)) ? v : 'all'; };
+  const omCats = () => { try { const v = JSON.parse(session.get('omCats')); if (Array.isArray(v)) return v.filter(k => omCatOf(k)); } catch { /* noop */ } return omDefault(); };
+  const omDir = q => `https://www.google.com/maps/dir/?api=1&destination=${enc(q)}`;
+  let omItemsCache = null;
+  function omItems() {
+    if (omItemsCache) return omItemsCache;
+    const geo = T.geo || {}, by = new Map(), out = [];
+    const span = it => (it.arr && it.dep && it.arr !== it.dep ? `${it.arr}〜${it.dep}` : it.arr || it.dep || '');
+    const introOf = to => { const m = /^#\/spot\/(\w+)/.exec(to || ''); return m ? { k: 'spot', id: m[1] } : { '#/food/marukatsu': { k: 'lunch' }, '#/stay': { k: 'hotel' }, '#/stay/car': { k: 'car' }, '#/sos/parking': { k: 'park' } }[to] || null; };
+    T.days.forEach(d => d.items.forEach(it => {
+      if (it.t !== 'stop' || it.type === 'ramp' || KYUSHU.includes(it.name)) return;
+      let x = by.get(it.name);
+      if (!x) {
+        const g = geo[it.name];
+        x = { id: 'p' + out.length, name: it.name, cat: OM_TYPE[it.type] || 'see', ll: g ? [g[0], g[1]] : null, sub: it.type === 'station' ? '駅' : TYPE_LABEL[it.type] || '', days: [], times: {}, intro: null, q: placeQ(it.name) !== it.name ? placeQ(it.name) : it.map || it.name };
+        by.set(it.name, x); out.push(x);
+      }
+      if (!x.intro) x.intro = introOf(it.to);
+      if (!x.days.includes(d.n)) x.days.push(d.n);
+      const t = span(it); if (t) (x.times[d.n] = x.times[d.n] || []).push(t + (it.optional ? '（余裕があれば）' : ''));
+    }));
+    /* 夕ごはん候補（1〜3日目）。新大阪の4店は JR新大阪駅の中なので、駅の位置に出す。梅田の3店は位置を確かめられないので一覧だけ */
+    const dinnerDays = T.days.filter(d => d.dinner).map(d => [d.n, new Date(d.date + 'T12:00:00+09:00').getDay()]);
+    T.dinner.forEach(s => {
+      const days = dinnerDays.filter(([, w]) => !(s.closedDays || []).includes(w)).map(([n]) => n), g = s.area === 'shinosaka' && geo['新大阪'];
+      out.push({ id: 'd-' + s.id, name: s.name, cat: 'eat', ll: g ? [g[0], g[1]] : null, sub: `夕ごはん候補・${s.genre}・${s.place}`, days, times: {}, intro: { k: 'shop', id: s.id }, q: `${s.name} ${s.address}` });
+    });
+    (T.rest || []).forEach(r => out.push({ id: 'r-' + r.id, name: r.name, cat: 'rest', ll: r.ll, sub: r.near, days: r.days, times: {}, intro: null, q: `${r.ll[0]},${r.ll[1]}`, rest: r }));
+    return (omItemsCache = out);
+  }
+  const omVisible = () => { const day = omDay(), cats = omCats(); return omItems().filter(x => cats.includes(x.cat) && (day === 'all' || x.days.includes(+day))); };
+  const omWhen = (x, day) => {
+    const ds = day === 'all' ? x.days : x.days.filter(n => n === +day);
+    return ds.map(n => { const t = (x.times[n] || []).join('・'); const d = T.days[n - 1]; return day === 'all' ? `${d.label}（${d.dow}）${t ? ' ' + t : ''}` : t; }).filter(Boolean).join('／');
+  };
+  const omDot = cat => `<i class="om-dot" style="--c:${omCatOf(cat)[2]}" aria-hidden="true"></i>`;
+  /* ピンのカード・一覧の1件 */
+  function omEntry(x, day, opt = {}) {
+    const C = omCatOf(x.cat), when = omWhen(x, day);
+    return `<div class="om-e">
+      <p class="om-k">${omDot(x.cat)}${C[1]}${x.sub ? '・' + esc(x.sub) : ''}${!x.ll ? '<span class="om-nomap">地図なし</span>' : ''}</p>
+      <p class="om-n">${esc(x.name)}</p>${when ? `<p class="om-t num">${esc(when)}</p>` : ''}
+      ${x.rest ? `<p class="om-r">${esc(x.rest.text)}</p><p class="om-src">出典：<a class="ext" href="${x.rest.url}" target="_blank" rel="noopener">${esc(x.rest.by)}</a></p>` : ''}
+      <div class="om-acts"><a class="btn quiet ext om-go" href="${omDir(x.q)}" target="_blank" rel="noopener">Googleマップで道順</a>${x.intro ? `<button type="button" class="btn quiet" data-omintro="${x.id}">詳しく</button>` : ''}${opt.locate && x.ll ? `<button type="button" class="btn quiet" data-omlocate="${x.id}">地図で見る</button>` : ''}</div></div>`;
+  }
+  /* 「詳しく」：しおりの中の紹介を、地図の上のポップアップで出す（別のページには移らない。予約番号・QRは出さない） */
+  function omIntroHtml(I) {
+    if (I.k === 'spot') {
+      const s = T.spots.find(p => p.id === I.id); if (!s) return '';
+      return `<p class="small muted num">${s.day}日目・${esc(s.when)}</p><p class="spot-lead">${esc(s.lead)}</p>${latestMini('#/spot/' + s.id)}
+        ${s.warn ? `<div class="warn"><span>${esc(s.warn)}</span></div>` : ''}
+        ${s.walk ? `<h3 class="sub">おすすめの歩き方</h3><ol class="walk">${s.walk.map(x => `<li>${esc(x)}</li>`).join('')}</ol>${s.walkNote ? `<p class="note">${esc(s.walkNote)}</p>` : ''}` : ''}
+        ${s.info ? `<h3 class="sub">基本情報</h3>${infoList(s.info.map(([k, v]) => [k, k === '電話' ? `<a href="${tel(v)}">${esc(v)}</a>` : esc(v)]))}` : ''}
+        ${s.fees ? `<h3 class="sub">拝観料</h3>${infoList(s.fees)}` : ''}
+        <div class="btns">${s.url ? ext(s.url, '公式の情報') : ''}${(s.urls || []).map(([l, u]) => ext(u, `${esc(l)}（公式）`)).join('')}${(s.maps || []).map(([l, u]) => ext(u, esc(l))).join('')}</div>`;
+    }
+    if (I.k === 'lunch') {
+      const L = T.lunch[0];
+      return `<p class="small muted">${esc(L.when)}・${esc(L.sub)}</p><p class="spot-lead">${esc(L.lead)}</p>
+        <ul class="picks">${L.menu.map(([n, p, d, hl]) => `<li class="${hl ? 'hl' : ''}"><div>${esc(n)}${d ? `<span>${esc(d)}</span>` : ''}</div><div class="pr num">${yen(p)}</div></li>`).join('')}</ul><p class="note">${esc(L.note)}</p>
+        ${infoList([['住所', esc(L.address)], ['電話', `<a href="${tel(L.tel)}">${L.tel}</a>`], ['営業', esc(L.hours)], ['支払い', esc(L.pay)]])}<div class="btns">${ext(L.url, 'お店の情報')}</div>`;
+    }
+    if (I.k === 'shop') {
+      const s = T.dinner.find(x => x.id === I.id); if (!s) return '';
+      return `<p class="small muted">${esc(s.genre)}・${esc(s.place)}</p><div class="tags">${s.cash ? '<span class="tag red">現金のみ</span>' : '<span class="tag blue">カード可</span>'}${s.takeout ? '<span class="tag">持ち帰り</span>' : ''}${s.closed ? `<span class="tag${s.closedDays ? ' red' : ''}">${esc(s.closed)}</span>` : ''}</div>
+        <ul class="picks">${s.picks.map(([n, p, d]) => `<li><div>${esc(n)}${d ? `<span>${esc(d)}</span>` : ''}</div><div class="pr num">${yen(p)}</div></li>`).join('')}</ul>
+        ${infoList([['営業', esc(s.hours)], ['支払い', esc(s.pay)], ['住所', esc(s.address)], ['電話', `<a href="${tel(s.tel)}">${s.tel}</a>`]].concat(s.takeout ? [['持ち帰り', esc(s.takeout)]] : []))}<div class="btns">${ext(s.url, 'お店の情報')}</div>`;
+    }
+    if (I.k === 'hotel') {
+      const H = T.hotel;
+      return `${infoList([['住所', esc(H.address)], ['電話', `<a href="${tel(H.tel)}">${H.tel}</a>`], ['チェックイン', H.checkin], ['チェックアウト', H.checkout], ['行き方', H.access], ['朝ごはん', `${esc(H.breakfast.place)}・${esc(H.breakfast.time)}`], ['大浴場', `${esc(H.bath.place)}・${H.bath.time.join('／')}`]])}
+        <p class="note">チェックインQRは「やど・くるま」のページにあります。</p><div class="btns">${ext(H.url, 'ホテルの公式サイト')}</div>`;
+    }
+    if (I.k === 'car') {
+      const C = T.car;
+      return `${infoList([['お店', esc(C.shop)], ['受け取り', C.outLabel], ['返却', `${C.backLabel}（予定は${C.plannedBack}）`], ['住所', esc(C.address)], ['電話', `<a href="${tel(C.tel)}">${C.tel}</a>`], ['行き方', C.access]])}<p class="note">予約番号は、予約メールをご確認ください。</p>`;
+    }
+    if (I.k === 'park') {
+      const Pk = T.parking;
+      return `${latestMini('#/sos/parking')}<p class="memo">${esc(Pk.rule)}</p>${Pk.list.map(p => `<div class="om-park"><p><b>${p.no} ${esc(p.name)}</b><small>${esc(p.spaces)}・${esc(p.open)}</small></p><p class="small">${esc(p.fee)}</p><p class="small muted">${esc(p.note)}</p></div>`).join('')}`;
+    }
+    return '';
+  }
+  function omIntro(x) { const h = x && x.intro && omIntroHtml(x.intro); if (h) sheet(esc(x.name), `<div class="om-intro">${h}</div>`); }
+  const omListHtml = day => {
+    const v = omVisible();
+    return v.length ? `<ul class="om-list">${v.map(x => `<li>${omEntry(x, day, { locate: true })}</li>`).join('')}</ul>` : '<p class="empty">表示するものがありません。上のボタンで、日にちや種類を選んでください。</p>';
+  };
+  function viewOuting() {
+    const day = omDay(), cats = omCats();
+    return `<div class="wrap">${topbar()}${phead('Outing map', 'おでかけマップ', '新大阪に着いてから、最終日に新大阪を出るまでに訪れる場所を、1枚の地図にまとめました。ピンを押すと、時刻と道順が出ます。')}
+      <div class="om-ctl">
+        <div class="segs om-days" role="group" aria-label="日にち">${[['all', '全日程'], ...T.days.map(d => [String(d.n), d.label])].map(([k, l]) => `<button type="button" data-omday="${k}" aria-pressed="${day === k}" class="${day === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+        <div class="om-cats" role="group" aria-label="地図に出すもの">${OM_CAT.map(([k, l, c]) => `<button type="button" class="om-cat" data-omcat="${k}" aria-pressed="${cats.includes(k)}" style="--c:${c}"><i aria-hidden="true"></i>${l}</button>`).join('')}</div>
+      </div>
+      <div class="dm om" id="om"><div class="dm-map" id="om-map" role="region" aria-label="おでかけマップ"></div>
+        <button type="button" class="om-me" data-omme aria-label="現在地を表示">${ic('here')}<span>現在地</span></button>
+        <div class="om-card" id="om-card" hidden></div></div>
+      <p class="om-off" id="om-off" hidden></p>
+      <section class="sec">${secH('一覧', 'List')}<p class="sec-lead">地図と同じ絞り込みで並べています。「地図なし」は、位置を確かめられなかったので、地図には出していない場所です。</p><div id="om-list">${omListHtml(day)}</div></section>
+      <p class="note">現在地は、この端末の中で地図に出すだけで、どこにも送りません。地図の下地は、電波がないときは一度表示した所だけ出ます。地図：地理院タイル（国土地理院）。ピンの位置：しおりのデータと、地理院地図の注記から。</p>
+      <p class="note">「トイレ・休憩」は、行程で使う駅のトイレのうち、JR西日本・Osaka Metro の公式の駅の案内で確かめられたものだけを載せています（2026年10月2日に確認）。各カードに出典を添えています。公園の中のトイレは、公式の地図を確かめられなかったため、載せていません。</p></div>`;
+  }
+  let omMap = null, omCleanup = null;
+  async function mountOutingMap() {
+    const root = $('#om'), box = $('#om-map'); if (!box) return;
+    const card = $('#om-card'), off = $('#om-off'), list = $('#om-list');
+    let ml = null, map = null, markers = [], me = null, sel = null, failed = false, dead = false;
+    const byId = id => omItems().find(x => x.id === id);
+    const showMode = () => {
+      const offline = failed || !navigator.onLine;
+      root.hidden = offline; off.hidden = !offline;
+      off.textContent = failed ? '地図を表示できません。下の一覧をご覧ください（日にち・種類の切り替えも効きます）。' : '電波がないため、地図の代わりに下の一覧を出しています（日にち・種類の切り替えも効きます）。';
+      if (!offline && !map) init();
+    };
+    const closeCard = () => { card.hidden = true; card.innerHTML = ''; if (sel) sel.classList.remove('sel'); sel = null; };
+    const openCard = (el, xs) => {
+      if (sel) sel.classList.remove('sel'); sel = el; el && el.classList.add('sel');
+      const day = omDay();
+      card.innerHTML = `<button type="button" class="om-x" aria-label="閉じる">✕</button>${xs.map(x => omEntry(x, day)).join('')}`;
+      card.hidden = false; card.scrollTop = 0;
+    };
+    const draw = fit => {
+      if (!map) return;
+      closeCard(); markers.forEach(m => m.remove()); markers = [];
+      const groups = new Map();
+      omVisible().filter(x => x.ll).forEach(x => { const k = x.ll.join(','); groups.has(k) ? groups.get(k).push(x) : groups.set(k, [x]); });
+      const order = OM_CAT.map(c => c[0]);
+      groups.forEach(xs => {
+        xs.sort((a, b) => order.indexOf(a.cat) - order.indexOf(b.cat));
+        const C = omCatOf(xs[0].cat), el = document.createElement('button');
+        el.type = 'button'; el.className = 'om-pin'; el.style.setProperty('--c', C[2]);
+        el.setAttribute('aria-label', xs.map(x => x.name).join('・'));
+        el.innerHTML = `${ic(C[3])}${xs.length > 1 ? `<b class="num">${xs.length}</b>` : ''}`;
+        const mk = new ml.Marker({ element: el, anchor: 'center' }).setLngLat([xs[0].ll[1], xs[0].ll[0]]).addTo(map);
+        mk.xs = xs; markers.push(mk);
+        /* 縮小していてピンが重なっているときは、押した所の近くのピンも、まとめてカードに出す */
+        el.addEventListener('click', e => {
+          e.stopPropagation();
+          const c = map.project(mk.getLngLat()), near = markers.map(m => [m, Math.hypot(map.project(m.getLngLat()).x - c.x, map.project(m.getLngLat()).y - c.y)]).filter(([, d]) => d < 28).sort((a, b) => a[1] - b[1]);
+          openCard(el, near.flatMap(([m]) => m.xs));
+        });
+      });
+      if (fit && groups.size) {
+        const pts = [...groups.values()].map(xs => xs[0].ll);
+        let w = 180, s = 90, e = -180, n = -90; pts.forEach(([la, lo]) => { w = Math.min(w, lo); e = Math.max(e, lo); s = Math.min(s, la); n = Math.max(n, la); });
+        map.fitBounds([[w, s], [e, n]], { padding: { top: 56, bottom: 40, left: 40, right: 56 }, maxZoom: 15, duration: 0 });
+      }
+    };
+    async function init() {
+      if (map || dead) return;
+      if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
+      try { ml = await import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href); } catch (e) { failed = true; return showMode(); }
+      if (dead || !box.isConnected || map) return;
+      const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+      const bg = getComputedStyle(document.documentElement).getPropertyValue('--paper-2').trim() || '#f4f2ec';
+      try {
+        map = new ml.Map({
+          container: box, center: [135.6, 34.65], zoom: 9, maxZoom: 17, minZoom: 7, attributionControl: false, dragRotate: false, pitchWithRotate: false, touchPitch: false, fadeDuration: 0,
+          cooperativeGestures: true, pixelRatio: Math.min(devicePixelRatio || 1, 2),
+          locale: { 'CooperativeGesturesHandler.WindowsHelpText': 'Ctrl キーを押しながらスクロールすると拡大・縮小できます', 'CooperativeGesturesHandler.MacHelpText': '⌘ キーを押しながらスクロールすると拡大・縮小できます', 'CooperativeGesturesHandler.MobileHelpText': '地図は2本指で動かせます' },
+          style: { version: 8, sources: {
+            pale: { type: 'raster', tiles: ['https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png'], tileSize: 256, minzoom: 2, maxzoom: 18, attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>' }
+          }, layers: [
+            { id: 'bg', type: 'background', paint: { 'background-color': bg } },
+            { id: 'pale', type: 'raster', source: 'pale', paint: dark ? { 'raster-brightness-max': 0.42, 'raster-saturation': -0.4 } : { 'raster-saturation': -0.2 } }
+          ] }
+        });
+      } catch (e) { map = null; failed = true; return showMode(); }
+      omMap = map;
+      map.addControl(new ml.AttributionControl({ compact: false }), 'bottom-left');
+      map.addControl(new ml.NavigationControl({ showCompass: false }), 'top-right');
+      map.on('click', closeCard);
+      map.on('error', () => { /* 下地のタイルが取れないときも、ピンはそのまま */ });
+      draw(true);
+    }
+    const locate = () => {
+      if (!navigator.geolocation) return toast('この端末では、現在地を使えません');
+      toast('現在地を調べています…', 2500);
+      navigator.geolocation.getCurrentPosition(p => {
+        if (dead || !map) return;
+        const ll = [p.coords.longitude, p.coords.latitude];
+        if (!me) { const el = document.createElement('div'); el.className = 'om-me-pt'; el.setAttribute('aria-hidden', 'true'); me = new ml.Marker({ element: el }).setLngLat(ll).addTo(map); } else me.setLngLat(ll);
+        map.easeTo({ center: ll, zoom: Math.max(map.getZoom(), 14), duration: 600 });
+        $$('.toast').forEach(x => x.remove());
+      }, () => toast('現在地を取得できませんでした。位置情報の設定をご確認ください', 3000), { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
+    };
+    const refresh = fit => {
+      const day = omDay(), cats = omCats();
+      $$('[data-omday]').forEach(b => { const on = b.dataset.omday === day; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+      $$('[data-omcat]').forEach(b => b.setAttribute('aria-pressed', cats.includes(b.dataset.omcat)));
+      list.innerHTML = omListHtml(day); applyRuby(list);
+      draw(fit);
+    };
+    const onClick = e => {
+      const t = e.target.closest('[data-omday],[data-omcat],[data-omme],[data-omintro],[data-omlocate],.om-x'); if (!t) return;
+      if (t.dataset.omday) { session.set('omDay', t.dataset.omday); refresh(true); }
+      else if (t.dataset.omcat) { const c = omCats(), k = t.dataset.omcat, i = c.indexOf(k); i < 0 ? c.push(k) : c.splice(i, 1); session.set('omCats', JSON.stringify(c)); refresh(i < 0); }
+      else if ('omme' in t.dataset) locate();
+      else if (t.dataset.omintro) omIntro(byId(t.dataset.omintro));
+      else if (t.dataset.omlocate) {
+        const x = byId(t.dataset.omlocate); if (!x || !map) return;
+        root.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        map.easeTo({ center: [x.ll[1], x.ll[0]], zoom: Math.max(map.getZoom(), 15), duration: 600 });
+        const m = markers.find(mk => mk.xs.includes(x));
+        m && openCard(m.getElement(), [x, ...m.xs.filter(y => y !== x)]);
+      } else if (t.classList.contains('om-x')) closeCard();
+    };
+    app.addEventListener('click', onClick);
+    addEventListener('online', showMode); addEventListener('offline', showMode);
+    omCleanup = () => {
+      dead = true; app.removeEventListener('click', onClick); removeEventListener('online', showMode); removeEventListener('offline', showMode);
+      if (map) { try { map.remove(); } catch { /* noop */ } } map = omMap = null;
+    };
+    showMode();
   }
 
   /* ========== 旅程 ========== */
@@ -2080,7 +2307,7 @@
     window.__restoreScrollAgain = go;     // 天気など、あとから高さが変わる所が読み込み終わったとき
   }
   /* しおりの中で奥のページ（下のタブのページではないところ）では、左上に「‹ 戻る」を出す */
-  const isDeep = (route, sub) => !(route === 'home' || route === 'trip' || route === 'map' || (route === 'ride' && !sub));
+  const isDeep = (route, sub) => !(route === 'home' || route === 'trip' || (route === 'map' && sub !== 'outing') || (route === 'ride' && !sub));
   function backTarget(route, sub) { return navHref(tabOf(route, sub)) || '#/'; }
   function goBack(route, sub) {
     const st = history.state;
@@ -2102,9 +2329,10 @@
     window.LiveMap && window.LiveMap.unmount();
     const views = {
       home: viewHome, trip: () => viewTrip(+parts[1] || todayN()), ride: () => viewRide(parts[1], parts[2], parts[3]), food: () => viewFood(parts[1]),
-      spot: () => viewSpots(parts[1]), stay: viewStay, sos: viewSos, money: viewMoney, bag: viewBag, memo: viewMemo, map: viewMap, help: () => viewHelp(parts[1]), tips: viewTips, trivia: () => viewTrivia(parts[1])
+      spot: () => viewSpots(parts[1]), stay: viewStay, sos: viewSos, money: viewMoney, bag: viewBag, memo: viewMemo, map: () => (parts[1] === 'outing' ? viewOuting() : viewMap()), help: () => viewHelp(parts[1]), tips: viewTips, trivia: () => viewTrivia(parts[1])
     };
     if (dmMap) { try { dmMap.remove(); } catch { /* noop */ } dmMap = null; }
+    if (omCleanup) { omCleanup(); omCleanup = null; }
     app.innerHTML = (views[route] || viewHome)();
     applyRuby(app);
     if (views[route] && isDeep(route, parts[1])) { const tb = $('.topbar', app); if (tb) { const b = document.createElement('button'); b.type = 'button'; b.className = 'tback'; b.dataset.back = route + '/' + (parts[1] || ''); b.textContent = '‹ 戻る'; tb.prepend(b); } }
@@ -2112,9 +2340,10 @@
     drawNav(views[route] ? route : 'home', parts[1]);
     simBar();
     document.title = { home: '旅のしおり｜奈良・大阪 2026', map: 'まっぷ｜旅のしおり', trip: '旅程｜旅のしおり', ride: 'のりもの｜旅のしおり', food: 'ごはん｜旅のしおり', spot: 'おでかけ｜旅のしおり', stay: 'やど・くるま｜旅のしおり', sos: 'もしも｜旅のしおり', money: '予算｜旅のしおり', help: '使い方｜旅のしおり', tips: '旅のワンポイント｜旅のしおり', trivia: 'トリビア｜旅のしおり', bag: '持ち物｜旅のしおり', memo: '思い出メモ｜旅のしおり' }[route] || '旅のしおり｜奈良・大阪 2026';
+    if (route === 'map' && parts[1] === 'outing') document.title = 'おでかけマップ｜旅のしおり';
     CoverTrain.mount(route === 'home' || !views[route] ? $('.cover:not(.slim)') : null);
     if (route === 'home') loadWeather($('#weather'));
-    if (route === 'map') mountDriveMap();
+    if (route === 'map') parts[1] === 'outing' ? mountOutingMap() : mountDriveMap();
     if (route === 'help') drawMarks();
     if (route === 'ride' && parts[1] === 'live') {
       requestAnimationFrame(updateLive);
@@ -2274,6 +2503,7 @@
     add('割り勘メモ', '予算', '立て替え 精算 割り勘', '#/money', '#split');
     T.stamps.forEach(st => add(`スタンプ：${st.name}`, `スタンプ帳・${st.day}日目`, '', '#/spot/stamps', `[data-stamp="${st.id}"]`));
     (T.officialMaps || []).forEach(m => add(m.name, `公式の案内図・${m.by}`, m.when, '#/map/official', '#official', { k: '地図 案内図 構内図' }));
+    add('おでかけマップ', 'まっぷ', '地図 ピン 現在地 交通 観光 グルメ 宿 トイレ 休憩 多機能トイレ 日にち 一覧 道順 Googleマップ', '#/map/outing', null, { k: 'マップ 地図' });
     add('旅先のお天気', 'きょう', '天気 予報 雨 気温', '#/', '#weather');
     if (T.tips) {
       add('例年の気温', '旅のワンポイント', '気温 平年値 気象庁 大阪 奈良 福岡 大村 寒い 暑い', '#/tips', '#tp-temp');

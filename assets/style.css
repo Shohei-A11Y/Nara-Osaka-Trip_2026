@@ -1332,6 +1332,55 @@ ruby { ruby-align: center; }
 .dm-legs p { font-size: calc(12.5px * var(--fs)); color: var(--sumi-2); line-height: 1.65; margin-top: 2px; }
 .dm-legs .acts { margin-top: 2px; }
 .act.ext-s.dm-go { margin-left: 0; padding-left: 0; font-size: calc(13px * var(--fs)); font-weight: 700; color: var(--ai); }
+
+/* おでかけマップ（まっぷ → おでかけマップ） */
+.map-om { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; margin-top: 10px; padding: 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--card); text-decoration: none; }
+.map-om > .ic { width: 22px; height: 22px; color: var(--shu); }
+.map-om b { display: block; font-family: var(--f-min); font-size: calc(15px * var(--fs)); line-height: 1.45; }
+.map-om small { display: block; font-size: calc(12px * var(--fs)); color: var(--sumi-2); line-height: 1.5; margin-top: 2px; }
+.map-om > span:last-child { color: var(--sumi-3); }
+.om-ctl { margin-top: 4px; }
+.om-days { margin: 0 0 10px; }
+.om-days button { padding: 9px 0; font-size: calc(12.5px * var(--fs)); }
+.om-cats { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.om-cat { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--rule); font-size: calc(13px * var(--fs)); font-weight: 700; color: var(--sumi-3); background: var(--paper); }
+.om-cat i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--c); background: transparent; }
+.om-cat[aria-pressed="true"] { color: var(--sumi); border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, var(--paper)); }
+.om-cat[aria-pressed="true"] i { background: var(--c); }
+.om.dm { height: min(64svh, 480px); }
+.om[hidden] { display: none; }
+.om-pin { position: relative; width: 30px; height: 30px; border-radius: 50%; background: var(--c); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .35); display: grid; place-items: center; color: #fff; cursor: pointer; padding: 0; }
+.om-pin .ic { width: 16px; height: 16px; stroke-width: 2; }
+.om-pin b { position: absolute; top: -7px; right: -8px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--sumi); color: var(--paper); font-size: 11px; line-height: 18px; text-align: center; }
+.om-pin.sel { transform: scale(1.22); z-index: 2; box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 35%, transparent), 0 2px 6px rgba(0, 0, 0, .4); }
+.om-me { position: absolute; top: 10px; left: 10px; z-index: 3; display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 12px 0 8px; border: 1px solid var(--rule); border-radius: 999px; background: var(--paper); font-size: calc(12.5px * var(--fs)); font-weight: 700; box-shadow: var(--shade); }
+.om-me .ic { width: 18px; height: 18px; color: var(--ai); }
+.om-me-pt { width: 16px; height: 16px; border-radius: 50%; background: #2f7de1; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(47, 125, 225, .22); pointer-events: none; }
+.om-card { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 4; max-height: 62%; overflow-y: auto; padding: 4px 14px 10px; border: 1px solid var(--rule); border-radius: 12px; background: var(--card); box-shadow: 0 6px 24px -6px rgba(0, 0, 0, .35); }
+.om-card[hidden] { display: none; }
+.om-x { position: sticky; top: 0; float: right; width: 36px; height: 36px; margin: 2px -8px 0 0; font-size: 16px; color: var(--sumi-2); background: var(--card); border-radius: 50%; }
+.om-card .om-e + .om-e { border-top: 1px solid var(--rule); }
+.om-e { padding: 10px 0 6px; }
+.om-k { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: calc(11.5px * var(--fs)); color: var(--sumi-2); font-weight: 700; }
+.om-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex: none; }
+.om-nomap { margin-left: 4px; padding: 0 6px; border: 1px solid var(--rule); border-radius: 4px; font-weight: 500; color: var(--sumi-3); }
+.om-n { margin-top: 2px; font-family: var(--f-min); font-weight: 700; font-size: calc(15.5px * var(--fs)); line-height: 1.45; }
+.om-t { margin-top: 2px; font-size: calc(12.5px * var(--fs)); color: var(--sumi-2); line-height: 1.6; }
+.om-r { margin-top: 4px; font-size: calc(12.5px * var(--fs)); line-height: 1.65; }
+.om-src { margin-top: 2px; font-size: calc(11.5px * var(--fs)); color: var(--sumi-2); }
+.om-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.om-acts .btn { min-height: 36px; padding: 4px 12px; font-size: calc(13px * var(--fs)); }
+.om-acts .om-go { color: var(--ai); font-weight: 700; }
+.om-off { margin: 4px 0 0; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--paper-2); font-size: calc(13.5px * var(--fs)); color: var(--sumi-2); line-height: 1.7; }
+.om-off[hidden] { display: none; }
+.om-off:not([hidden]) ~ .sec [data-omlocate] { display: none; }
+.om-list { list-style: none; border-top: 1px solid var(--rule); }
+.om-list > li { border-bottom: 1px solid var(--rule); }
+.om-intro .sub { margin-top: 16px; }
+.om-park { padding: 8px 0; border-top: 1px solid var(--rule); }
+.om-park b { margin-right: 8px; }
+.om-park small { font-size: calc(12px * var(--fs)); color: var(--sumi-2); }
+.om .maplibregl-ctrl-attrib { font-size: calc(10px * var(--fs)); }
 /* 公式の案内図 */
 .omaps { list-style: none; border-top: 1px solid var(--rule); }
 .omaps a { display: grid; gap: 0; min-height: 52px; padding: 8px 0; border-bottom: 1px solid var(--rule); text-decoration: none; }
