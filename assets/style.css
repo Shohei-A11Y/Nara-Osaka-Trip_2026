@@ -724,6 +724,9 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 
 /* 右上のボタン群（押しやすい大きさで縦に） */
 .lm-tools { position: absolute; top: 10px; right: 10px; z-index: 4; display: flex; flex-direction: column; gap: 6px; }
+.lm-tl { display: none; flex-direction: column; gap: 6px; }
+.lm-tools.open .lm-tl { display: flex; }
+.lm-short .lm-tl { gap: 4px; }
 .lm-tool { width: 46px; height: 46px; flex: none; display: grid; place-items: center; align-content: center; gap: 1px; background: var(--paper); color: var(--sumi); border: 1px solid var(--rule); border-radius: 10px; box-shadow: 0 2px 6px rgba(28, 24, 20, .18); text-decoration: none; }
 .lm-tool svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .lm-tool .lm-needle { width: 26px; height: 26px; stroke: none; transition: transform .25s; }

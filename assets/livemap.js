@@ -12,7 +12,7 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const MIN = 6e4;
   const MAPLIBRE = 'assets/vendor/maplibre-gl/maplibre-gl.mjs';
-  const LINE_URL = 'assets/line-sanyo.json?v=15';
+  const LINE_URL = 'assets/line-sanyo.json?v=16';
   const GPS_MAX_OFF = 0.5, GPS_MAX_ACC = 1000, GPS_MAX_AGE = 30e3, V_MAX = 330;
 
   /* ========== 線路の形（km ⇔ 緯度経度） ========== */
@@ -342,6 +342,21 @@
     } catch { /* 通知を出せない端末は、画面のお知らせだけ */ }
   }
 
+  /* 右上の操作ボタン群は、開閉ボタン1つにまとめる（初めは閉じる。開閉はこの端末に覚える）。
+     閉じるときは、地図の種類のメニューも閉じる。大きさが変わるので、名前の置き場所（placeLabels）も計算し直す */
+  function setTools(open, save) {
+    const c = cur; if (!c) return;
+    const box = $('.lm-tools', c.root), b = $('[data-lm="tools"]', c.root); if (!box || !b) return;
+    box.classList.toggle('open', open);
+    b.setAttribute('aria-expanded', open);
+    b.setAttribute('aria-label', open ? '地図の操作ボタンを閉じる' : '地図の操作ボタンを開く');
+    b.innerHTML = `${open ? TOOLS_X : TOOLS_MENU}<small>${open ? 'とじる' : '操作'}</small>`;
+    if (!open) toggleMenu(false);
+    if (save) { ls.set('lm-tools', open ? '1' : null); layoutLabels(); }
+  }
+  const TOOLS_MENU = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M4.5 12h15M4.5 17h15"/></svg>';
+  const TOOLS_X = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+
   function mount(key, helpers) {
     unmount();
     const root = $('#lm'); if (!root) return;
@@ -357,6 +372,7 @@
       eco: ls.get('lm-eco') === '1', docVisible: document.visibilityState !== 'hidden', mapVisible: true, pins: [], camAt: 0, nearCur: null, nearSeen: new Set()
     };
     if (c.eco) { c.pitch = 0; c.wakeWant = false; if (c.base === 'photo') c.base = 'pale'; }
+    setTools(ls.get('lm-tools') === '1', false);
 
     /* --- GPS（本物はボタンを押したときだけ。画面を離れた・地図が画面外のあいだは止める） --- */
     const active = () => c.docVisible && (c.full || c.mapVisible);
@@ -410,6 +426,7 @@
       if (k === 'settings') openSettings();
       if (k === 'endop') setActive(false);
       if (k === 'compass') compass();
+      if (k === 'tools') setTools(b.getAttribute('aria-expanded') !== 'true', true);
       if (k === 'base') toggleMenu();
       if (k === 'legend') { const open = b.getAttribute('aria-expanded') !== 'true'; b.setAttribute('aria-expanded', open); const u = b.nextElementSibling; u && (u.hidden = !open); ls.set('lm-legend', open ? '1' : null); }
       if (k === 'help') helpChoice();
@@ -1394,9 +1411,8 @@
       { el: () => pinTarget() || $('#lm-map', root), title: '見どころのピン', text: '名前を押すと、紹介が下から開きます。ピンの色と記号は種類（城・寺社・自然・川・街）を表します。', before: toMap },
       { el: '#spots', title: '見どころの紹介と一覧', text: '紹介には、ところ・ひとこと・くわしい説明が載っています。地図の下へスクロールすると「沿線の見どころ一覧」を通る順に見られます。', before: async () => { const h = $('#spots'); if (h) { h.scrollIntoView({ block: 'start' }); await sleep(150); } }, after: toMap },
       { el: '#lm-map', title: c.full ? '地図の操作' : '押して地図を操作', text: c.full ? '1本指で地図を動かし、2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。動かすと列車を追いかけるのを止めます。「列車へ」で戻ります。' : 'ふだんは1本指でページをスクロールします。地図を1回押すと枠が朱色になり、1本指で動かす・2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。「操作を終える」を押すか、地図の外を押すと戻ります。' },
-      { el: () => $('[data-lm="compass"]', root), title: '方位磁針', text: '押すと北が上に、もう一度押すと進行方向が上になります。赤い側が北です。' },
-      { el: () => [$('[data-lm="base"]', root), $('[data-lm="full"]', root)].filter(Boolean), title: '地図の種類・全画面', text: '地図の種類（標準・淡色・航空写真・OpenStreetMap）を選べます。全画面では地図だけを大きく見られます。' },
-      { el: () => [$('.lm-sum', root), $('[data-lm="settings"]', root)].filter(Boolean), title: 'お知らせと画面の設定', text: `${c.full ? '⚙' : 'この1行か ⚙'}を押すと設定が開きます。お知らせをONにすると、降りる駅の5分前と1分前にバイブと画面でお知らせします。画面を自動で消さない・省電力もここで切り替えます。`, after: toMap }
+      { el: () => $('[data-lm="tools"]', root), title: '地図の操作ボタン', text: '押すと開きます（もう一度押すと閉じます）。開くと、方位磁針（押すと北が上に、もう一度押すと進行方向が上。赤い側が北）・立体・地図の種類（標準・淡色・航空写真・OpenStreetMap）・列車へ・全画面・設定・使い方のボタンが並びます。' },
+      { el: () => c.full ? $('[data-lm="tools"]', root) : $('.lm-sum', root), title: 'お知らせと画面の設定', text: `${c.full ? '「操作」を押して開き、⚙' : 'この1行か、「操作」を開いた中の ⚙'}を押すと設定が開きます。お知らせをONにすると、降りる駅の5分前と1分前にバイブと画面でお知らせします。画面を自動で消さない・省電力もここで切り替えます。`, after: toMap }
     ], { force });
   }
 

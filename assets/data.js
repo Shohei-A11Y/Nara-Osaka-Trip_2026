@@ -306,7 +306,7 @@ window.TRIP = {
         { t: 'move', min: 10, mode: 'metro', line: 'Osaka Metro 御堂筋線 なかもず行', detail: '1番ホーム・10両目／240円' },
         { t: 'stop', arr: '15:51', name: '淀屋橋', type: 'station', roma: 'Yodoyabashi', minor: 1, note: '最寄りの出口は7番口' },
         { t: 'move', min: 11, mode: 'walk', line: '徒歩', dist: '528m' },
-        { t: 'stop', arr: '16:02', dep: '16:30', name: '大阪堂島浜タワー WowUs', type: 'spot', note: '16階の無料展望テラス', to: '#/spot/wowus' },
+        { t: 'stop', arr: '16:02', dep: '16:30', name: '大阪堂島浜タワー WowUs', type: 'spot', note: '16階の無料展望テラス。※貸切や臨時休業の日があり、貸切の時間はテラスに入れません。当日、公式のお知らせを確認してください', to: '#/spot/wowus' },
         { t: 'move', min: 5, mode: 'walk', line: '徒歩', dist: '410m' },
         { t: 'stop', arr: '16:35', dep: '16:50', name: '中之島エリアをおさんぽ', type: 'spot', optional: 1, note: '日本銀行大阪支店など。時間と体力に余裕があれば' },
         { t: 'move', min: 9, mode: 'walk', line: '徒歩', dist: '446m' },
@@ -417,6 +417,7 @@ window.TRIP = {
     { id: 'wowus', day: 3, when: '10/19（月）16:02〜16:30', name: '大阪堂島浜タワー WowUs', area: '大阪・中之島', kana: 'ワオアス',
       lead: '16階から大阪の街並みを眺められる、無料の展望スポット。見学のあと、時間と体力に余裕があれば中之島エリアを15分ほどおさんぽ。',
       info: [['住所', '大阪市北区堂島浜1丁目1-27 大阪堂島浜タワー16階'], ['営業', '屋内 9:00〜21:00、ウッドデッキテラス 8:00〜21:00'], ['休み', '不定休。貸切・臨時休業の有無は当日確認'], ['入場', '無料'], ['行き方', '淀屋橋駅7番出口から徒歩11分（528m）']],
+      warn: '※貸切や臨時休業の日があり、貸切の時間はテラスに入れません。当日、下の「公式の情報」でお知らせを確認してください。',
       url: 'https://www.wow-us.jp/', map: '大阪堂島浜タワー' }
   ],
 
@@ -488,7 +489,7 @@ window.TRIP = {
     rule: '出発前に①の空き状況を確認。満車なら②へ直行。17時近くは③を避けて、②か④を選びます。',
     list: [
       { no: '①', name: 'タイムズ奈良公園南', spaces: '9台', open: '24時間', fee: '日曜 30分200円、当日最大1,000円（24時まで・繰り返し）', note: '台数が少ないので、出発前に空きを確認。高畑町交差点のTimesの看板と、左折で入る入口が目印。奈良市高畑町1204', nav: 'https://maps.app.goo.gl/GQAReJyxqbexKjgX8', live: 'https://times-info.net/P29-nara/C201/park-detail-BUK0050592/', first: 1 },
-      { no: '②', name: '奈良登大路自動車駐車場', spaces: '275台', open: '6:00〜22:00', fee: '休日 入庫1,000円、以後60分500円、当日最大2,000円', note: '南大門まで約15分。台数が多く、いちばん頼れる予備。', nav: 'https://www.google.com/maps/dir/?api=1&destination=%E5%A5%88%E8%89%AF%E7%99%BB%E5%A4%A7%E8%B7%AF%E8%87%AA%E5%8B%95%E8%BB%8A%E9%A7%90%E8%BB%8A%E5%A0%B4&travelmode=driving' },
+      { no: '②', name: '奈良登大路自動車駐車場', spaces: '275台', open: '6:00〜22:00', fee: '10/17・18は特定日で、当日最大3,000円（2026/10/1 改定）', note: '南大門まで約15分。台数が多く、いちばん頼れる予備。県営3駐車場の料金は10/1に変わりました。平日の「入庫後1時間無料」は、土日の旅行日には使えません。細かい料金は、下の公式ページで確認してください。', src: ['奈良県「県営自動車駐車場の料金改定について」', 'https://www.pref.nara.lg.jp/n111/p060008.html'], nav: 'https://www.google.com/maps/dir/?api=1&destination=%E5%A5%88%E8%89%AF%E7%99%BB%E5%A4%A7%E8%B7%AF%E8%87%AA%E5%8B%95%E8%BB%8A%E9%A7%90%E8%BB%8A%E5%A0%B4&travelmode=driving' },
       { no: '③', name: '興福寺駐車場', spaces: '46台', open: '9:00〜17:00', fee: '乗用車1回2,000円', note: '西側から回りやすい。南大門まで約20分。17時に閉まるので帰りの時間に注意。', nav: 'https://www.google.com/maps/dir/?api=1&destination=%E8%88%88%E7%A6%8F%E5%AF%BA%E9%A7%90%E8%BB%8A%E5%A0%B4%20%E5%A5%88%E8%89%AF%E5%B8%82%E7%99%BB%E5%A4%A7%E8%B7%AF%E7%94%BA48&travelmode=driving' },
       { no: '④', name: 'タイムズならまち', spaces: '132台', open: '24時間', fee: '土日祝 20分220円（8:00〜20:00）、当日最大1,800円', note: '歩く距離は長め。一部の枠は予約できます。', nav: 'https://www.google.com/maps/dir/?api=1&destination=%E3%82%BF%E3%82%A4%E3%83%A0%E3%82%BA%E3%81%AA%E3%82%89%E3%81%BE%E3%81%A1%20%E5%A5%88%E8%89%AF%E5%B8%82%E9%AB%98%E7%95%91%E7%94%BA1112&travelmode=driving', live: 'https://times-info.net/P29-nara/C201/park-detail-BUK0031256/' }
     ]

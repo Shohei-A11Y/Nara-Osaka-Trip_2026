@@ -1052,7 +1052,7 @@
       <p class="sec-lead">PDFしおりの行程表と、環状線の略図の矢印のとおりに引いた、予定の道筋です。環状線は時計回りに一周します。</p>
       <div class="dm" id="dm"><div class="dm-map" id="dm-map" role="img" aria-label="10/18のドライブの予定の道筋"></div><p class="dm-err" hidden>地図を表示できません。下の道順とGoogleマップをご覧ください。</p></div>
       <ol class="dm-legs">${d.drives.map((v, k) => `<li data-drive="${v.id}"><span class="dm-n num">${k + 1}</span><div><b>${esc(v.label)}</b><small class="num">${esc(v.when)}</small><p>${esc(v.via)}</p>
-        <div class="acts">${actX(driveUrl(v), 'out', 'Googleマップで開く', `Googleマップ：${v.label}（経由地入り）`).replace('ext-s', 'ext-s dm-go')}</div></div></li>`).join('')}</ol>
+        <div class="acts">${actX(driveUrl(v), 'out', 'Googleマップで開く', `Googleマップ：${v.label}（経由地入り）`).replace('ext-s', 'ext-s dm-go')}</div>${v.id === 'eve' ? '<p class="small muted dm-warn">Googleマップでは一般道に寄ることがあります。道順はしおりの赤線が正しいです（ナビアプリでは高速優先で）。</p>' : ''}</div></li>`).join('')}</ol>
       <p class="note">Googleマップには、経由地を予定の順に入れて、予定の道筋に近づけています。経由地の間で別の道が出ることや、スマホのアプリでは経由地の数が限られることがあります（Google側の都合です）。運転中の案内はGoogleマップにお任せください。この地図は、予定の確認用です。</p>
       <p class="note">地図の下地は、電波がないときは一度表示した所だけ出ます。道筋の線は、電波がなくても出ます。地図：地理院タイル（国土地理院）。道筋：国土地理院の道路中心線から作成。</p></div>`;
   }
@@ -1062,7 +1062,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=15').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=16').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -1513,12 +1513,15 @@
     here: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/></svg>',
     full: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
     exit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>',
+    tools: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M4.5 12h15M4.5 17h15"/></svg>',
     gear: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M5.5 18.5l1.8-1.8M16.7 7.3l1.8-1.8"/><circle cx="12" cy="12" r="6.6"/></svg>'
   };
   const liveMapBlock = (key, full) => `<section class="lm${full ? ' lm-full' : ''}" id="lm" aria-label="いまどのへん？の地図">
       <div class="lm-mapwrap"><div class="lm-map" id="lm-map"></div>
         ${full ? `<a class="lm-back" href="#/ride/live/${key}" aria-label="いまどのへん？のページに戻る">‹ 戻る</a>` : ''}
         <div class="lm-tools" role="toolbar" aria-label="地図の操作">
+          <button type="button" class="lm-tool lm-tog" data-lm="tools" aria-expanded="false" aria-controls="lm-tl" aria-label="地図の操作ボタンを開く">${LMI.tools}<small>操作</small></button>
+          <div class="lm-tl" id="lm-tl">
           <button type="button" class="lm-tool" data-lm="compass">${LMI.compass}<small>進行方向</small></button>
           <button type="button" class="lm-tool" data-lm="view"><small>立体</small></button>
           <button type="button" class="lm-tool" data-lm="base" aria-haspopup="true" aria-expanded="false" aria-label="地図の種類">${LMI.base}<small>地図</small></button>
@@ -1526,6 +1529,7 @@
           <a class="lm-tool" data-lm="full" href="#/ride/live/${key}${full ? '' : '/full'}" aria-label="${full ? '全画面をやめる' : '全画面で見る'}">${full ? LMI.exit : LMI.full}<small>${full ? '戻す' : '全画面'}</small></a>
           <button type="button" class="lm-tool" data-lm="settings" aria-haspopup="dialog" aria-label="お知らせと画面の設定">${LMI.gear}<small>設定</small></button>
           <button type="button" class="lm-tool" data-lm="help" aria-label="使い方を見る"><b aria-hidden="true">？</b><small>使い方</small></button>
+          </div>
         </div>
         ${full ? '' : '<button type="button" class="lm-endop" data-lm="endop" hidden>操作を終える</button>'}
         <div class="lm-basemenu" hidden></div>
@@ -1702,7 +1706,7 @@
       <section class="sec" id="parking">${secH('奈良公園近くの駐車場　10/18', 'Parking')}
         <p class="memo" style="margin-bottom:6px">${esc(Pk.rule)}</p>
         ${Pk.list.map((p, k) => `<div class="park${p.first ? ' first' : ''}" data-sid="park-${k}"><div class="park-top"><span class="no">${p.no}</span><h3>${esc(p.name)}</h3><span class="small muted">${p.spaces}・${p.open}</span></div>
-          <p class="small" style="margin-top:4px"><b>${esc(p.fee)}</b></p><p class="small muted">${esc(p.note)}</p>
+          <p class="small" style="margin-top:4px"><b>${esc(p.fee)}</b></p><p class="small muted">${esc(p.note)}</p>${p.src ? `<p class="small muted">出典：<a class="ext" href="${p.src[1]}" target="_blank" rel="noopener">${esc(p.src[0])}</a></p>` : ''}
           <div class="btns">${ext(p.nav, 'ナビで行く', p.first ? 'btn fill' : 'btn quiet')}${p.live ? ext(p.live, '空き状況') : ''}</div></div>`).join('')}
         <p class="note">料金・営業時間は Times24・奈良県・興福寺の公式情報（2026年9月14日確認）。現地の表示を優先してください。</p>
       </section></div>`;
@@ -1973,7 +1977,9 @@
   const newsId = n => n.id || `${n.date} ${n.title}`;
   const newsAll = () => (Array.isArray(window.NEWS) ? window.NEWS : []).filter(n => n && n.date && n.title).slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   const newsRead = () => { const r = store.get('newsRead', []); return Array.isArray(r) ? r : []; };
-  const newsUnread = () => { const r = newsRead(); return newsAll().filter(n => !r.includes(newsId(n))).length; };
+  // 公開前のお知らせ（date <= NEWS_BASE）は、端末に関わらず最初から既読として扱う
+  const isRead = (n, r) => (window.NEWS_BASE && n.date <= window.NEWS_BASE) || r.includes(newsId(n));
+  const newsUnread = () => { const r = newsRead(); return newsAll().filter(n => !isRead(n, r)).length; };
   const BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>';
   function bellBtn() {
     const u = newsUnread();
@@ -1986,7 +1992,7 @@
       const box = $('#nw', el);
       const list = () => {
         const all = newsAll(), r = newsRead();
-        box.innerHTML = all.length ? `<ul class="nw-list">${all.map(n => `<li><button class="nw-row${r.includes(newsId(n)) ? '' : ' unread'}" data-nid="${esc(newsId(n))}"><span class="nw-d num">${fmtNewsDate(n.date)}</span><span class="nw-t">${esc(n.title)}</span>${r.includes(newsId(n)) ? '' : '<span class="nw-new">未読</span>'}<span class="go" aria-hidden="true">›</span></button></li>`).join('')}</ul>`
+        box.innerHTML = all.length ? `<ul class="nw-list">${all.map(n => `<li><button class="nw-row${isRead(n, r) ? '' : ' unread'}" data-nid="${esc(newsId(n))}"><span class="nw-d num">${fmtNewsDate(n.date)}</span><span class="nw-t">${esc(n.title)}</span>${r.includes(newsId(n)) ? '' : '<span class="nw-new">未読</span>'}<span class="go" aria-hidden="true">›</span></button></li>`).join('')}</ul>`
           : '<p class="nw-empty">お知らせはまだありません。<br><span class="small muted">しおりを直したときは、ここでお知らせします。</span></p>';
       };
       const detail = id => {
