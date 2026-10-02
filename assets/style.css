@@ -93,6 +93,10 @@ dl, dd { margin: 0; }
 .mark { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; font-family: var(--f-min); font-weight: 700; font-size: calc(15px * var(--fs)); letter-spacing: .1em; }
 .mark i { width: 26px; height: 26px; background: var(--shu); color: #fff; display: grid; place-items: center; font-style: normal; font-size: calc(14px * var(--fs)); border-radius: 3px; letter-spacing: 0; }
 .top-actions { display: flex; gap: 6px; }
+.tback { display: inline-flex; align-items: center; height: 34px; margin-right: auto; padding: 0 12px 0 8px; border: 1px solid var(--rule); border-radius: 999px; background: var(--paper); font-size: calc(12.5px * var(--fs)); font-weight: 700; color: var(--shu-ink); white-space: nowrap; }
+.topbar:has(.tback) { justify-content: flex-start; }
+.topbar:has(.tback) .top-actions { margin-left: auto; }
+.topbar .tback + .mark { display: none; }
 .tbtn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 999px; font-size: calc(12.5px * var(--fs)); font-weight: 500; background: var(--paper); white-space: nowrap; }
 .tbtn .ic { width: 15px; height: 15px; }
 
@@ -1426,3 +1430,44 @@ ruby { ruby-align: center; }
 .tv-a { margin-top: 5px; font-size: calc(14.5px * var(--fs)); line-height: 1.85; }
 .tv-src { margin-top: 6px; font-size: calc(12px * var(--fs)); color: var(--sumi-3); overflow-wrap: anywhere; }
 .tv-src a { color: var(--ai); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+
+/* ---------- ここに停めた・ここに集合（きょう） ---------- */
+.ht-card { margin-top: 12px; padding: 14px 16px 16px; border: 1px solid var(--rule); border-radius: 10px; background: var(--card); }
+.ht-card h3 { display: flex; align-items: center; gap: 8px; font-size: calc(15px * var(--fs)); font-weight: 700; margin-bottom: 6px; }
+.ht-card h3 .ic { color: var(--shu); }
+.ht-card .btns { margin-top: 10px; flex-wrap: wrap; }
+.ht-stat { font-size: calc(14px * var(--fs)); line-height: 1.6; }
+.ht-msg { margin-top: 8px; color: var(--sumi-2); line-height: 1.6; }
+.ht-msg:empty { display: none; }
+.ht-time { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: calc(13px * var(--fs)); font-weight: 700; }
+.ht-time input { min-height: 44px; padding: 0 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); font: inherit; font-size: calc(16px * var(--fs)); }
+.ht-out { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--rule); }
+.ht-text { font-size: calc(14px * var(--fs)); line-height: 1.7; word-break: break-all; user-select: all; -webkit-user-select: all; }
+.ht-ta { width: 100%; padding: 10px; border: 1px solid var(--rule); border-radius: 8px; font: inherit; font-size: calc(14px * var(--fs)); background: var(--paper); }
+
+/* ---------- 例年の気温・日の出日の入り（トップ） ---------- */
+.wn { font-size: calc(11px * var(--fs)); color: var(--sumi-3); line-height: 1.5; padding: 0 2px; }
+.sun-t { width: 100%; border-collapse: collapse; font-size: calc(14px * var(--fs)); }
+.sun-t th, .sun-t td { padding: 9px 6px; border-bottom: 1px solid var(--rule); text-align: center; font-weight: 500; }
+.sun-t thead th { font-size: calc(12px * var(--fs)); color: var(--sumi-2); border-bottom: 1px solid var(--sumi); }
+.sun-t tbody th { text-align: left; font-weight: 700; }
+.sun-t td { font-weight: 700; }
+.sun-box { margin-top: 26px; }
+.sub-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-family: var(--f-min); font-size: calc(15px * var(--fs)); font-weight: 700; margin-bottom: 8px; }
+.sub-h .eyebrow { font-size: calc(11px * var(--fs)); }
+
+/* ---------- 旅先の最新情報 ---------- */
+.lt-card { margin-top: 12px; padding: 14px 16px 14px; border: 1px solid var(--rule); border-left: 4px solid var(--shu); border-radius: 10px; background: var(--card); }
+.lt-card h3 { font-size: calc(15px * var(--fs)); font-weight: 700; line-height: 1.5; }
+.lt-h { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+.lt-d { font-size: calc(12px * var(--fs)); color: var(--sumi-2); font-weight: 700; }
+.lt-mark { font-size: calc(11px * var(--fs)); font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--shu-tint); color: var(--shu-ink); }
+.lt-new { font-size: calc(11px * var(--fs)); font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--shu); color: #fff; }
+.lt-t { margin-top: 6px; font-size: calc(13.5px * var(--fs)); line-height: 1.75; }
+.lt-src { margin-top: 6px; line-height: 1.6; }
+.lt-card .btns { margin-top: 8px; }
+.lt-mini { margin: 10px 0 12px; padding: 10px 12px; border-left: 3px solid var(--shu); background: var(--shu-tint); border-radius: 0 8px 8px 0; }
+.lt-mini .lt-h { margin-bottom: 2px; }
+.lt-lab { font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--shu-ink); letter-spacing: .06em; }
+.lt-mt { font-size: calc(13px * var(--fs)); line-height: 1.6; }
+.nav-dot { position: absolute; top: 9px; left: calc(50% + 7px); width: 9px; height: 9px; border-radius: 50%; background: var(--shu); border: 2px solid var(--paper); box-sizing: content-box; }
