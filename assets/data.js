@@ -455,19 +455,22 @@ window.TRIP = {
     ] }
   },
 
-  /* スタンプ */
+  /* スタンプ（旅の記録）。id はスポットの紹介ページの id と同じ（紹介ページのない所は、その場所の短い名前）。
+     spot：「行った」を出すページ（おでかけの id。'food' はごはんのページのお昼、'castles' は車窓の城）。shape：印の形。mark：印の真ん中の字。
+     押した記録は端末ごと（localStorage の stamps）に {id: 押した日時（ISO）} で持つ。後の「思い出モード」でも使う */
   stamps: [
-    { id: 'osakastation', name: '大阪駅', day: 1, mark: '梅' },
-    { id: 'relative', name: '親戚の家', day: 2, mark: '桜' },
-    { id: 'marukatsu', name: 'まるかつ', day: 2, mark: '膳' },
-    { id: 'deer', name: '鹿に会えた', day: 2, mark: '鹿' },
-    { id: 'daibutsu', name: '大仏さま', day: 2, mark: '仏' },
-    { id: 'loop', name: '環状線一周', day: 2, mark: '環' },
-    { id: 'dotonbori', name: '道頓堀', day: 3, mark: '道' },
-    { id: 'osakajo', name: '大阪城', day: 3, mark: '城' },
-    { id: 'wowus', name: 'WowUs', day: 3, mark: '空' },
-    { id: 'castle', name: '車窓の城', day: 4, mark: '白' }
+    { id: 'osakastation', name: '大阪駅', day: 1, mark: '梅', shape: 'rrect', spot: 'osakastation' },
+    { id: 'sakurai', name: '親戚の家', day: 2, mark: '桜', shape: 'circle', spot: 'sakurai' },
+    { id: 'marukatsu', name: 'まるかつ', day: 2, mark: '膳', shape: 'square', spot: 'food' },
+    { id: 'deer', name: '鹿に会えた', day: 2, mark: '鹿', shape: 'oct', spot: 'todaiji' },
+    { id: 'todaiji', name: '大仏さま', day: 2, mark: '仏', shape: 'lotus', spot: 'todaiji' },
+    { id: 'loop', name: '環状線一周', day: 2, mark: '環', shape: 'double', spot: 'loop' },
+    { id: 'dotonbori', name: '道頓堀', day: 3, mark: '道', shape: 'wave', spot: 'dotonbori' },
+    { id: 'osakajo', name: '大阪城', day: 3, mark: '城', shape: 'roof', spot: 'osakajo' },
+    { id: 'wowus', name: 'WowUs', day: 3, mark: '空', shape: 'tall', spot: 'wowus' },
+    { id: 'castle', name: '車窓の城', day: 4, mark: '白', shape: 'hex', spot: 'castles' }
   ],
+  stampOld: { relative: 'sakurai', daibutsu: 'todaiji' },   // 前の版の id → 今の id（押してあった記録を引き継ぐ）
 
   /* ---------------- もしも ---------------- */
   sos: {

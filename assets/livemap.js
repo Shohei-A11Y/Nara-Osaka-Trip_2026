@@ -12,7 +12,7 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const MIN = 6e4;
   const MAPLIBRE = 'assets/vendor/maplibre-gl/maplibre-gl.mjs';
-  const LINE_URL = 'assets/line-sanyo.json?v=22';
+  const LINE_URL = 'assets/line-sanyo.json?v=23';
   const GPS_MAX_OFF = 0.5, GPS_MAX_ACC = 1000, GPS_MAX_AGE = 30e3, V_MAX = 330;
 
   /* ========== 線路の形（km ⇔ 緯度経度） ========== */
@@ -269,6 +269,48 @@
     osm: { name: 'OpenStreetMap', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', max: 19, attr: OSM_ATTR }
   };
   const PITCH_3D = 55;
+  /* ---------- 3D地形（立体表示のときだけ） ----------
+     標高は地理院の標高タイル（dem_png）。地理院独自の形式（x = R×2^16 + G×2^8 + B、x < 2^23 なら x×0.01 m、x > 2^23 なら (x − 2^24)×0.01 m、
+     x = 2^23（128,0,0）は海などの無効値）なので、読み込むときに terrarium 形式（(R×256 + G + B/256) − 32768 m）へ直す。無効値は 0m。
+     取れないタイル（海で無い・圏外）は、0mの平らなタイルにする（地形が平らに戻るだけで、地図は止めない）。
+     誇張は1.5倍。平面表示・省電力では使わない（setTerrain(null)） */
+  const DEM = 'https://cyberjapandata.gsi.go.jp/xyz/dem_png/', TERRAIN_X = 1.5;
+  let demOn = false, demCv = null, demFlat = null;
+  async function demPng(img) {
+    if (!demCv) demCv = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(256, 256) : Object.assign(document.createElement('canvas'), { width: 256, height: 256 });
+    const g = demCv.getContext('2d', { willReadFrequently: true });
+    let px;
+    if (img) { g.clearRect(0, 0, 256, 256); g.drawImage(img, 0, 0, 256, 256); px = g.getImageData(0, 0, 256, 256); }
+    else px = g.createImageData(256, 256);
+    const d = px.data;
+    for (let i = 0; i < d.length; i += 4) {
+      let h = 0;
+      if (img) { const x = d[i] * 65536 + d[i + 1] * 256 + d[i + 2]; h = x === 8388608 ? 0 : (x > 8388608 ? x - 16777216 : x) * 0.01; }
+      const v = h + 32768, f = Math.floor(v);
+      d[i] = f >> 8; d[i + 1] = f & 255; d[i + 2] = Math.floor((v - f) * 256); d[i + 3] = 255;
+    }
+    g.putImageData(px, 0, 0);
+    const blob = demCv.convertToBlob ? await demCv.convertToBlob({ type: 'image/png' }) : await new Promise(r => demCv.toBlob(r, 'image/png'));
+    return blob.arrayBuffer();
+  }
+  async function demLoad(params, ac) {
+    const m = /^gsidem:\/\/(\d+)\/(\d+)\/(\d+)/.exec(params.url);
+    let img = null;
+    try {
+      const res = await fetch(`${DEM}${m[1]}/${m[2]}/${m[3]}.png`, { signal: ac && ac.signal });
+      if (res.ok) img = await createImageBitmap(await res.blob(), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+    } catch (e) { if (ac && ac.signal.aborted) throw e; }
+    if (!img) return { data: (demFlat = demFlat || await demPng(null)).slice(0) };
+    const data = await demPng(img); img.close && img.close();
+    return { data };
+  }
+  /* 立体表示（傾き5°以上）で、省電力でなければ地形を盛り上げる。それ以外は平ら */
+  function syncTerrain(c, to3d) {
+    const m = c && c.map; if (!m || !c.loaded || !m.getSource('dem')) return;
+    const want = !c.eco && (to3d ?? m.getPitch() >= 5), has = !!m.getTerrain();
+    if (want === has) return;
+    try { m.setTerrain(want ? { source: 'dem', exaggeration: TERRAIN_X } : null); } catch { /* 地形が使えなくても、平らなまま続ける */ }
+  }
 
   function spotCard(s) {
     const { esc, sheet, ext } = ui, S = cur && cur.S, go = S ? S.tr.dir === 'go' : true;
@@ -1013,6 +1055,7 @@
     await lineReady;
     if (cur !== c) return;
     c.ml = ml;
+    if (!demOn) { try { ml.addProtocol('gsidem', demLoad); demOn = true; } catch { /* 地形なしで続ける */ } }
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement);
     const col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -1046,7 +1089,8 @@
             line: { type: 'geojson', data: lineGeo || { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: geom.coords } }, attribution: OSM_ATTR },
             done: { type: 'geojson', data: emptyLine() },
             tun: { type: 'geojson', data: tunnels },
-            stn: { type: 'geojson', data: stations }
+            stn: { type: 'geojson', data: stations },
+            ...(demOn ? { dem: { type: 'raster-dem', tiles: ['gsidem://{z}/{x}/{y}'], tileSize: 256, minzoom: 1, maxzoom: 12, encoding: 'terrarium' } } : {})
           },
           layers: layers.concat([
             { id: 'line-case', type: 'line', source: 'line', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': dark ? '#1b1a18' : '#ffffff', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 4, 12, 8, 16, 12] } },
@@ -1120,11 +1164,12 @@
     /* 自分の列車（絵の選び方は trainFace） */
     const tel = document.createElement('div'); tel.className = 'lm-train';
     tel.setAttribute('role', 'img'); tel.setAttribute('aria-label', '自分の列車');
-    c.train = new ml.Marker({ element: tel, anchor: 'top-left', offset: [-TRAIN.w / 2, -TRAIN.oy], rotationAlignment: 'viewport', pitchAlignment: 'viewport' }).setLngLat(p).addTo(map);
+    c.train = new ml.Marker({ element: tel, anchor: 'top-left', offset: [-TRAIN.w / 2, -TRAIN.oy], rotationAlignment: 'viewport', pitchAlignment: 'viewport', opacityWhenCovered: 1 }).setLngLat(p).addTo(map);   // 山の陰でも薄くしない
     c.trainEl = tel; c.frame = -1;
     map.on('move', () => cur === c && c.disp != null && trainFace(c));
     c.disp = c.tgt = r.km; trainFace(c);
-    map.on('load', () => { if (cur === c) { c.loaded = true; c.camAt = 0; drawPins(c.last || r); mapTick(c.last || r, true); layoutLabels(); } });
+    map.on('pitchend', () => syncTerrain(c));
+    map.on('load', () => { if (cur === c) { c.loaded = true; syncTerrain(c); c.camAt = 0; drawPins(c.last || r); mapTick(c.last || r, true); layoutLabels(); } });
     drawCtrl(); drawPins(r); layoutLabels();
   }
   const emptyLine = () => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } });
@@ -1349,6 +1394,7 @@
       /* 自動のときは、立体・平面それぞれの標準に速さの分を足す。手動のときは今までどおり（立体は1段大きく） */
       const nz = c.zAuto && c.zMan == null ? baseZoom(v) + BAND_DZ[c.band || 'fast'] : v >= 5 && z < 10.8 ? z + 1 : v < 5 && z > 11 ? z - 1 : z;
       if (c.zMan != null) setManualZoom(nz);
+      if (v >= 5) syncTerrain(c, true);   // 立体へは、傾け始めから地形を出す（平面へは傾け終わってから消す）
       c.map.easeTo({ pitch: v, zoom: nz, duration: 700 });
     }
     drawTools();
@@ -1374,6 +1420,7 @@
       if (prev) { BASES[prev.base] && (c.base = prev.base, applyBase()); typeof prev.pitch === 'number' && setPitch(prev.pitch); ls.set('lm-base', c.base); }
     }
     try { c.map && c.map.setPixelRatio(Math.min(window.devicePixelRatio || 1, on ? 1 : 2)); } catch { /* noop */ }
+    syncTerrain(c);
     c.camAt = 0; drawCtrl();
   }
 

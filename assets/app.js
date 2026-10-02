@@ -98,6 +98,75 @@
   const art = (k, cls = '') => `<svg class="${cls}" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ART[k]}</svg>`;
   const SPOT_ART = { osakastation: 'station', sakurai: 'torii', todaiji: 'deer', loop: 'loop', dotonbori: 'river', osakajo: 'castle', wowus: 'tower' };
   const DAYC = n => `var(--day${n})`;
+
+  /* ========== 旅の記録スタンプ ==========
+     押した記録は {スタンプid: 押した日時（ISO）}。スポットの紹介ページの id と同じなので、後の「思い出モード」でもそのまま使える。
+     この端末だけに残す（localStorage）。おためし中は sessionStorage に分けて置き、本当の記録を汚さない。
+     前の版（id が違う・値が「10/18」）の記録は、読むときに今の形に直す */
+  const Stamps = (() => {
+    const fix = v => { const m = /^(\d{1,2})\/(\d{1,2})$/.exec(v || ''); return m ? `2026-${p0(m[1])}-${p0(m[2])}` : v; };
+    function p0(n) { return String(n).padStart(2, '0'); }
+    function get() {
+      let raw;
+      if (Clock.active()) { try { raw = JSON.parse(session.get('stamps-sim')) || {}; } catch { raw = {}; } }
+      else raw = store.get('stamps', {}) || {};
+      const out = {};
+      Object.entries(raw).forEach(([k, v]) => { if (v) out[(T.stampOld || {})[k] || k] = fix(String(v)); });
+      return out;
+    }
+    function set(v) { Clock.active() ? session.set('stamps-sim', JSON.stringify(v)) : store.set('stamps', v); }
+    /* 押す・取り消す。戻り値：押したら true */
+    function toggle(id) {
+      const v = get();
+      if (v[id]) delete v[id]; else v[id] = now().toISOString();
+      set(v); return !!v[id];
+    }
+    const count = (v = get()) => T.stamps.filter(s => v[s.id]).length;
+    /* 押した日時を短く（日付だけの古い記録は日付だけ） */
+    const when = iso => { const d = new Date(iso); if (isNaN(d)) return ''; const md = d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' }); return /T/.test(iso) ? `${md} ${fmtHM(d)}` : md; };
+    return { get, toggle, count, when };
+  })();
+  /* 印の形（64×64）。スタンプごとに形を変えて、字が読めなくても見分けられるようにする */
+  const STAMP_SHAPE = (() => {
+    const poly = (n, r, rot = 0) => Array.from({ length: n }, (_, i) => { const a = rot + i * 2 * Math.PI / n; return `${(32 + r * Math.sin(a)).toFixed(1)},${(32 - r * Math.cos(a)).toFixed(1)}`; }).join(' ');
+    /* 蓮の花びらのような、縁が波打つ丸 */
+    const lotus = (() => { const n = 12, r = 25.5, pts = Array.from({ length: n + 1 }, (_, i) => { const a = i * 2 * Math.PI / n; return [32 + r * Math.sin(a), 32 - r * Math.cos(a)]; }); const rr = (2 * r * Math.sin(Math.PI / n) / 2 + .6).toFixed(1); return `M${pts[0].map(x => x.toFixed(1)).join(' ')}` + pts.slice(1).map(p => `A${rr} ${rr} 0 0 1 ${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('') + 'Z'; })();
+    return {
+      circle: '<circle cx="32" cy="32" r="28"/><circle class="thin" cx="32" cy="32" r="24.6"/>',
+      double: '<circle cx="32" cy="32" r="29"/><circle cx="32" cy="32" r="25.2"/>',
+      square: '<rect x="5" y="5" width="54" height="54" rx="2.5"/><rect class="thin" x="8.6" y="8.6" width="46.8" height="46.8" rx="1"/>',
+      rrect: '<rect x="3" y="9" width="58" height="46" rx="11"/><path class="thin" d="M9 20h46M9 45h46"/>',
+      tall: '<rect x="12" y="2.5" width="40" height="59" rx="5"/><rect class="thin" x="15.4" y="5.9" width="33.2" height="52.2" rx="3"/>',
+      oct: `<polygon points="${poly(8, 29.5, Math.PI / 8)}"/><polygon class="thin" points="${poly(8, 26, Math.PI / 8)}"/>`,
+      hex: `<polygon points="${poly(6, 30, Math.PI / 6)}"/><polygon class="thin" points="${poly(6, 26.4, Math.PI / 6)}"/>`,
+      lotus: `<path d="${lotus}"/><circle class="thin" cx="32" cy="32" r="21"/>`,
+      wave: '<path d="M5 7h54v42c-4.5 0-6.75 4-13.5 4S36 49 32 49s-6.75 4-13.5 4S9.5 49 5 49z"/><path class="thin" d="M8.5 11h47"/>',
+      roof: '<path d="M6 59V30c8-1 14-6 18-12l8-12 8 12c4 6 10 11 18 12v29z"/><path class="thin" d="M10 33h44"/>'
+    };
+  })();
+  /* 字の位置：形ごとに少しずらす（城の屋根は上がせまいので下げる） */
+  const STAMP_DY = { roof: 5, rrect: 0, wave: -2 };
+  function stampSvg(s, at, cls = '') {
+    const dy = STAMP_DY[s.shape] || 0, rot = ((s.id.length * 7) % 17) - 10;
+    const date = at ? (d => isNaN(d) ? '' : d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' }).replace('/', '.'))(new Date(at)) : '';
+    return `<svg class="seal${at ? ' on' : ''}${cls ? ' ' + cls : ''}" viewBox="0 0 64 64" style="--rot:${rot}deg" aria-hidden="true"><g class="ink">
+      <g class="edge">${STAMP_SHAPE[s.shape] || STAMP_SHAPE.circle}</g>
+      ${date ? `<text class="sd" x="32" y="${17 + dy}">${date}</text>` : ''}
+      <text class="sm" x="32" y="${39.5 + dy}">${esc(s.mark)}</text>
+      <text class="sn" x="32" y="${50 + dy}"${s.name.length > 4 ? ' textLength="34" lengthAdjust="spacingAndGlyphs"' : ''}>${esc(s.name)}</text></g></svg>`;
+  }
+  /* 紹介ページの「行った」。spot に結びついたスタンプを並べる */
+  function visitBlock(spot) {
+    const list = T.stamps.filter(s => s.spot === spot);
+    if (!list.length) return '';
+    const v = Stamps.get();
+    return `<div class="visit">${list.map(s => `<div class="visit-row">${stampSvg(s, v[s.id], 'sc')}
+      <div class="visit-t"><b>${esc(s.name)}</b><span class="small muted">${v[s.id] ? `${esc(Stamps.when(v[s.id]))} に押しました。もう一度押すと取り消せます。` : '着いたら、押してください。'}</span></div>
+      <button class="visit-btn${v[s.id] ? ' on' : ''}" data-stamp="${s.id}" aria-pressed="${!!v[s.id]}">${v[s.id] ? '行った ✓' : '行った'}</button></div>`).join('')}
+      <a class="visit-count" href="#/spot/stamps">スタンプ帳 <span class="num">${Stamps.count(v)} / ${T.stamps.length}</span></a></div>`;
+  }
+  /* 印にかすれを出すフィルター（ページに1つだけ置く） */
+  document.body.insertAdjacentHTML('beforeend', '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="ink-rough" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.1" result="d"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -2.6 0 0 0 2.25" result="m"/><feComposite in="d" in2="m" operator="in"/></filter></svg>');
   const COVER_DEER = `<svg class="cover-art" viewBox="0 0 120 110" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M38 20l-6-12M38 20l-12-3M38 20l2-13M56 20l6-12M56 20l12-3M56 20l-2-13"/><path d="M36 25c0-4 5-6 11-6s11 2 11 6l-3 13c-1.4 5-4.6 8-8 8s-6.6-3-8-8z"/><path d="M32 27l-7 2M62 27l7 2"/><circle cx="42" cy="31" r="1.3" fill="#fff"/><circle cx="52" cy="31" r="1.3" fill="#fff"/><path d="M44 46c-3 8-3 14 0 20h30c8 0 12-5 12-12v-4M50 66v24M70 66v24M80 60v30M58 66v24"/><path d="M4 96c20-4 40-4 60 0s40 4 56 0" stroke-opacity=".7"/><g fill="#fff" stroke="none"><circle cx="62" cy="56" r="1.8"/><circle cx="70" cy="54" r="1.8"/><circle cx="77" cy="58" r="1.8"/></g></svg>`;
   /* 表紙の影絵（たこ焼き・大阪城・通天閣）。表紙の横線の上に置く */
   const COVER_OSAKA = `<svg class="cover-osaka" viewBox="0 0 108 52" aria-hidden="true"><g fill="#fff">
@@ -1130,8 +1199,7 @@
 
   function viewHome() {
     const f = fam(), tn = todayDay(), ph = phase();
-    const stamps = store.get('stamps', {});
-    const got = T.stamps.filter(s => stamps[s.id]).length;
+    const got = Stamps.count();
     /* 旅行中は表紙を小さくして、いま必要な情報をすぐ下に出す。旅行前・後の表紙は、ときどき新幹線が横切る（CoverTrain。押すとすぐ走る） */
     const cover = ph === 'during' ? `<header class="cover slim"><div class="cover-in"><div class="cover-frame"></div>
       <div class="cover-top"><span class="lat">Nara &amp; Osaka</span><span class="cover-acts">${bellBtn()}<button class="chip" data-act="fam">${ic('user')} ${esc(famName() || '家族を選ぶ')}</button></span></div>
@@ -1225,7 +1293,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=22').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=23').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -1875,6 +1943,7 @@
         <p class="sec-lead">福山城は停車中に、三原城跡と姫路城は通過中に見えます。${dir === 'go' ? '往路はどれも<b>進行方向の左</b>の窓。' : '復路はどれも<b>進行方向の右</b>の窓。'}時刻は目安です。</p>
         ${T.castles.map((c, j) => `<div class="castle" data-sid="castle-${j}">${art('castle', 'castle-icon')}<div><h3>${c.name}<span class="small muted" style="font-family:var(--f-got);font-weight:500">　${c.station}駅・${c.side}</span></h3>
           <p class="small">${esc(c.text)}</p><p class="when num"><b>${dir === 'go' ? '左' : '右'}の窓</b>・${dir === 'go' ? c.go : c.back}</p><div class="btns" style="margin-top:6px">${ext(c.url, 'くわしく', 'more')}</div></div></div>`).join('')}
+        ${visitBlock('castles')}
       </section>
 
       <section class="sec">${secH('博多駅の駅弁', 'Ekiben', 'ekiben')}
@@ -2014,6 +2083,7 @@
         <p class="note">${esc(L.note)}</p>
         ${infoList([['住所', esc(L.address)], ['電話', `<a href="${tel(L.tel)}">${L.tel}</a>`], ['営業', esc(L.hours)], ['支払い', esc(L.pay)]])}
         <div class="btns">${ext(gmap('まるかつ天理店'), '地図')}${ext(L.url, 'お店の情報')}</div>
+        ${visitBlock('food')}
       </section>
       <section class="sec" id="joterrace">${secH('10/19 お昼　JO-TERRACE OSAKA', 'Lunch')}
         <p class="small">大阪城公園の中。お店は現地で決めます。</p><div class="btns">${ext('https://jo-terrace.jp/', 'JO-TERRACE OSAKA（公式）')}<a class="more" href="#/spot/osakajo">大阪城公園のページへ</a></div>
@@ -2032,16 +2102,26 @@
       <div class="cards">${g.cards.map(([k, q, a], j) => `<button class="flip" data-flip data-tv="${key}-${j}"><div class="fk">${k}</div><div class="fq">${esc(q)}</div><div class="fa">${esc(a)}</div><div class="fh">タップして読む</div></button>`).join('')}</div>${g.note ? `<p class="note">${g.note}</p>` : ''}`;
   }
   function stampsBlock() {
-    const st = store.get('stamps', {});
-    const got = T.stamps.filter(s => st[s.id]).length;
-    return `<p class="small muted" style="margin-bottom:14px">行った場所をタップしてスタンプを押します。もう一度タップすると消せます（この端末だけに残ります）。いま <span class="stamp-count num">${got}</span> / ${T.stamps.length}</p>
-      <div class="stamps">${T.stamps.map(s => `<button class="stamp ${st[s.id] ? 'on' : ''}" data-stamp="${s.id}" aria-pressed="${!!st[s.id]}"><span class="sc">${s.mark}</span>${s.name}<span class="num" style="color:var(--sumi-3)">${st[s.id] || `${s.day}日目`}</span></button>`).join('')}</div>`;
+    const st = Stamps.get(), got = Stamps.count(st), all = got === T.stamps.length;
+    return `<p class="small muted" style="margin-bottom:14px">行った場所をタップしてスタンプを押します。スポットの紹介ページの「行った」でも押せます。もう一度タップすると消せます（この端末だけに残ります）。いま <span class="stamp-count num">${got}</span> / ${T.stamps.length}</p>
+      <div class="stamps">${T.stamps.map(s => `<button class="stamp ${st[s.id] ? 'on' : ''}" data-stamp="${s.id}" aria-pressed="${!!st[s.id]}" aria-label="${esc(s.name)}${st[s.id] ? '（押した）' : ''}">${stampSvg(s, st[s.id], 'sc')}<span class="stn">${esc(s.name)}</span><span class="num" style="color:var(--sumi-3)">${st[s.id] ? esc(Stamps.when(st[s.id])) : `${s.day}日目`}</span></button>`).join('')}</div>
+      ${all ? `<div class="stamp-done">${MANGAN}<div><b>満願</b><p class="small">${T.stamps.length}の印が、すべてそろいました。おつかれさまでした。</p></div></div>` : ''}`;
+  }
+  /* すべて集めたときの印（満願）。自作の図案 */
+  const MANGAN = `<svg class="mangan" viewBox="0 0 96 96" aria-hidden="true"><g class="ink"><circle cx="48" cy="48" r="44" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="48" cy="48" r="38.5" fill="none" stroke="currentColor" stroke-width="1"/>
+    ${Array.from({ length: 16 }, (_, i) => { const a = i * Math.PI / 8; return `<circle cx="${(48 + 41.3 * Math.sin(a)).toFixed(1)}" cy="${(48 - 41.3 * Math.cos(a)).toFixed(1)}" r="1.1" fill="currentColor"/>`; }).join('')}
+    <text x="48" y="45" class="mg1">満願</text><text x="48" y="62" class="mg2">奈良・大阪</text><text x="48" y="73" class="mg3">2026</text></g></svg>`;
+  /* 最後の1つを押したときだけ、静かに知らせる */
+  function stampComplete() {
+    sheet('スタンプがそろいました', `<div class="mangan-sheet">${MANGAN}<p>4日間で、${T.stamps.length}の印がすべてそろいました。<br>おつかれさまでした。</p><p class="small muted">スタンプ帳は、旅のあとも見返せます。</p><div class="btns" style="justify-content:center"><a class="btn quiet" href="#/spot/stamps">スタンプ帳を見る</a></div></div>`);
   }
   function viewSpots(sub) {
     const s = T.spots.find(x => x.id === sub);
     if (s) return viewSpot(s);
+    const st = Stamps.get();
     return `<div class="wrap">${topbar()}${phead('Places', 'おでかけ', '4日間で立ち寄る場所と、知ってから歩くと楽しい小ネタ。')}
-      <div>${T.spots.map(p => `<a class="spotrow" href="#/spot/${p.id}" style="--c:${DAYC(p.day)}"><span class="spot-ill">${art(SPOT_ART[p.id])}</span><span><span class="sw">${p.day}日目・${p.when.split('）')[1] || ''}｜${p.area}</span><h3>${esc(p.name)}</h3><p>${esc(p.lead)}</p></span></a>`).join('')}</div>
+      <a class="stamp-mini" href="#stamps">${ic('stamp')}旅の記録スタンプ<span class="num"><b>${Stamps.count(st)}</b> / ${T.stamps.length}</span></a>
+      <div>${T.spots.map(p => `<a class="spotrow" href="#/spot/${p.id}" style="--c:${DAYC(p.day)}"><span class="spot-ill">${art(SPOT_ART[p.id])}${st[p.id] ? stampSvg(T.stamps.find(x => x.id === p.id), st[p.id], 'mini') : ''}</span><span><span class="sw">${p.day}日目・${p.when.split('）')[1] || ''}｜${p.area}</span><h3>${esc(p.name)}</h3><p>${esc(p.lead)}</p></span></a>`).join('')}</div>
       <section class="sec" id="stamps">${secH('スタンプ帳', 'Stamps')}${stampsBlock()}</section></div>`;
   }
   function viewSpot(s) {
@@ -2050,6 +2130,7 @@
     return `<div class="wrap" style="--c:${c}">${topbar()}
       <header class="spot-hero"><div><div class="kana">${esc(s.kana)}</div><h1>${esc(s.name)}</h1><div class="when num">${s.day}日目・${s.when}</div></div>${art(SPOT_ART[s.id])}</header>
       <p class="spot-lead">${esc(s.lead)}</p>
+      ${visitBlock(s.id)}
       ${latestMini('#/spot/' + s.id)}
       ${s.warn ? `<div class="warn"><span>${esc(s.warn)}</span></div>` : ''}
       ${s.steps ? `<section class="sec">${secH('走るルート', 'Route')}<ol class="walk">${s.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol></section>` : ''}
@@ -2813,11 +2894,12 @@
       i < 0 ? list.push(n) : list.splice(i, 1); store.set('votes', list); const y = scrollY; render(); scrollTo(0, y); return;
     }
     if ((el = q('[data-stamp]'))) {
-      const st = store.get('stamps', {}), id = el.dataset.stamp;
-      if (st[id]) delete st[id]; else st[id] = now().toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' });
-      store.set('stamps', st);
+      const id = el.dataset.stamp, before = Stamps.count(), on = Stamps.toggle(id);
       const y = scrollY; render(); scrollTo(0, y);
-      if (st[id]) { const sc = $(`[data-stamp="${id}"] .sc`); sc && sc.classList.add('pop'); }
+      if (on) {
+        $$(`[data-stamp="${id}"]`).forEach(b => { const sc = $('.sc', b.closest('.visit-row') || b); sc && sc.classList.add('pop'); });
+        if (before === T.stamps.length - 1 && Stamps.count() === T.stamps.length) setTimeout(stampComplete, 700);
+      }
       return;
     }
     if ((el = q('[data-del]'))) { const l = store.get('expenses', []); l.splice(+el.dataset.del, 1); store.set('expenses', l); const y = scrollY; render(); scrollTo(0, y); return; }
