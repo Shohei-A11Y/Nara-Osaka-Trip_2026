@@ -781,7 +781,7 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 .lm-map .maplibregl-canvas { outline: none; }
 /* 地図の操作中：枠を朱の細線で示し、「操作を終える」を出す */
 .lm-mapwrap.lm-act::after { content: ""; position: absolute; inset: 0; border: 2px solid var(--shu); border-radius: inherit; pointer-events: none; z-index: 6; }
-.lm-endop { position: absolute; z-index: 7; left: 50%; bottom: 30px; transform: translateX(-50%); height: 40px; padding: 0 18px; border-radius: 999px; background: var(--shu); color: #fff; font-weight: 700; font-size: calc(14px * var(--fs)); box-shadow: 0 3px 10px rgba(28, 24, 20, .3); white-space: nowrap; }
+.lm-endop { position: absolute; z-index: 7; left: 50%; bottom: 76px; transform: translateX(-50%); height: 40px; padding: 0 18px; border-radius: 999px; background: var(--shu); color: #fff; font-weight: 700; font-size: calc(14px * var(--fs)); box-shadow: 0 3px 10px rgba(28, 24, 20, .3); white-space: nowrap; }
 .lm-endop[hidden] { display: none; }
 .lm-hint { position: absolute; z-index: 7; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 10px 18px; border-radius: 999px; background: rgba(28, 24, 20, .72); color: #fff; font-size: calc(14px * var(--fs)); font-weight: 700; white-space: nowrap; pointer-events: none; }
 .lm-maperr[hidden], .lm-basemenu[hidden], .lm-legend ul[hidden] { display: none; }
@@ -797,10 +797,11 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 .lm-stn.stop { font-size: calc(13px * var(--fs)); color: var(--ai); }
 
 /* 右上のボタン群（押しやすい大きさで縦に） */
-.lm-tools { position: absolute; top: 10px; right: 10px; z-index: 4; display: flex; flex-direction: column; gap: 6px; }
-.lm-tl { display: none; flex-direction: column; gap: 6px; }
-.lm-tools.open .lm-tl { display: flex; }
-.lm-short .lm-tl { gap: 4px; }
+/* 開いたときは、右下の縮尺の札にかからない段数（--tl-rows。livemap.js の fitTools が決める）で折り返し、残りは左へもう1列並べる */
+.lm-tools { position: absolute; top: 10px; right: 10px; z-index: 4; display: grid; grid-template-rows: repeat(var(--tl-rows, 1), auto); grid-auto-flow: column; direction: rtl; gap: 6px; pointer-events: none; }
+.lm-tl { display: none; }
+.lm-tools.open .lm-tl { display: contents; }
+.lm-tools .lm-tool { direction: ltr; pointer-events: auto; }
 .lm-tool { width: 46px; height: 46px; flex: none; display: grid; place-items: center; align-content: center; gap: 1px; background: var(--paper); color: var(--sumi); border: 1px solid var(--rule); border-radius: 10px; box-shadow: 0 2px 6px rgba(28, 24, 20, .18); text-decoration: none; }
 .lm-tool svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .lm-tool .lm-needle { width: 26px; height: 26px; stroke: none; transition: transform .25s; }
@@ -813,11 +814,10 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 .lm-short .lm-tool .lm-needle { width: 22px; height: 22px; }
 .lm-short .lm-tool small { font-size: calc(9px * var(--fs)); }
 .lm-short .lm-tool b { font-size: calc(16px * var(--fs)); }
-.lm-short .lm-basemenu { right: 56px; }
 .lm-tool.on { background: var(--shu); border-color: var(--shu); color: #fff; }
 .lm-tool.on small { color: #fff; }
 .lm-tool[aria-expanded="true"] { border-color: var(--sumi); }
-.lm-basemenu { position: absolute; top: 10px; right: 64px; z-index: 5; width: min(230px, calc(100% - 84px)); background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; box-shadow: var(--shade), 0 4px 14px rgba(28, 24, 20, .18); padding: 8px; }
+.lm-basemenu { position: absolute; top: 10px; right: calc(var(--tl-w, 46px) + 18px); z-index: 5; width: min(230px, calc(100% - 84px)); background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; box-shadow: var(--shade), 0 4px 14px rgba(28, 24, 20, .18); padding: 8px; }
 .lm-menu-h { font-size: calc(11.5px * var(--fs)); color: var(--sumi-3); letter-spacing: .1em; padding: 2px 6px 4px; }
 .lm-basemenu button { display: block; width: 100%; text-align: left; padding: 9px 10px; border-radius: 6px; font-size: calc(14px * var(--fs)); }
 .lm-basemenu button[aria-pressed="true"] { background: var(--shu-tint); color: var(--shu-ink); font-weight: 700; }
@@ -825,17 +825,21 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 .lm-basemenu button:disabled { opacity: .4; }
 .lm-menu-n { font-size: calc(11.5px * var(--fs)); line-height: 1.6; color: var(--sumi-2); padding: 6px 6px 2px; border-top: 1px solid var(--rule); margin-top: 4px; }
 /* 凡例（開閉できる） */
-/* 縮尺の札（右下）：自動・手動（「自動」で戻す）・到着モード */
-.lm-zoom { position: absolute; z-index: 4; right: 10px; bottom: 10px; display: flex; align-items: center; gap: 6px; pointer-events: none; }
+/* 縮尺のボタン（右下）：「縮尺：自動」／「縮尺：手動（自動に戻す）」。自動のときの補足は左に小さく */
+.lm-zoom { position: absolute; z-index: 4; right: 10px; left: calc(var(--ov-w, 0px) + 84px); bottom: 28px; display: flex; align-items: center; justify-content: flex-end; gap: 6px; pointer-events: none; }   /* 左下の出典（地理院タイル…）より上。左は凡例の分をあける */
 .lm-zoom[hidden] { display: none; }
-.lm-full .lm-zoom { bottom: calc(var(--ov-h, 0px) + 10px); }
-.lm-zchip { display: inline-flex; align-items: baseline; gap: 6px; height: 30px; padding: 0 10px; line-height: 30px; border-radius: 999px; background: var(--paper); background: color-mix(in srgb, var(--paper) 90%, transparent); border: 1px solid var(--rule); font-size: calc(11px * var(--fs)); color: var(--sumi-2); white-space: nowrap; box-shadow: 0 2px 6px rgba(28, 24, 20, .15); }
-.lm-zchip b { font-size: calc(11.5px * var(--fs)); color: var(--sumi); }
-.lm-zchip.man { border-color: var(--shu); }
-.lm-zchip.man b { color: var(--shu-ink); }
-.lm-zchip.arr { border-color: var(--ai); background: var(--ai-tint); color: var(--ai); }
-.lm-zchip.arr b { color: var(--ai); }
-.lm-zbtn { pointer-events: auto; height: 36px; min-width: 56px; padding: 0 14px; border-radius: 999px; background: var(--shu); color: #fff; font-weight: 700; font-size: calc(13px * var(--fs)); box-shadow: 0 2px 8px rgba(28, 24, 20, .28); }
+.lm-full .lm-zoom { bottom: calc(var(--ov-h, 0px) + 26px); }
+.lm-zbtn { flex: none; pointer-events: auto; display: inline-flex; align-items: center; height: 38px; padding: 0 14px; border-radius: 999px; background: var(--paper); border: 1.5px solid var(--sumi-3); color: var(--sumi); font-size: calc(12.5px * var(--fs)); white-space: nowrap; box-shadow: 0 2px 8px rgba(28, 24, 20, .22); touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: transform .12s, background-color .2s, border-color .2s; }
+.lm-zbtn .lm-zk { color: var(--sumi-2); }
+.lm-zbtn b { font-weight: 700; }
+.lm-zbtn.man { background: var(--shu); border-color: var(--shu); color: #fff; }
+.lm-zbtn.man .lm-zk { color: rgba(255, 255, 255, .85); }
+/* 押した感じ：押しているあいだは少し縮み、押したあとは短く色が変わる */
+.lm-zbtn:active { transform: scale(.94); }
+.lm-zbtn.tap { animation: lmztap .26s ease-out; }
+@keyframes lmztap { from { box-shadow: 0 0 0 6px color-mix(in srgb, var(--shu) 35%, transparent), 0 2px 8px rgba(28, 24, 20, .22); } }
+.lm-znote { min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 3px 8px; border-radius: 6px; background: var(--paper); background: color-mix(in srgb, var(--paper) 88%, transparent); font-size: calc(11px * var(--fs)); color: var(--sumi-2); white-space: nowrap; }
+.lm-znote[hidden] { display: none; }
 .lm-legend { position: absolute; top: 10px; left: 10px; z-index: 4; font-size: calc(11.5px * var(--fs)); }
 .lm-legend > button { height: 30px; padding: 0 10px; border-radius: 999px; background: var(--paper); border: 1px solid var(--rule); font-weight: 700; font-size: calc(11.5px * var(--fs)); box-shadow: 0 2px 6px rgba(28, 24, 20, .15); }
 .lm-legend > button::after { content: " ＋"; color: var(--sumi-3); }
@@ -845,6 +849,7 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 .lm-legend i { width: 16px; height: 16px; border-radius: 50%; background: var(--g); display: grid; place-items: center; flex: none; }
 .lm-legend i.vis { background: var(--sumi-3); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--sumi-3); }
 .lm-legend .lm-sym { width: 11px; height: 11px; }
+.lm-legend i.tun { width: 18px; height: 6px; border-radius: 3px; background: repeating-linear-gradient(90deg, var(--ai) 0 5px, transparent 5px 9px) var(--paper); box-shadow: 0 0 0 1px var(--rule); }
 .lm-sym { fill: none; stroke: #fff; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 
 /* 見どころのピン：頭に記号・横に名前。地図を傾けても立てる */
@@ -866,7 +871,7 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 .lm-pin.lv-near .lm-pin-in { opacity: 1; }
 .lm-pin.lv-hot .lm-pin-in { opacity: 1; transform: scale(1.12); }
 .lm-pin.lv-hot .lm-pin-n { font-size: calc(13.5px * var(--fs)); color: var(--g); }
-.lm-train { width: 56px; height: 52px; background: url("train-sprite.webp?v=15") 0 0 / 336px 312px no-repeat; z-index: 6; pointer-events: none; }
+.lm-train { width: 56px; height: 52px; background: url("train-sprite.webp?v=15") 0 0 / 336px 312px no-repeat; z-index: 6; pointer-events: none; transition: opacity .6s; }   /* トンネルの中は半透明（livemap.js の trainTunnel）。出入りでなめらかに */
 
 /* 地図のすぐ下：次の停車駅と残り時間・速さ */
 .lm-panel { padding: 10px 0 8px; border-bottom: 1px solid var(--rule); }
@@ -1023,6 +1028,13 @@ body.sim-on .lm-full .lm-tools, body.sim-on .lm-full .lm-back, body.sim-on .lm-f
 .lm-ov .lm-alert { opacity: .94; }
 .lm-ov .lm-near { background: color-mix(in srgb, var(--paper) 86%, transparent); border-radius: 0 8px 8px 0; padding-right: 8px; }
 .lm-ov .lm-transfer { background: color-mix(in srgb, var(--ai-tint) 90%, transparent); }
+/* 横向きで背が低いとき：下に札を重ねると地図が細い帯になるので、札は左に縦に並べ、地図は右側を広く見せる（--ov-w は札の幅。livemap.js が入れる） */
+@media (orientation: landscape) and (max-height: 540px) {
+  .lm-full .lm-ov { top: calc(60px + env(safe-area-inset-top)); right: auto; width: min(380px, 46%); align-content: end; overflow-y: auto; overscroll-behavior: contain; }
+  .lm-full .lm-sheet { border-radius: 0 14px 0 0; border-right: 1px solid var(--rule); }
+  .lm-full .lm-legend { left: calc(var(--ov-w, 0px) + 10px); }
+  .lm-full .lm-map .maplibregl-ctrl-bottom-left { left: var(--ov-w, 0px); }
+}
 
 /* 見どころ一覧 */
 .lm-pg { margin-top: 6px; }

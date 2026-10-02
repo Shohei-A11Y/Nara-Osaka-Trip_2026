@@ -12,7 +12,7 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const MIN = 6e4;
   const MAPLIBRE = 'assets/vendor/maplibre-gl/maplibre-gl.mjs';
-  const LINE_URL = 'assets/line-sanyo.json?v=23';
+  const LINE_URL = 'assets/line-sanyo.json?v=25';
   const GPS_MAX_OFF = 0.5, GPS_MAX_ACC = 1000, GPS_MAX_AGE = 30e3, V_MAX = 330;
 
   /* ========== 線路の形（km ⇔ 緯度経度） ========== */
@@ -310,6 +310,162 @@
     const want = !c.eco && (to3d ?? m.getPitch() >= 5), has = !!m.getTerrain();
     if (want === has) return;
     try { m.setTerrain(want ? { source: 'dem', exaggeration: TERRAIN_X } : null); } catch { /* 地形が使えなくても、平らなまま続ける */ }
+    tunnelMode(c);
+  }
+
+  /* ---------- トンネル（路線を問わない作り。線路の形 pointAt(km) とトンネルの一覧を渡すだけで描ける） ----------
+     トンネルの一覧は [入口km, 出口km, 名前, 入口の標高m, 出口の標高m]（標高は tools/make-tunnel-portals.js で求める。2km以上のみ）。
+     - 地表に貼る赤い線は、トンネルの外だけ（tunnelSplit）。
+     - 平面・省電力・地形がないとき：トンネルの中は、地図に貼った紺の点線（2Dのレイヤー tun-case・tun・tun-done）。
+     - 立体の地形のとき：入口と出口の標高を直線で結んだ高さ（山の中）に、紺の点線を立体で描く（TunnelLayer。カスタムレイヤー）。
+       奥行きの判定をしないので、山の手前でも裏でも、山を透かして見える。平面の位置は線路の形どおり（曲がったトンネルは曲がったまま）。
+     - 通り過ぎた分は灰色（setKm）。 */
+  const tunAlt = (tunnels, km) => { const t = tunnels.find(x => x[0] <= km && km <= x[1]); return t && t.length >= 5 ? t[3] + (t[4] - t[3]) * (km - t[0]) / ((t[1] - t[0]) || 1) : null; };
+  /* km の範囲 [a, b] を、トンネルの外（open）と中（tun）の線に分ける。slice(a, b) はその範囲の線の座標 */
+  function tunnelSplit(tunnels, slice, a, b) {
+    if (a > b) [a, b] = [b, a];
+    const open = [], tun = [];
+    let k = a;
+    for (const t of [...tunnels].sort((x, y) => x[0] - y[0])) {
+      const s = Math.max(a, t[0]), e = Math.min(b, t[1]);
+      if (e <= s) continue;
+      if (s > k) open.push(slice(k, s));
+      tun.push(slice(s, e)); k = e;
+    }
+    if (b > k) open.push(slice(k, b));
+    return { open, tun };
+  }
+  const multiLine = lines => ({ type: 'Feature', properties: {}, geometry: { type: 'MultiLineString', coordinates: lines } });
+  const mercXYZ = (lon, lat, alt) => { const s = Math.sin(rad(lat)); return [(lon + 180) / 360, 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI), alt / (2 * Math.PI * R * 1000 * Math.cos(rad(lat)))]; };
+  /* 立体のトンネルの線（WebGL のカスタムレイヤー）。色は CSS の色（'#rrggbb'）。
+     線の太さは画面の上の px で、頂点シェーダーで線の向きに直角に広げる（遠近があっても太さは同じ）。点線は線に沿った距離（m）で切る。
+     座標は最初の点を原点にした差で持ち、行列の側で原点へずらす（スマホの精度でも揺れないように） */
+  function TunnelLayer({ id, pointAt: at, tunnels, exag, color, caseColor, doneColor, onRender }) {
+    const STEP = 0.2;   // 曲がりに沿わせるため、0.2kmごとに点を置く
+    const vals = [], idx = [];
+    let org = null, nv = 0;
+    for (const t of tunnels) {
+      if (t.length < 5) continue;
+      const n = Math.max(1, Math.ceil((t[1] - t[0]) / STEP)), pts = [];
+      for (let i = 0; i <= n; i++) { const km = t[0] + (t[1] - t[0]) * i / n, p = at(km); pts.push({ km, p, m: mercXYZ(p[0], p[1], (t[3] + (t[4] - t[3]) * i / n) * exag) }); }
+      if (!org) org = pts[0].m;
+      let d = 0;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const A = pts[i], B = pts[i + 1], dl = hav(A.p, B.p) * 1000;
+        for (const [side, end] of [[-1, 0], [1, 0], [-1, 1], [1, 1]]) vals.push(A.m[0] - org[0], A.m[1] - org[1], A.m[2] - org[2], B.m[0] - org[0], B.m[1] - org[1], B.m[2] - org[2], side, end, end ? d + dl : d, end ? B.km : A.km);
+        idx.push(nv, nv + 1, nv + 2, nv + 1, nv + 3, nv + 2); nv += 4;
+        d += dl;
+      }
+    }
+    const rgba = (hex, a = 1) => { const h = hex.replace('#', ''), v = h.length === 3 ? h.split('').map(x => parseInt(x + x, 16)) : [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); return [v[0] / 255 * a, v[1] / 255 * a, v[2] / 255 * a, a]; };   // 重ね方に合わせて、色は透明度を掛けておく
+    const VS = `attribute vec3 a_a; attribute vec3 a_b; attribute vec4 a_i;
+      uniform mat4 u_m; uniform vec2 u_vp; uniform float u_w; uniform float u_cap; varying float v_d; varying float v_km;
+      void main() {
+        vec4 ca = u_m * vec4(a_a, 1.0), cb = u_m * vec4(a_b, 1.0);
+        if (ca.w <= 0.0 || cb.w <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+        vec2 sa = ca.xy / ca.w * u_vp * 0.5, sb = cb.xy / cb.w * u_vp * 0.5, dir = sb - sa;
+        float l = length(dir); dir = l > 1e-4 ? dir / l : vec2(1.0, 0.0);
+        vec4 c = a_i.y > 0.5 ? cb : ca;
+        vec2 off = (vec2(-dir.y, dir.x) * a_i.x + dir * (a_i.y > 0.5 ? 1.0 : -1.0) * u_cap) * u_w * 0.5;   // 縁は両端を少し延ばして継ぎ目を埋める（点線は延ばさない。延ばすと隙間がふさがる）
+        c.xy += off / (u_vp * 0.5) * c.w;
+        gl_Position = c; v_d = a_i.z; v_km = a_i.w;
+      }`;
+    const FS = `#ifdef GL_FRAGMENT_PRECISION_HIGH
+      precision highp float;
+      #else
+      precision mediump float;
+      #endif
+      uniform vec4 u_col; uniform vec4 u_col2; uniform float u_ppm; uniform float u_dash; uniform float u_km; uniform float u_dir;
+      varying float v_d; varying float v_km;
+      void main() {
+        if (u_dash > 0.0 && fract(v_d * u_ppm / u_dash) > 0.55) discard;
+        gl_FragColor = (v_km - u_km) * u_dir < 0.0 ? u_col2 : u_col;
+      }`;
+    let map = null, prog = null, buf = null, ibuf = null, vao = null, loc = null, M = null, km = 0, dir = 0;
+    const attrs = gl => {
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibuf);
+      [['a_a', 3, 0], ['a_b', 3, 12], ['a_i', 4, 24]].forEach(([n, k, o]) => { gl.enableVertexAttribArray(loc[n]); gl.vertexAttribPointer(loc[n], k, gl.FLOAT, false, 40, o); });
+    };
+    const layer = {
+      id, type: 'custom', renderingMode: '3d',
+      onAdd(m, gl) {
+        map = m;
+        if (!nv) return;
+        const sh = (type, src) => { const x = gl.createShader(type); gl.shaderSource(x, src); gl.compileShader(x); return x; };
+        const pg = gl.createProgram(); gl.attachShader(pg, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pg, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(pg);
+        if (!gl.getProgramParameter(pg, gl.LINK_STATUS)) return;   // 描けない端末は、立体のトンネルなしで続ける
+        prog = pg;
+        loc = {}; ['a_a', 'a_b', 'a_i'].forEach(n => { loc[n] = gl.getAttribLocation(pg, n); });
+        ['u_m', 'u_vp', 'u_w', 'u_cap', 'u_col', 'u_col2', 'u_ppm', 'u_dash', 'u_km', 'u_dir'].forEach(n => { loc[n] = gl.getUniformLocation(pg, n); });
+        buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vals), gl.STATIC_DRAW);
+        ibuf = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibuf); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
+        if (gl.createVertexArray) { vao = gl.createVertexArray(); gl.bindVertexArray(vao); attrs(gl); gl.bindVertexArray(null); }
+      },
+      render(gl, args) {
+        const P = args.defaultProjectionData && args.defaultProjectionData.mainMatrix;
+        M = P || null;
+        if (onRender) onRender();
+        if (!prog || !P || !map.getTerrain()) return;   // 立体の地形のときだけ
+        const m = new Float32Array(16);
+        for (let i = 0; i < 16; i++) m[i] = P[i];
+        for (let r = 0; r < 4; r++) m[12 + r] = P[r] * org[0] + P[4 + r] * org[1] + P[8 + r] * org[2] + P[12 + r];
+        const cv = map.getCanvas(), z = map.getZoom(), lat = map.getCenter().lat;
+        const lerp = (a, b, c) => z <= 12 ? a + (b - a) * Math.max(0, z - 6) / 6 : b + (c - b) * Math.min(1, (z - 12) / 4);
+        gl.useProgram(prog);
+        vao ? gl.bindVertexArray(vao) : attrs(gl);
+        gl.disable(gl.DEPTH_TEST); gl.disable(gl.STENCIL_TEST); gl.disable(gl.CULL_FACE);
+        gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.uniformMatrix4fv(loc.u_m, false, m);
+        gl.uniform2f(loc.u_vp, cv.clientWidth, cv.clientHeight);
+        gl.uniform1f(loc.u_ppm, 512 * 2 ** z / (2 * Math.PI * R * 1000 * Math.cos(rad(lat))));
+        gl.uniform1f(loc.u_km, km); gl.uniform1f(loc.u_dir, dir);
+        const core = lerp(2, 4, 7);
+        /* 縁（つながった白）→ 点線（紺。通り過ぎた分は灰） */
+        gl.uniform1f(loc.u_w, lerp(4, 8, 12)); gl.uniform1f(loc.u_dash, 0); gl.uniform1f(loc.u_cap, 1);
+        gl.uniform4fv(loc.u_col, rgba(caseColor, 0.85)); gl.uniform4fv(loc.u_col2, rgba(caseColor, 0.6));
+        gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
+        gl.uniform1f(loc.u_w, core); gl.uniform1f(loc.u_dash, Math.max(8, core * 3.2)); gl.uniform1f(loc.u_cap, 0);
+        gl.uniform4fv(loc.u_col, rgba(color)); gl.uniform4fv(loc.u_col2, rgba(doneColor));
+        gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
+        if (vao) gl.bindVertexArray(null);
+      },
+      onRemove(m, gl) { prog && gl.deleteProgram(prog); buf && gl.deleteBuffer(buf); ibuf && gl.deleteBuffer(ibuf); vao && gl.deleteVertexArray(vao); prog = null; }
+    };
+    return {
+      layer,
+      /* 列車の位置（km）と進む向き（+1／−1。発車前は 0）。後ろ側を灰色にする */
+      setKm(k, d) { if (k !== km || d !== dir) { km = k; dir = d; map && map.getTerrain() && map.triggerRepaint(); } },
+      /* 経緯度と高さ（m。誇張を掛けたもの）→ 画面の位置 [x, y]（いちばん新しく描いたときの行列で） */
+      project(ll, alt) {
+        if (!M || !map) return null;
+        const v = mercXYZ(ll[0], ll[1], alt), x = M[0] * v[0] + M[4] * v[1] + M[8] * v[2] + M[12], y = M[1] * v[0] + M[5] * v[1] + M[9] * v[2] + M[13], w = M[3] * v[0] + M[7] * v[1] + M[11] * v[2] + M[15];
+        if (!(w > 0)) return null;
+        const cv = map.getCanvas();
+        return [(x / w + 1) / 2 * cv.clientWidth, (1 - y / w) / 2 * cv.clientHeight];
+      }
+    };
+  }
+  /* 平面か立体かで、トンネルの描き方を切り替える（地形があるときは立体の線、ないときは地図に貼った点線） */
+  function tunnelMode(c) {
+    const m = c && c.map; if (!m || !c.loaded) return;
+    const v = m.getTerrain() && c.tunLayer ? 'none' : 'visible';
+    ['tun-case', 'tun', 'tun-done'].forEach(id => { try { m.getLayer(id) && m.getLayoutProperty(id, 'visibility') !== v && m.setLayoutProperty(id, 'visibility', v); } catch { /* noop */ } });
+    trainTunnel(c);
+  }
+  /* トンネルの中の列車の印：半透明にし（出たら元の濃さ。CSS でなめらかに）、立体の地形のときはトンネルの線の高さ（山の中）に置く。
+     印は地図の部品（Marker）で、地形の高さにしか置けないので、山の中の高さとの画面上の差を、印のずらし（offset）で足す */
+  function trainTunnel(c) {
+    if (!c || !c.train || c.disp == null) return;
+    const inTun = !!(c.last && c.last.mode === 'running' && tunnelAt(c.disp));
+    const op = inTun ? '0.5' : '1';
+    if (c.trainOp !== op) { c.trainOp = op; c.train.setOpacity(op, op); c.trainEl.classList.toggle('in-tun', inTun); }
+    let dx = 0, dy = 0;
+    if (inTun && c.tunLayer && c.map.getTerrain()) {
+      const ll = pointAt(c.disp), alt = tunAlt(L.tunnels, c.disp), e = c.map.queryTerrainElevation(ll);
+      const a = alt != null && e != null && c.tunLayer.project(ll, alt * TERRAIN_X), b = a && c.tunLayer.project(ll, e);
+      if (a && b) { dx = a[0] - b[0]; dy = a[1] - b[1]; }
+    }
+    if (Math.abs(dx - (c.tdx || 0)) > 0.3 || Math.abs(dy - (c.tdy || 0)) > 0.3) { c.tdx = dx; c.tdy = dy; c.train.setOffset([-TRAIN.w / 2 + dx, -TRAIN.oy + dy]); }
   }
 
   function spotCard(s) {
@@ -394,7 +550,22 @@
     b.setAttribute('aria-label', open ? '地図の操作ボタンを閉じる' : '地図の操作ボタンを開く');
     b.innerHTML = `${open ? TOOLS_X : TOOLS_MENU}<small>${open ? 'とじる' : '操作'}</small>`;
     if (!open) toggleMenu(false);
+    fitTools();
     if (save) { ls.set('lm-tools', open ? '1' : null); layoutLabels(); }
+  }
+  /* 操作ボタン群の段数：右下の縮尺の札（なければ地図の下の端）より上に収まるだけ縦に並べ、残りは左へもう1列。
+     地図の高さ・全画面の下の札の高さ・横向きで変わるので、大きさが変わるたびに計算し直す */
+  function fitTools() {
+    const c = cur; if (!c || !c.wrap) return;
+    const box = $('.lm-tools', c.root); if (!box) return;
+    const items = $$('.lm-tool', box).filter(x => x.offsetParent);
+    const H = c.wrap.clientHeight; if (!items.length || !H) return;
+    const bh = items[0].offsetHeight, gap = parseFloat(getComputedStyle(box).rowGap) || 6;
+    const zm = $('.lm-zoom', c.wrap);
+    const floor = zm && !zm.hidden && zm.offsetHeight ? zm.offsetTop - 8 : H - 26;
+    const rows = Math.max(1, Math.min(items.length, Math.floor((floor - box.offsetTop + gap) / (bh + gap))));
+    if (box.style.getPropertyValue('--tl-rows') !== String(rows)) box.style.setProperty('--tl-rows', rows);
+    c.root.style.setProperty('--tl-w', box.offsetWidth + 'px');
   }
   const TOOLS_MENU = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M4.5 12h15M4.5 17h15"/></svg>';
   const TOOLS_X = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
@@ -466,8 +637,8 @@
         drawCtrl();
       }
       if (k === 'view') setPitch(c.map ? (c.map.getPitch() >= 5 ? 0 : PITCH_3D) : (c.pitch >= 5 ? 0 : PITCH_3D));
-      if (k === 'recenter') { c.follow = true; drawCtrl(); camera(true); }
-      if (k === 'zauto') { setManualZoom(null); c.follow = true; c.camAt = 0; drawCtrl(); camera(true); ui.toast('縮尺を自動に戻しました'); }
+      if (k === 'recenter') recenter();
+      if (k === 'zoom') toggleZoom(b);
       if (k === 'settings') openSettings();
       if (k === 'endop') setActive(false);
       if (k === 'compass') compass();
@@ -479,7 +650,7 @@
     const onChange = e => {
       if (e.target.matches('[data-lm="wake"]')) { c.wakeWant = e.target.checked; ss.set('lm-wake', c.wakeWant ? '1' : null); wake(); }
       if (e.target.matches('[data-lm="eco"]')) { setEco(e.target.checked); ss.set('lm-eco-manual', e.target.checked ? 'on' : 'off'); }
-      if (e.target.matches('[data-lm="autozoom"]')) { c.zAuto = e.target.checked; ls.set('lm-autozoom', c.zAuto ? null : '0'); if (c.zAuto) setManualZoom(null); c.camAt = 0; drawCtrl(); }
+      if (e.target.matches('[data-lm="autozoom"]')) { c.zAuto = e.target.checked; ls.set('lm-autozoom', c.zAuto ? null : '0'); setManualZoom(null); c.camAt = 0; drawCtrl(); camera(true, true); }
     };
     root.addEventListener('click', onClick); root.addEventListener('change', onChange);
     c.onClick = onClick; c.onChange = onChange;
@@ -561,7 +732,7 @@
     syncGeo();
     fillStatic(); fitHeight();
     drawCtrl(); tick(); startLoop(); wake();
-    c.onResize = () => { fitHeight(); syncPad(); };
+    c.onResize = () => { fitHeight(); syncPad(); fitTools(); };
     addEventListener('resize', c.onResize);
     /* 自動スクロールは、ページを開いた最初の1回だけ（自分でスクロールしたあとは動かさない） */
     if (helpers.fresh && !c.full) setTimeout(() => {
@@ -606,6 +777,7 @@
     c.root.style.setProperty('--lm-h', h + 'px');
     c.root.classList.toggle('lm-short', h < 420);
     c.map && c.map.resize();
+    fitTools();
   }
 
   /* 凡例と地図の種類のメニュー（中身はここで作る） */
@@ -614,7 +786,7 @@
     const lg = $('.lm-legend', c.root);
     if (lg) {
       const open = ls.get('lm-legend') === '1';
-      lg.innerHTML = `<button type="button" data-lm="legend" aria-expanded="${open}">凡例</button><ul${open ? '' : ' hidden'}>${Object.values(CATS).map(k => `<li><i style="--g:${k.color}"><svg class="lm-sym" viewBox="0 0 12 12" aria-hidden="true">${k.sym}</svg></i>${esc(k.name)}</li>`).join('')}<li><i class="vis" style="--g:#67625b"></i>白い縁＝窓から見える</li></ul>`;
+      lg.innerHTML = `<button type="button" data-lm="legend" aria-expanded="${open}">凡例</button><ul${open ? '' : ' hidden'}>${Object.values(CATS).map(k => `<li><i style="--g:${k.color}"><svg class="lm-sym" viewBox="0 0 12 12" aria-hidden="true">${k.sym}</svg></i>${esc(k.name)}</li>`).join('')}<li><i class="vis" style="--g:#67625b"></i>白い縁＝窓から見える</li><li><i class="tun" aria-hidden="true"></i>トンネル（点線）</li></ul>`;
     }
     const mn = $('.lm-basemenu', c.root);
     if (mn) mn.innerHTML = `<p class="lm-menu-h">地図の種類</p>${Object.entries(BASES).map(([id, b]) => `<button type="button" data-base="${id}">${esc(b.name)}</button>`).join('')}<p class="lm-menu-n">航空写真は通信量が多めです。電波が弱いときは標準地図に戻します。</p>`;
@@ -705,16 +877,20 @@
   function syncPad() {
     const c = cur; if (!c || !c.full || !c.map) return;
     const ov = $('.lm-ov', c.root), box = c.map.getContainer(); if (!ov) return;
-    const H = box.clientHeight, bt = box.getBoundingClientRect().top, ovTop = ov.getBoundingClientRect().top - bt;
-    c.root.style.setProperty('--ov-h', Math.max(0, H - ovTop) + 'px');
-    const bottom = Math.max(0, Math.round(H - ovTop + 12));
-    const y = Math.min(ovTop - 76, H * 0.74);          // 列車の印を置く高さ（札の上端から少し余裕をとる）
+    const H = box.clientHeight, W = box.clientWidth, br = box.getBoundingClientRect(), or = ov.getBoundingClientRect(), ovTop = or.top - br.top;
+    /* 横向きで札を左に並べているとき（style.css の @media）は、札の右側を地図の見える範囲にする */
+    const side = or.width < W * 0.8;
+    c.root.style.setProperty('--ov-h', side ? '0px' : Math.max(0, H - ovTop) + 'px');
+    c.root.style.setProperty('--ov-w', side ? Math.round(or.right - br.left) + 'px' : '0px');
+    fitTools();
+    const bottom = side ? 0 : Math.max(0, Math.round(H - ovTop + 12));
+    const y = side ? H * 0.68 : Math.min(ovTop - 76, H * 0.74);          // 列車の印を置く高さ（札の上端から少し余裕をとる）
     const top = Math.max(0, Math.round(2 * y - (H - bottom)));
-    const pad = { top, bottom, left: 0, right: 0 }, was = c.pad;
-    if (was && was.top === pad.top && was.bottom === pad.bottom) return;
+    const pad = { top, bottom, left: side ? Math.round(or.right - br.left) : 0, right: 0 }, was = c.pad;
+    if (was && was.top === pad.top && was.bottom === pad.bottom && was.left === pad.left) return;
     c.pad = pad;
     /* 札が増えて下の欄が高くなったときは、すぐに地図をずらす（ゆっくり動かすと、そのあいだ列車の印が札の下に隠れる） */
-    if (!was || pad.bottom > was.bottom) { c.map.setPadding(pad); if (!was) return; }
+    if (!was || pad.bottom > was.bottom) { camEase(c, null, pad); if (!was) return; }
     c.camAt = 0; camera(true);
   }
 
@@ -965,8 +1141,9 @@
         ${hasWake() ? `<label class="lm-sw"><input type="checkbox" role="switch" data-lm="wake"${c.wakeWant ? ' checked' : ''}${c.eco ? ' disabled' : ''}><span>画面を自動で消さない</span></label>
           <p class="lm-desc">スマホは、しばらく触らないと暗くなって消えます。オンにすると、このページを開いている間は消えなくなります。そのぶん電池を多く使います。${c.eco ? '省電力中は使えません。' : ''}</p>` : ''}
         <label class="lm-sw"><input type="checkbox" role="switch" data-lm="autozoom"${c.zAuto ? ' checked' : ''}><span>速さに合わせて、地図を自動で拡大・縮小</span></label>
-        <p class="lm-desc">速く走っているときは広く、駅の前後で速度が落ちたら拡大して、街の様子が分かるようにします。手で拡大・縮小すると、その縮尺のまま止まり、地図の右下の「自動」を押すまで戻りません。</p>
-        <p class="lm-desc">到着モード：終点（${ui.esc(c.S.tr.end || dest)}）が地図に映ったら、終点を画面の上にして、近づくにつれて拡大します。この設定にかかわらず働き、着いて止まると元の表示に戻ります。</p>
+        <p class="lm-desc">速く走っているときは広く、駅の前後で速度が落ちたら拡大して、街の様子が分かるようにします。オフにすると、速さにかかわらず標準の縮尺です。</p>
+        <p class="lm-desc">地図の右下の「縮尺：自動」は、自動で縮尺を変えている印です。指で拡大・縮小すると「縮尺：手動（自動に戻す）」に変わり、その縮尺のまま止まります。押すと、すぐ自動に戻ります。</p>
+        <p class="lm-desc">到着モード：終点（${ui.esc(c.S.tr.end || dest)}）が地図に映ったら、終点を画面の上にして、列車と終点が両方入る縮尺で、近づくにつれて拡大します。見下ろす角度は変えません（立体なら斜めのまま、平面なら真上から）。この設定にかかわらず働き、着いて止まると元の表示に戻ります。</p>
         <label class="lm-sw"><input type="checkbox" role="switch" data-lm="eco"${c.eco ? ' checked' : ''}><span>省電力</span></label>
         <p class="lm-desc">地図の更新を10秒に1回にし、平面・淡色の地図にします。航空写真と「画面を自動で消さない」は使いません。${c.hasBattery ? '電池が20%以下になると、自動でオンになります。' : ''}</p>
         ${c.full ? JR_INFO : ''}`;
@@ -1061,7 +1238,7 @@
     const col = n => cs.getPropertyValue(n).trim() || '#888';
     const r = c.last || c.tk.compute();
     const p = pointAt(r.km);
-    const tunnels = { type: 'FeatureCollection', features: L.tunnels.map(t => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: sliceLine(t[0], t[1]) } })) };
+    const split = tunnelSplit(L.tunnels, sliceLine, 0, geom.cum[geom.cum.length - 1]);   // 地表の線はトンネルの外だけ。トンネルの中は点線（平面）か立体の線
     const stations = { type: 'FeatureCollection', features: L.stations.map(s => ({ type: 'Feature', properties: { stop: c.S.st.some(x => x.name === s[0] && x.stop) ? 1 : 0 }, geometry: { type: 'Point', coordinates: [s[2], s[1]] } })) };
     /* 電波が弱い・通信を節約する設定なら、航空写真は使わない */
     const conn = navigator.connection;
@@ -1076,7 +1253,7 @@
     let map;
     try {
       map = new ml.Map({
-        container: box, center: p, zoom: c.zMan ?? (c.zAuto ? baseZoom(c.pitch) + BAND_DZ[bandOf(r)] : baseZoom(c.pitch)), pitch: c.pitch, bearing: c.orient === 'north' ? 0 : headingAt(r.km),
+        container: box, center: p, zoom: c.zMan ?? baseZoom(c.pitch) + (c.zAuto ? BAND_DZ[bandOf(r)] : 0), pitch: c.pitch, bearing: c.orient === 'north' ? 0 : headingAt(r.km),
         maxPitch: 70, minZoom: 5, maxZoom: 16, attributionControl: false, fadeDuration: 0,
         /* ふだんは1本指でページをスクロールし、地図は2本指の拡大・縮小だけ。地図を1回押すと「操作中」になり、1本指で動かせる（setActive）。
            全画面は最初から操作中。傾きは MapLibre の判定が甘いため、自前の判定（pitchGesture）で行う */
@@ -1086,9 +1263,10 @@
           version: 8,
           sources: {
             ...sources,
-            line: { type: 'geojson', data: lineGeo || { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: geom.coords } }, attribution: OSM_ATTR },
+            line: { type: 'geojson', data: multiLine(split.open), attribution: OSM_ATTR },
             done: { type: 'geojson', data: emptyLine() },
-            tun: { type: 'geojson', data: tunnels },
+            tun: { type: 'geojson', data: multiLine(split.tun) },
+            'tun-done': { type: 'geojson', data: emptyLine() },
             stn: { type: 'geojson', data: stations },
             ...(demOn ? { dem: { type: 'raster-dem', tiles: ['gsidem://{z}/{x}/{y}'], tileSize: 256, minzoom: 1, maxzoom: 12, encoding: 'terrarium' } } : {})
           },
@@ -1096,7 +1274,9 @@
             { id: 'line-case', type: 'line', source: 'line', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': dark ? '#1b1a18' : '#ffffff', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 4, 12, 8, 16, 12] } },
             { id: 'line', type: 'line', source: 'line', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': col('--shu'), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 2, 12, 4, 16, 7] } },
             { id: 'done', type: 'line', source: 'done', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': col('--sumi-3'), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 2, 12, 4, 16, 7] } },
-            { id: 'tun', type: 'line', source: 'tun', paint: { 'line-color': dark ? '#1b1a18' : '#ffffff', 'line-opacity': 0.75, 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1, 12, 2, 16, 3], 'line-dasharray': [1.2, 1.6] } },
+            { id: 'tun-case', type: 'line', source: 'tun', paint: { 'line-color': dark ? '#1b1a18' : '#ffffff', 'line-opacity': 0.85, 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 4, 12, 8, 16, 12] } },
+            { id: 'tun', type: 'line', source: 'tun', paint: { 'line-color': col('--ai'), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 2, 12, 4, 16, 7], 'line-dasharray': [1.4, 1.1] } },
+            { id: 'tun-done', type: 'line', source: 'tun-done', paint: { 'line-color': col('--sumi-3'), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 2, 12, 4, 16, 7], 'line-dasharray': [1.4, 1.1] } },
             { id: 'stn', type: 'circle', source: 'stn', paint: { 'circle-radius': ['case', ['==', ['get', 'stop'], 1], 6, 4], 'circle-color': dark ? '#1b1a18' : '#ffffff', 'circle-stroke-color': col('--ai'), 'circle-stroke-width': ['case', ['==', ['get', 'stop'], 1], 3, 2] } }
           ])
         }
@@ -1110,6 +1290,8 @@
     }
     if (!c.act) map.touchZoomRotate.disableRotation();
     pitchGesture(c, map);
+    const fingers = e => { c.fingers = e.touches.length; };
+    ['touchstart', 'touchend', 'touchcancel'].forEach(t => box.addEventListener(t, fingers, { capture: true, passive: true }));
     /* ふだんの画面で地図を押したら「操作中」に */
     map.on('click', () => { if (!c.act) setActive(true); else poke(); });
     map.addControl(new ml.AttributionControl({ compact: false }), 'bottom-left');
@@ -1128,15 +1310,22 @@
     map.on('movestart', e => { if (e.originalEvent) c.gest = true; });
     map.on('moveend', () => { if (!c.pg) c.gest = false; layoutLabels(); });
     map.on('rotate', needle);
-    map.on('pitchend', () => { if (c.arr) return; const v = Math.round(map.getPitch()); c.pitch = v; ls.set('lm-pitch', String(v)); drawTools(); });   // 到着モードで平面にしたのは覚えない
-    /* 指で拡大・縮小したら、自動をやめてその縮尺を保つ（到着モードのあいだは、到着モードを優先）
-       （拡大・縮小のイベントには指の操作が付かないことがあるので、ホイール・ダブルタップ・2本指の操作のすぐあとの拡大・縮小を、手の操作とみなす） */
-    const zUser = () => { c.zUserAt = performance.now(); };
-    map.on('wheel', () => { zUser(); if (!c.arr) setManualZoom(map.getZoom()); });
-    map.on('dblclick', zUser);
-    map.on('touchstart', e => { const t = e.originalEvent && e.originalEvent.touches; if (t && t.length >= 2) zUser(); });
-    map.on('zoomstart', e => { if (e.originalEvent) zUser(); });
-    map.on('zoomend', () => { if (!c.arr && performance.now() - (c.zUserAt || -1e9) < 2500) setManualZoom(map.getZoom()); });
+    map.on('pitchend', () => { const v = Math.round(map.getPitch()); c.pitch = v; ls.set('lm-pitch', String(v)); drawTools(); });
+    /* 指で拡大・縮小したら、自動をやめてその縮尺を保つ（到着モードのあいだも同じ。「縮尺：手動（自動に戻す）」で戻る）。
+       手の操作かどうかは、拡大・縮小が始まったときに決める：こちらで動かしたもの（camEase。自動・「自動に戻す」・到着など）は手動にしない。
+       それ以外で、指の操作が付いている・2本指で触れている・ホイールかダブルタップのあと最初の拡大・縮小なら、手の操作とみなす
+       （時間で区切らない。重い場面で拡大の始まりが遅れても取りこぼさない） */
+    const zUser = () => { c.zPend = performance.now(); };
+    map.on('wheel', zUser);
+    map.on('dblclick', () => { if (c.act) zUser(); });
+    map.on('touchstart', e => { const t = e.originalEvent && e.originalEvent.touches; c.touch2 = !!(t && t.length >= 2); });
+    map.on('touchend', e => { const t = e.originalEvent && e.originalEvent.touches; if (!t || t.length < 2) c.touch2 = false; });
+    map.on('touchcancel', () => { c.touch2 = false; });
+    /* こちらで動かしている途中に指で拡大・縮小すると、始まりの知らせが来ないので、途中の知らせ（zoom）でも見る */
+    const byUser = e => !c.prog && (!!e.originalEvent || !!c.touch2 || performance.now() - (c.zPend || -1e9) < 5000);
+    map.on('zoomstart', e => { c.zByUser = byUser(e); });
+    map.on('zoom', e => { if (!c.zByUser && byUser(e)) c.zByUser = true; });
+    map.on('zoomend', () => { c.zPend = 0; if (c.zByUser) { c.zByUser = false; setManualZoom(map.getZoom()); } });
     /* 駅名（ふだんは駅の点の下。列車の印と重なるときは、上・右・左へずらす。placeLabels） */
     c.stns = L.stations.map(s => {
       const stop = c.S.st.some(x => x.name === s[0] && x.stop);
@@ -1169,7 +1358,15 @@
     map.on('move', () => cur === c && c.disp != null && trainFace(c));
     c.disp = c.tgt = r.km; trainFace(c);
     map.on('pitchend', () => syncTerrain(c));
-    map.on('load', () => { if (cur === c) { c.loaded = true; syncTerrain(c); c.camAt = 0; drawPins(c.last || r); mapTick(c.last || r, true); layoutLabels(); } });
+    map.on('load', () => {
+      if (cur !== c) return;
+      c.loaded = true;
+      try {
+        c.tunLayer = TunnelLayer({ id: 'tun3d', pointAt, tunnels: L.tunnels, exag: TERRAIN_X, color: col('--ai'), caseColor: dark ? '#1b1a18' : '#ffffff', doneColor: col('--sumi-3'), onRender: () => cur === c && trainTunnel(c) });
+        map.addLayer(c.tunLayer.layer, 'stn');
+      } catch { c.tunLayer = null; }   // 立体のトンネルが描けなくても、平面の点線で続ける
+      syncTerrain(c); tunnelMode(c); c.camAt = 0; drawPins(c.last || r); mapTick(c.last || r, true); layoutLabels();
+    });
     drawCtrl(); drawPins(r); layoutLabels();
   }
   const emptyLine = () => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } });
@@ -1186,7 +1383,8 @@
   const TRAIN = { w: 56, h: 52, cols: 6, n: 36, oy: 30.1, elev: 38 * Math.PI / 180 };   // oy：地面の中心の位置（絵の上から）
   function trainFace(c) {
     const map = c.map, d = c.S.dir;
-    const p0 = map.project(pointAt(c.disp - 1.5 * d)), p1 = map.project(pointAt(c.disp + 1.5 * d));
+    const prj = km => { const ll = pointAt(km), alt = c.tunLayer && map.getTerrain() ? tunAlt(L.tunnels, km) : null, q = alt != null && c.tunLayer.project(ll, alt * TERRAIN_X); return q ? { x: q[0], y: q[1] } : map.project(ll); };   // トンネルの中は山の中の高さで
+    const p0 = prj(c.disp - 1.5 * d), p1 = prj(c.disp + 1.5 * d);
     let sg = Math.hypot(p1.x - p0.x, p1.y - p0.y) > 4 ? Math.atan2(p1.x - p0.x, p0.y - p1.y) : (headingAt(c.disp) - map.getBearing()) * Math.PI / 180;
     const a = Math.atan2(Math.sin(TRAIN.elev) * Math.sin(sg), Math.cos(sg)) * 180 / Math.PI;
     const k = ((Math.round(a / 10) % TRAIN.n) + TRAIN.n) % TRAIN.n;
@@ -1240,9 +1438,9 @@
     if (tools) obst.push({ l: W - (tools.offsetWidth + 16), t: 0, r: W, b: tools.offsetTop + tools.offsetHeight + 6 });
     obst.push({ l: 0, t: 0, r: 80, b: 46 }, { l: 0, t: H - 22, r: Math.min(W, 300), b: H });
     const ov = c.full && $('.lm-ov', c.root);
-    if (ov) { const bt = box.getBoundingClientRect().top; obst.push({ l: 0, t: ov.getBoundingClientRect().top - bt - 4, r: W, b: H }); }
+    if (ov) { const br = box.getBoundingClientRect(), or = ov.getBoundingClientRect(); obst.push({ l: or.left - br.left - 4, t: or.top - br.top - 4, r: or.right - br.left + 4, b: H }); }
     let tb = null;
-    if (c.train && c.disp != null) { const q = map.project(pointAt(c.disp)); tb = { l: q.x - 28, t: q.y - 30, r: q.x + 28, b: q.y + 22 }; obst.push(tb); }
+    if (c.train && c.disp != null) { const q = map.project(pointAt(c.disp)); q.x += c.tdx || 0; q.y += c.tdy || 0; tb = { l: q.x - 28, t: q.y - 30, r: q.x + 28, b: q.y + 22 }; obst.push(tb); }
     /* 駅名：列車の印と重ならない向きを選ぶ（下→上→右→左）。どこも重なるなら、名前を列車の印より上に出す */
     (c.stns || []).forEach(st => {
       const q = map.project([st.s[2], st.s[1]]);
@@ -1336,14 +1534,16 @@
     let g = null;
     const two = e => [0, 1].map(i => [e.touches[i].clientX, e.touches[i].clientY]);
     const dist = p => Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]);
+    /* 傾けている途中で指の数が変わった・やめたときは、操作中の印（c.pg・c.gest）を必ず戻す（残るとカメラが止まったままになる） */
+    const reset = () => { if (g && g.mode === 'pitch') { c.pg = c.gest = false; c.holdUntil = performance.now() + 300; } g = null; };
     el.addEventListener('touchstart', e => {
-      if (!c.act || e.touches.length !== 2) { g = null; return; }
+      if (!c.act || e.touches.length !== 2) { reset(); return; }
       const p = two(e);
       g = { p0: p, d0: dist(p), mode: null };
     }, { capture: true, passive: true });
     el.addEventListener('touchmove', e => {
       if (!g) return;
-      if (e.touches.length !== 2) { g = null; return; }
+      if (e.touches.length !== 2) { reset(); return; }
       const p = two(e);
       const dx = [p[0][0] - g.p0[0][0], p[1][0] - g.p0[1][0]], dy = [p[0][1] - g.p0[0][1], p[1][1] - g.p0[1][1]];
       if (!g.mode) {
@@ -1364,11 +1564,7 @@
         poke();
       }
     }, { capture: true, passive: false });
-    const end = e => {
-      if (!g || e.touches.length >= 2) return;
-      if (g.mode === 'pitch') { c.pg = c.gest = false; c.holdUntil = performance.now() + 300; }
-      g = null;
-    };
+    const end = e => { if (g && e.touches.length < 2) reset(); };
     el.addEventListener('touchend', end, { capture: true, passive: true });
     el.addEventListener('touchcancel', end, { capture: true, passive: true });
   }
@@ -1390,12 +1586,11 @@
     if (c.map) {
       const z = c.map.getZoom();
       c.holdUntil = performance.now() + 800;   // 角度を変えているあいだは、追いかけるカメラで止めない
-      if (c.arr) { ui.toast('到着モードのあいだは平面で表示します。着いたら立体に戻ります'); drawTools(); return; }
       /* 自動のときは、立体・平面それぞれの標準に速さの分を足す。手動のときは今までどおり（立体は1段大きく） */
-      const nz = c.zAuto && c.zMan == null ? baseZoom(v) + BAND_DZ[c.band || 'fast'] : v >= 5 && z < 10.8 ? z + 1 : v < 5 && z > 11 ? z - 1 : z;
+      const nz = c.zMan == null ? (c.arr ? z : autoZoom(c, v)) : v >= 5 && z < 10.8 ? z + 1 : v < 5 && z > 11 ? z - 1 : z;   // 到着モードの縮尺は、角度を変えたあとに arrCamera が決める
       if (c.zMan != null) setManualZoom(nz);
       if (v >= 5) syncTerrain(c, true);   // 立体へは、傾け始めから地形を出す（平面へは傾け終わってから消す）
-      c.map.easeTo({ pitch: v, zoom: nz, duration: 700 });
+      camEase(c, { pitch: v, zoom: nz, duration: 700 });
     }
     drawTools();
   }
@@ -1404,7 +1599,7 @@
     const c = cur; if (!c) return;
     if (c.free) c.free = false;
     else { c.orient = c.orient === 'north' ? 'head' : 'north'; ls.set('lm-orient', c.orient); }
-    if (c.map) { c.holdUntil = performance.now() + 700; c.map.easeTo({ bearing: c.orient === 'north' ? 0 : headingAt(c.tgt ?? c.last.km), duration: 600 }); }
+    if (c.map) { c.holdUntil = performance.now() + 700; camEase(c, { bearing: c.orient === 'north' ? 0 : headingAt(c.tgt ?? c.last.km), duration: 600 }); }
     drawTools();
   }
   function setEco(on) {
@@ -1431,14 +1626,17 @@
     const c = cur; if (!c || !c.map || !c.train || !c.active()) return;
     const due = force || performance.now() - c.camAt >= camInterval() - 60;
     c.tgt = r.km;
+    if (c.gest && !c.fingers && !c.map.isMoving()) c.gest = c.pg = false;   // 指が離れて止まっているのに残った印は消す（カメラが止まったままにならないように）
     if (!c.eco || due) animTrain(force || Math.abs(r.km - (c.disp ?? r.km)) > 60);
     if (!due) return;
     c.camAt = performance.now();
     arrCheck(r);
     camera(false);
     if (c.loaded) {
-      const src = c.map.getSource('done');
-      src && src.setData(r.mode === 'before' ? emptyLine() : { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: sliceLine(c.S.first.km, r.km) } });
+      const sp = r.mode === 'before' ? { open: [], tun: [] } : tunnelSplit(L.tunnels, sliceLine, c.S.first.km, r.km);
+      const src = c.map.getSource('done'), st = c.map.getSource('tun-done');
+      src && src.setData(multiLine(sp.open)); st && st.setData(multiLine(sp.tun));
+      c.tunLayer && c.tunLayer.setKm(r.km, r.mode === 'before' ? 0 : c.S.dir);
     }
   }
   function animTrain(jump) {
@@ -1452,29 +1650,44 @@
       if (f < 1 && ts - last < 66) { c.anim = requestAnimationFrame(step); return; }   // 1秒に15回まで
       last = ts;
       c.disp = from + (to - from) * f;
-      c.train.setLngLat(pointAt(c.disp)); trainFace(c);
+      c.train.setLngLat(pointAt(c.disp)); trainTunnel(c); trainFace(c);
       c.anim = f < 1 ? requestAnimationFrame(step) : null;
       if (f >= 1) layoutLabels();   // 列車の印が動いたので、名前の置き場所を選び直す
     };
     c.anim = requestAnimationFrame(step);
   }
+  /* 「列車へ」：すぐ列車の位置に戻り、追いかけを再開する。2本指で回した向きも、元の向き（進行方向／北が上）に戻す。
+     指の操作の途中の印（c.gest・c.pg）や、カメラを待たせる時間が残っていても、押したら必ず動かす */
+  function recenter() {
+    const c = cur; if (!c) return;
+    c.follow = true; c.free = false; c.gest = c.pg = false; c.holdUntil = 0;
+    if (c.map) { c.map.stop(); c.camAt = performance.now(); }
+    drawCtrl(); camera(true);
+  }
+  /* こちらから動かすカメラ（手の操作と区別するため、動かしているあいだ c.prog を立てる。始まりの知らせはその場で届く） */
+  function camEase(c, opt, pad) {
+    c.prog = true;
+    try { pad ? c.map.setPadding(pad) : c.map.easeTo(opt); } finally { c.prog = false; }
+  }
   /* カメラ：追いかけるときは中心だけを動かす。傾きはそのまま。向きは「北が上」なら0、「進行方向」なら線路の向き、回したあとはそのまま */
-  function camera(ease) {
+  /* snap：縮尺を少しずつではなく、一度で自動の縮尺へ（「自動に戻す」を押したとき） */
+  function camera(ease, snap) {
     const c = cur; if (!c || !c.map || !c.follow || c.gest) return;
     if (performance.now() < (c.holdUntil || 0)) { c.camAt = 0; return; }
     const km = c.tgt ?? c.disp;
-    if (c.arr) return arrCamera(km, ease);
+    if (c.arr && c.zMan == null) return arrCamera(km, ease || snap);
     const opt = { center: pointAt(km) };
     if (c.full && c.pad) opt.padding = c.pad;
     if (!c.free) opt.bearing = c.orient === 'north' ? 0 : headingAt(km);
     /* 速さに合わせた縮尺へ、1回に少しずつ近づける（ゆっくり・なめらかに） */
     let slow = false;
-    if (c.zAuto && c.zMan == null && c.band) {
-      const z = c.map.getZoom(), dz = baseZoom(c.map.getPitch()) + BAND_DZ[c.band] - z;
-      if (Math.abs(dz) > 0.02) { opt.zoom = z + Math.max(-Z_STEP, Math.min(Z_STEP, dz)); slow = true; }
+    if (c.zMan == null) {
+      const z = c.map.getZoom(), dz = autoZoom(c) - z;
+      if (snap) opt.zoom = z + dz;
+      else if (Math.abs(dz) > 0.02) { opt.zoom = z + Math.max(-Z_STEP, Math.min(Z_STEP, dz)); slow = true; }
     }
-    if (ease) c.map.easeTo({ ...opt, duration: 800 });
-    else c.map.easeTo({ ...opt, duration: slow ? Math.min(2500, camInterval() * 0.9) : Math.min(700, camInterval() * 0.5), easing: t => t });
+    if (ease) camEase(c, { ...opt, duration: 800 });
+    else camEase(c, { ...opt, duration: slow ? Math.min(2500, camInterval() * 0.9) : Math.min(700, camInterval() * 0.5), easing: t => t });
   }
 
   /* ---------- 縮尺（速さで自動ズーム） ----------
@@ -1482,7 +1695,9 @@
      速さは GPS の値（なければ時刻表からの推定）。ふらつかないよう、同じ速さの帯が BAND_HOLD 続いたら切り替える */
   const baseZoom = pitch => (pitch >= 5 ? 11.3 : 10.3);
   const BAND_DZ = { fast: 0, mid: 0.7, slow: 1.5, stop: 2.6 };
-  const BAND_NAME = { fast: '高速', mid: '中速', slow: '減速中', stop: '停車・徐行' };
+  const BAND_NOTE = { fast: '', mid: '少し拡大中', slow: '減速中は拡大', stop: '停車・徐行中は拡大' };
+  /* 自動のときの縮尺：立体・平面それぞれの標準に、速さの分を足す（設定で速さの自動ズームを切ったときは標準のまま） */
+  const autoZoom = (c, pitch) => baseZoom(pitch ?? (c.map ? c.map.getPitch() : c.pitch)) + (c.zAuto ? BAND_DZ[c.band || 'fast'] : 0);
   const BAND_HOLD = 10e3, Z_STEP = 0.3;      // 帯の切り替え：（時計の）10秒続いたら／1回のカメラ移動で動かす縮尺の上限
   const bandOf = r => {
     if (!r || r.mode !== 'running') return 'stop';
@@ -1503,24 +1718,53 @@
     ss.set('lm-zman', c.zMan == null ? null : String(c.zMan));
     drawZoom();
   }
-  /* 地図の右下の札：自動（いまの速さの帯）／手動（「自動」で戻す）／到着モード */
+  /* 地図の右下の縮尺のボタン。表示は2つだけ：「縮尺：自動」／「縮尺：手動（自動に戻す）」。
+     ボタンは一度作ったら作り直さない（押しているあいだに差し替わって、押したのが消えないように）。文字と色だけ変える。
+     自動のときの補足（減速中は拡大・到着駅に向けて拡大）は、ボタンの左に小さく出す */
   function drawZoom() {
-    const c = cur; if (!c) return;
-    const box = $('.lm-mapwrap', c.root); if (!box || !c.map) return;
-    let el = $('.lm-zoom', box);
-    if (!el) { el = document.createElement('div'); el.className = 'lm-zoom'; box.appendChild(el); }
-    const dest = c.S.tr.end || c.S.last.name;
-    const html = c.arr ? `<span class="lm-zchip arr" role="status"><b>到着モード</b>${ui.esc(dest)}を上に</span>`
-      : !c.zAuto ? ''
-      : c.zMan != null ? `<span class="lm-zchip man"><b>縮尺：手動</b></span><button type="button" class="lm-zbtn" data-lm="zauto" aria-label="縮尺を自動に戻す">自動</button>`
-      : `<span class="lm-zchip"><b>縮尺：自動</b>${BAND_NAME[c.band || 'fast']}</span>`;
-    if (el.dataset.v !== html) { el.innerHTML = html; el.dataset.v = html; el.hidden = !html; }
+    const c = cur; if (!c || !c.map || !c.wrap) return;
+    let el = $('.lm-zoom', c.wrap);
+    if (!el) {
+      el = document.createElement('div'); el.className = 'lm-zoom';
+      el.innerHTML = '<span class="lm-znote" aria-hidden="true" hidden></span><button type="button" class="lm-zbtn" data-lm="zoom"><span class="lm-zk">縮尺：</span><b></b></button>';
+      c.wrap.appendChild(el);
+    }
+    const man = c.zMan != null;
+    const note = man ? '' : c.arr ? `${c.S.tr.end || c.S.last.name}へ向けて拡大` : c.zAuto ? BAND_NOTE[c.band || 'fast'] : '';
+    const v = `${man}|${note}`;
+    if (el.dataset.v === v) return;
+    el.dataset.v = v;
+    const b = $('.lm-zbtn', el), n = $('.lm-znote', el);
+    b.classList.toggle('man', man);
+    $('b', b).textContent = man ? '手動（自動に戻す）' : '自動';
+    b.setAttribute('aria-label', man ? '縮尺：手動。押すと自動に戻します' : '縮尺：自動。押すと、いまの縮尺で止めます');
+    n.textContent = note; n.hidden = !note;
+    fitTools();
+  }
+  /* 縮尺のボタン：1回押すたびに必ず切り替える（手動 → すぐ自動の縮尺へ／自動 → いまの縮尺で止める）。
+     押した印（短く色が変わる）を出す。続けて押しても、そのたびに切り替わるだけで状態は崩れない */
+  function toggleZoom(b) {
+    const c = cur; if (!c || !c.map) return;
+    c.zPend = 0; c.zByUser = false;
+    if (b) { b.classList.remove('tap'); void b.offsetWidth; b.classList.add('tap'); clearTimeout(c.tapT); c.tapT = setTimeout(() => b.classList.remove('tap'), 260); }
+    if (c.zMan != null) {
+      setManualZoom(null);
+      c.follow = true; c.gest = c.pg = false; c.holdUntil = 0; c.camAt = performance.now();
+      drawTools(); camera(true, true);
+      ui.toast('縮尺を自動に戻しました');
+    } else {
+      c.map.stop();
+      setManualZoom(c.map.getZoom());
+      ui.toast('いまの縮尺で止めました（もう一度押すと自動）');
+    }
   }
 
   /* ---------- 到着モード ----------
      終点（便ごとのデータ T.trains[key].end。なければ時刻表の最後の駅）が地図に映り込んだら入る。距離では決めない。
-     終点を画面の上の端に置き、列車を下に置いて、近づくにつれて拡大する（終点より先は見せないよう、平面で、終点の方向を上に）。
-     速さの自動ズーム・手動の縮尺より優先する。終点に着いて止まったら、ふだんの表示に戻す */
+     終点を画面の上の端に置き、列車を下に置いて、両方が画面に収まる縮尺で、近づくにつれて拡大する（終点の方向を上に）。
+     見下ろす角度は変えない：立体（斜め）ならその角度のまま最後まで、平面なら真上から。
+     入ったときは手動の縮尺も自動に戻す。途中で指で拡大・縮小したら手動になり、「自動に戻す」でまた到着駅へ向けた拡大に戻る。
+     終点に着いて止まったら、ふだんの表示に戻す */
   const endKm = c => { const k = stationKm(c.S.tr.end || c.S.last.name); return k == null ? c.S.last.km : k; };
   function arrCheck(r) {
     const c = cur; if (!c || !c.map || !c.loaded) return;
@@ -1528,10 +1772,12 @@
     const done = r.mode === 'after' || (r.mode === 'stopped' && Math.abs(r.km - ek) < 0.3);
     if (c.arr) { if (done || r.mode === 'before') arrExit(); return; }
     if (done || r.mode === 'before' || !c.follow || c.gest) return;
-    const map = c.map, box = map.getContainer(), W = box.clientWidth, H = box.clientHeight - (c.full && c.pad ? c.pad.bottom : 0);
+    const map = c.map, box = map.getContainer(), pad = c.full && c.pad ? c.pad : { bottom: 0, left: 0 }, W = box.clientWidth, H = box.clientHeight - pad.bottom;
     const q = map.project(pointAt(ek));
-    if (Number.isFinite(q.x) && Number.isFinite(q.y) && q.x >= 0 && q.x <= W && q.y >= 0 && q.y <= H) {
-      c.arr = true; c.arrFirst = true; c.camAt = 0; drawZoom();
+    if (Number.isFinite(q.x) && Number.isFinite(q.y) && q.x >= pad.left && q.x <= W && q.y >= 0 && q.y <= H) {
+      c.arr = true; c.arrFirst = true; c.camAt = 0;
+      if (c.zMan != null) setManualZoom(null);   // 手動の縮尺で終点が映ったときも、ここから自動（到着駅に向けた拡大）にする
+      drawZoom();
     }
   }
   function arrExit() {
@@ -1539,27 +1785,33 @@
     c.arr = false; c.camAt = 0; drawZoom();
     if (c.map) {
       const opt = { pitch: c.pitch, duration: 1200 };
-      if (c.zAuto && c.zMan == null) opt.zoom = baseZoom(c.pitch) + BAND_DZ[c.band || 'stop'];
-      else if (c.zMan != null) opt.zoom = c.zMan;
+      opt.zoom = c.zMan ?? autoZoom(c, c.pitch);
       if (c.full && c.pad) opt.padding = c.pad;
       if (!c.free) opt.bearing = c.orient === 'north' ? 0 : headingAt(c.tgt ?? c.disp);
       c.holdUntil = performance.now() + 1300;
-      c.map.easeTo(opt);
+      camEase(c, opt);
     }
   }
+  /* 列車を画面の yA、終点を yB に置く縮尺と中心。斜めのときは遠近（奥ほど小さく見える）を入れて求める：
+     画面の中心から上へ u（px）に見える地面は、中心から奥へ s = u·D / (D·cos p − u·sin p)（D は中心までのカメラの距離、p は傾き）。
+     平面（p = 0）では s = u になり、今までと同じ */
   function arrCamera(km, ease) {
     const c = cur, map = c.map, M = c.ml.MercatorCoordinate;
     const a = M.fromLngLat(pointAt(km)), b = M.fromLngLat(pointAt(endKm(c)));
     const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy);
-    const box = map.getContainer(), H = box.clientHeight, padB = c.full && c.pad ? c.pad.bottom : 0, Hv = H - padB;
+    const box = map.getContainer(), H = box.clientHeight, pad = c.full && c.pad ? c.pad : { bottom: 0, left: 0 }, Hv = H - pad.bottom;
     const yB = 44, yA = Math.max(yB + 60, Hv - 72);           // 終点は上の端から44px（駅名が下に出る）、列車は下から72px
-    const z = dist > 0 ? Math.max(5, Math.min(15.5, Math.log2((yA - yB) / (dist * 512)))) : 15.5;
-    const f = (yA - Hv / 2) / (yA - yB);                      // 画面の真ん中に来る点（列車→終点の割合）
+    const pitch = map.getPitch(), p = rad(pitch);
+    const fov = rad((map.getVerticalFieldOfView && map.getVerticalFieldOfView()) || 36.87), D = H / 2 / Math.tan(fov / 2);
+    const ground = u => u * D / Math.max(1e-3, D * Math.cos(p) - u * Math.sin(p));
+    const sA = ground(Hv / 2 - yA), sB = ground(Hv / 2 - yB);  // 列車（中心より下＝負）と終点（中心より上＝正）
+    const z = dist > 0 ? Math.max(5, Math.min(15.5, Math.log2((sB - sA) / (dist * 512)))) : 15.5;
+    const f = -sA / (sB - sA);                                 // 画面の中心に来る点（列車→終点の割合）
     const center = new M(a.x + dx * f, a.y + dy * f).toLngLat();
     const brg = dist > 0 ? Math.atan2(dx, -dy) * 180 / Math.PI : map.getBearing();
-    const opt = { center, zoom: z, bearing: brg, pitch: 0, padding: { top: 0, bottom: padB, left: 0, right: 0 } };
-    if (ease || c.arrFirst) { c.arrFirst = false; map.easeTo({ ...opt, duration: 1500 }); }
-    else map.easeTo({ ...opt, duration: Math.min(1500, camInterval() * 0.9), easing: t => t });
+    const opt = { center, zoom: z, bearing: brg, pitch, padding: { top: 0, bottom: pad.bottom, left: pad.left || 0, right: 0 } };
+    if (ease || c.arrFirst) { c.arrFirst = false; camEase(c, { ...opt, duration: 1500 }); }
+    else camEase(c, { ...opt, duration: Math.min(1500, camInterval() * 0.9), easing: t => t });
   }
 
   /* ---------- このページ専用の初回ガイド ---------- */
@@ -1584,7 +1836,8 @@
     Guide.run('livemap', [
       { el: () => pinTarget() || $('#lm-map', root), title: '見どころのピン', text: '名前を押すと、紹介が下から開きます。ピンの色と記号は種類（城・寺社・自然・川・街）を表します。', before: toMap },
       { el: '#spots', title: '見どころの紹介と一覧', text: '紹介には、ところ・ひとこと・くわしい説明が載っています。地図の下へスクロールすると「沿線の見どころ一覧」を通る順に見られます。', before: async () => { const h = $('#spots'); if (h) { h.scrollIntoView({ block: 'start' }); await sleep(150); } }, after: toMap },
-      { el: '#lm-map', title: c.full ? '地図の操作' : '押して地図を操作', text: c.full ? '1本指で地図を動かし、2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。動かすと列車を追いかけるのを止めます。「列車へ」で戻ります。' : 'ふだんは1本指でページをスクロールします。地図を1回押すと枠が朱色になり、1本指で動かす・2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。「操作を終える」を押すか、地図の外を押すと戻ります。' },
+      { el: '#lm-map', title: c.full ? '地図の操作' : '押して地図を操作', text: c.full ? '1本指で地図を動かし、2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。動かすと列車を追いかけるのを止めます。「列車へ」を押すと、列車の位置と元の向きに戻ります。' : 'ふだんは1本指でページをスクロールします。地図を1回押すと枠が朱色になり、1本指で動かす・2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。「操作を終える」を押すか、地図の外を押すと戻ります。' },
+      { el: () => $('.lm-zbtn', root), title: '縮尺のボタン', text: '「縮尺：自動」のあいだは、速さや降りる駅に合わせて縮尺が自動で変わります。指で拡大・縮小すると「縮尺：手動（自動に戻す）」に変わり、その縮尺のまま止まります。押すと、すぐ自動に戻ります。' },
       { el: () => $('[data-lm="tools"]', root), title: '地図の操作ボタン', text: '押すと開きます（もう一度押すと閉じます）。開くと、方位磁針（押すと北が上に、もう一度押すと進行方向が上。赤い側が北）・立体・地図の種類（標準・淡色・航空写真・OpenStreetMap）・列車へ・全画面・設定・使い方のボタンが並びます。' },
       { el: () => c.full ? $('[data-lm="tools"]', root) : $('.lm-sum', root), title: 'お知らせと画面の設定', text: `${c.full ? '「操作」を押して開き、⚙' : 'この1行か、「操作」を開いた中の ⚙'}を押すと設定が開きます。お知らせをONにすると、降りる駅の5分前と1分前にバイブと画面でお知らせします。画面を自動で消さない・省電力もここで切り替えます。`, after: toMap }
     ], { force });
