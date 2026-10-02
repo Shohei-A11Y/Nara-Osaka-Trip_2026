@@ -1,18 +1,18 @@
 /* 電波が弱い場所でも見られるように、しおり本体を端末に保存する */
-const CACHE = 'shiori-v20';
+const CACHE = 'shiori-v21';
 const TILES = 'shiori-tiles';     // 地図タイル：見た分だけ保存（地図の種類は分けず、全体でおよそ300枚まで。古いものから消す。航空写真は保存しない）
 const TILE_MAX = 300;
 const ML = 'assets/vendor/maplibre-gl/';
 const TH = 'assets/vendor/three/';      // 駅の乗り換え（3D）だけで使う。ページを開いたときだけ読み込むが、電波がなくても開けるように保存しておく
 const MAN = 'assets/manual/';          // 使い方ページの写真（電波がなくても見られるように保存）
 const INTRO = 'assets/intro/';         // 機能紹介の動画と、止まった1コマ（電波がなくても再生できるように保存）
-const FILES = ['./', 'index.html', 'assets/style.css?v=20', 'assets/sim.js?v=20', 'assets/data.js?v=20', 'assets/timetable.js?v=20', 'assets/timetable-data.js?v=20', 'assets/line-data.js?v=20', 'assets/guide.js?v=20', 'assets/news.js?v=20', 'assets/latest.js?v=20', 'assets/livemap.js?v=20', 'assets/app.js?v=20', 'assets/line-sanyo.json?v=20', 'assets/drive-route.json?v=20',
+const FILES = ['./', 'index.html', 'assets/style.css?v=21', 'assets/sim.js?v=21', 'assets/data.js?v=21', 'assets/timetable.js?v=21', 'assets/timetable-data.js?v=21', 'assets/line-data.js?v=21', 'assets/guide.js?v=21', 'assets/news.js?v=21', 'assets/latest.js?v=21', 'assets/livemap.js?v=21', 'assets/app.js?v=21', 'assets/line-sanyo.json?v=21', 'assets/drive-route.json?v=21',
   ML + 'maplibre-gl.mjs', ML + 'maplibre-gl-shared.mjs', ML + 'maplibre-gl-worker.mjs', ML + 'maplibre-gl.css',
-  'transfer.html', TH + 'three.module.min.js?v=20', TH + 'addons/controls/OrbitControls.js', TH + 'addons/renderers/CSS2DRenderer.js', TH + 'addons/utils/BufferGeometryUtils.js',
+  'transfer.html', TH + 'three.module.min.js?v=21', TH + 'addons/controls/OrbitControls.js', TH + 'addons/renderers/CSS2DRenderer.js', TH + 'addons/utils/BufferGeometryUtils.js',
   TH + 'addons/lines/Line2.js', TH + 'addons/lines/LineMaterial.js', TH + 'addons/lines/LineGeometry.js', TH + 'addons/lines/LineSegments2.js', TH + 'addons/lines/LineSegmentsGeometry.js',
-  'assets/train-sprite.webp?v=20',   // いまどのへん？の列車の印（36方向）
-  MAN + 'marks.json?v=20', ...['top', 'today', 'shift', 'search', 'ride', 'xfer', 'live', 'sim', 'qr', 'a2hs', 'fs', 'offline', 'news', 'intro', 'xhelp'].map(k => MAN + k + '.webp?v=20'),
-  ...['live', 'xfer'].flatMap(k => [INTRO + k + '.mp4?v=20', INTRO + k + '.webp?v=20']),
+  'assets/train-sprite.webp?v=21',   // いまどのへん？の列車の印（36方向）
+  MAN + 'marks.json?v=21', ...['top', 'today', 'shift', 'search', 'ride', 'xfer', 'live', 'sim', 'qr', 'a2hs', 'fs', 'offline', 'news', 'intro', 'xhelp'].map(k => MAN + k + '.webp?v=21'),
+  ...['live', 'xfer'].flatMap(k => [INTRO + k + '.mp4?v=21', INTRO + k + '.webp?v=21']),
   'assets/icon.svg', 'assets/icon-192.png', 'assets/icon-512.png', 'manifest.webmanifest'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE && k !== TILES).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

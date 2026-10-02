@@ -1185,7 +1185,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=20').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=21').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -1273,7 +1273,7 @@
   };
   /* 地図の名前の優先度（宿・観光・お昼・交通・夕ごはん候補・トイレの順）と、短い呼び名（長い名前は省く。カードには全部出る） */
   const omPrio = x => (x.cat === 'eat' && x.id.startsWith('d-') ? 4.5 : ['stay', 'see', 'eat', 'move'].indexOf(x.cat) + 1 || 5);
-  const OM_SHORT = { 'からくさホテルグランデ新大阪タワー': 'ホテル（からくさ）', '中之島エリアをおさんぽ': '中之島', '奈良公園近くの駐車場': '駐車場', '大阪城・大阪城公園': '大阪城', '大阪堂島浜タワー WowUs': 'WowUs' };
+  const OM_SHORT = { 'からくさホテルグランデ新大阪タワー': 'ホテル（からくさ）', '中之島エリアをおさんぽ': '中之島', '奈良公園近くの駐車場': '駐車場', '大阪城・大阪城公園': '大阪城', '大阪堂島浜タワー WowUs': 'WowUs', 'JO-TERRACE OSAKA': 'JO-TERRACE', 'ニッポンレンタカー 新大阪駅新幹線口': 'レンタカー営業所' };
   const omLabel = x => { const n = OM_SHORT[x.name] || (x.rest ? x.name.replace(/^Osaka Metro /, '').replace(/のトイレ$/, ' トイレ') : x.name); return n.length > 11 ? n.slice(0, 10) + '…' : n; };
   const omDot = cat => `<i class="om-dot" style="--c:${omCatOf(cat)[2]}" aria-hidden="true"></i>`;
   /* ピンのカード・一覧の1件 */
