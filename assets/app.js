@@ -1185,7 +1185,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=18').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=19').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -1271,6 +1271,10 @@
     const ds = day === 'all' ? x.days : x.days.filter(n => n === +day);
     return ds.map(n => { const t = (x.times[n] || []).join('・'); const d = T.days[n - 1]; return day === 'all' ? `${d.label}（${d.dow}）${t ? ' ' + t : ''}` : t; }).filter(Boolean).join('／');
   };
+  /* 地図の名前の優先度（宿・観光・お昼・交通・夕ごはん候補・トイレの順）と、短い呼び名（長い名前は省く。カードには全部出る） */
+  const omPrio = x => (x.cat === 'eat' && x.id.startsWith('d-') ? 4.5 : ['stay', 'see', 'eat', 'move'].indexOf(x.cat) + 1 || 5);
+  const OM_SHORT = { 'からくさホテルグランデ新大阪タワー': 'ホテル（からくさ）', '中之島エリアをおさんぽ': '中之島', '奈良公園近くの駐車場': '駐車場', '大阪城・大阪城公園': '大阪城', '大阪堂島浜タワー WowUs': 'WowUs' };
+  const omLabel = x => { const n = OM_SHORT[x.name] || (x.rest ? x.name.replace(/^Osaka Metro /, '').replace(/のトイレ$/, ' トイレ') : x.name); return n.length > 11 ? n.slice(0, 10) + '…' : n; };
   const omDot = cat => `<i class="om-dot" style="--c:${omCatOf(cat)[2]}" aria-hidden="true"></i>`;
   /* ピンのカード・一覧の1件 */
   function omEntry(x, day, opt = {}) {
@@ -1366,14 +1370,14 @@
       const order = OM_CAT.map(c => c[0]);
       groups.forEach(xs => {
         xs.sort((a, b) => order.indexOf(a.cat) - order.indexOf(b.cat));
-        const C = omCatOf(xs[0].cat), el = document.createElement('button');
-        el.type = 'button'; el.className = 'om-pin'; el.style.setProperty('--c', C[2]);
-        el.setAttribute('aria-label', xs.map(x => x.name).join('・'));
-        el.innerHTML = `${ic(C[3])}${xs.length > 1 ? `<b class="num">${xs.length}</b>` : ''}`;
+        const C = omCatOf(xs[0].cat), top = xs.slice().sort((a, b) => omPrio(a) - omPrio(b))[0];
+        /* ピン（押すとカード）と、その横の名前（いつも見える。重なるときは出さない） */
+        const el = document.createElement('div'); el.className = 'om-mk';
+        el.innerHTML = `<button type="button" class="om-pin" style="--c:${C[2]}" aria-label="${esc(xs.map(x => x.name).join('・'))}">${ic(C[3])}${xs.length > 1 ? `<b class="num">${xs.length}</b>` : ''}</button><span class="om-lb" aria-hidden="true">${esc(omLabel(top))}</span>`;
         const mk = new ml.Marker({ element: el, anchor: 'center' }).setLngLat([xs[0].ll[1], xs[0].ll[0]]).addTo(map);
-        mk.xs = xs; markers.push(mk);
+        mk.xs = xs; mk.prio = omPrio(top) * 100 + omItems().indexOf(top) / 100; mk.lb = $('.om-lb', el); markers.push(mk);
         /* 縮小していてピンが重なっているときは、押した所の近くのピンも、まとめてカードに出す */
-        el.addEventListener('click', e => {
+        $('.om-pin', el).addEventListener('click', e => {
           e.stopPropagation();
           const c = map.project(mk.getLngLat()), near = markers.map(m => [m, Math.hypot(map.project(m.getLngLat()).x - c.x, map.project(m.getLngLat()).y - c.y)]).filter(([, d]) => d < 28).sort((a, b) => a[1] - b[1]);
           openCard(el, near.flatMap(([m]) => m.xs));
@@ -1384,7 +1388,28 @@
         let w = 180, s = 90, e = -180, n = -90; pts.forEach(([la, lo]) => { w = Math.min(w, lo); e = Math.max(e, lo); s = Math.min(s, la); n = Math.max(n, la); });
         map.fitBounds([[w, s], [e, n]], { padding: { top: 56, bottom: 40, left: 40, right: 56 }, maxZoom: 15, duration: 0 });
       }
+      layout();
     };
+    /* 名前の置き場所：優先度の高いピンから順に、右・左・下・上のうち、ほかのピンや名前と重ならない所へ。
+       置けなければ出さない。縮小しているときは、出す数も減らす */
+    let lay = 0;
+    const layout = () => {
+      if (!map) return;
+      const W = box.clientWidth, H = box.clientHeight, z = map.getZoom(), cap = z < 10 ? 4 : z < 11.5 ? 8 : z < 13 ? 14 : 99;
+      const ps = markers.map(m => ({ m, p: map.project(m.getLngLat()) }));
+      const occ = ps.map(({ p }) => [p.x - 16, p.y - 16, p.x + 16, p.y + 16]);
+      const bad = r => r[0] < 2 || r[1] < 2 || r[2] > W - 2 || r[3] > H - 2 || occ.some(o => r[0] < o[2] && r[2] > o[0] && r[1] < o[3] && r[3] > o[1]);
+      let n = 0;
+      ps.sort((a, b) => a.m.prio - b.m.prio).forEach(({ m, p }) => {
+        const w = m.lb.offsetWidth + 2, h = m.lb.offsetHeight + 2;
+        let side = '';
+        if (n < cap) for (const [k, r] of [['r', [p.x + 18, p.y - h / 2, p.x + 18 + w, p.y + h / 2]], ['l', [p.x - 18 - w, p.y - h / 2, p.x - 18, p.y + h / 2]], ['b', [p.x - w / 2, p.y + 18, p.x + w / 2, p.y + 18 + h]], ['t', [p.x - w / 2, p.y - 18 - h, p.x + w / 2, p.y - 18]]]) {
+          if (!bad(r)) { side = k; occ.push(r); n++; break; }
+        }
+        m.getElement().dataset.lb = side;
+      });
+    };
+    const relayout = () => { if (!lay) lay = requestAnimationFrame(() => { lay = 0; layout(); }); };
     async function init() {
       if (map || dead) return;
       if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
@@ -1409,6 +1434,8 @@
       map.addControl(new ml.AttributionControl({ compact: false }), 'bottom-left');
       map.addControl(new ml.NavigationControl({ showCompass: false }), 'top-right');
       map.on('click', closeCard);
+      map.on('move', relayout); map.on('resize', relayout);
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
       map.on('error', () => { /* 下地のタイルが取れないときも、ピンはそのまま */ });
       draw(true);
     }
