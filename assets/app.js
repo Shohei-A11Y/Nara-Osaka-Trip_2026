@@ -632,14 +632,16 @@
     { id: 'live', tab: 'のりもの', where: '〈のりもの〉の「いまどのへん？」を開いたときの、地図の画面の説明です。', ic: 'map', title: 'いまどのへん？', sub: '新幹線の車内で', pts: [
       { m: 1, t: '自分の列車です。鼻先が進む向きを向いています。' },
       { m: 1, t: '方位磁針。押すたびに「北が上」と「進行方向が上」が切り替わります。' },
-      { m: 1, t: '立体（斜めから見下ろす地図）と、平面を切り替えます。' },
+      { m: 1, t: '立体（斜めから見下ろす地図）と、平面を切り替えます。山の盛り上がり（立体の地形）は、地図の種類が航空写真のときだけです。ほかの地図は文字が描き込まれていて、盛り上げると読みにくいため、立体でも平らです。' },
       { m: 1, t: '地図だけを大きく表示します。' },
       { m: 1, t: 'この説明書と、画面の上での案内を開きます。' },
       { m: 1, t: '次の停車駅と、到着までの時間です。' },
       { m: 1, t: '時速です。下の線は速さの目安で、時速300kmでいっぱいになります。全画面では、この札が画面の下に出ます。' },
       { t: '地図は1回押すと、指で動かせるようになります。動かしたあとは、操作ボタンの「列車へ」で列車の位置に戻ります。' },
       { t: '地図の右下の「自動ズーム：オン」のあいだは、停車駅に近づくと着く前から少しずつ拡大し、駅前の建物や道が分かるくらいまで寄ります。駅を出ると少しずつ戻ります。押すとオフになり、縮尺を自動では変えません。指で拡大・縮小しても自動は止まらず、その縮尺を「走行中の縮尺」として覚えます。「元の縮尺に戻す」で最初の縮尺に戻ります。' },
-      { t: '「現在地を使う」を押していないときは、時刻表どおりの位置です。遅れているときは押すと、GPSで遅れを測って「約○分遅れ」と出し、時刻をずらします。運行の状況は、地図の下の「JR公式の運行情報」で確かめられます。' }] },
+      { t: '乗車の時間帯（発車の30分前〜到着の2時間後）は、位置の情報を許可していれば、ボタンを押さなくてもGPSで遅れを測り、「約○分遅れ」と出して、次の駅まで・到着・降車のお知らせ・駅一覧の時刻をずらします。時間帯が終わると、自動で止まります。' },
+      { t: '位置の情報の許可は、端末ごとに一度だけ必要です。旅行の前に、いまどのへん？を開くと出る案内の「許可する」を押しておいてください（当日まではGPSを使いません）。許可していない端末には、乗車の時間帯に画面の上に「使う」が出ます。' },
+      { t: '「GPSを止める」を押すと、そのタブのあいだは自動で使いません。それ以外の時間は、「現在地を使う」を押したときだけ使います。運行の状況は、地図の下の「JR公式の運行情報」で確かめられます。' }] },
     { id: 'search', tab: 'すべての画面', where: '右上の「目次」か、〈その他〉のいちばん下の「しおりの目次」から開く、目次と検索の説明です。', ic: 'search', title: '目次と検索', sub: 'あの情報はどこ？', pts: [
       { m: 1, t: 'ことばを入れると、しおりの中から探します。ひらがなでも探せます。電波がなくても使えます。' },
       { m: 1, t: '見つかった所を押すと、その場所へ移って、短く光ります。' },
@@ -803,6 +805,7 @@
       { id: 'lm28', title: '10/17 12:13　のぞみ28号・博多を発車（往路）', text: '作り物のGPSが線路を進みます。上の帯の「×1」を押すと×10・×60に早送りできます。', t: '2026-10-17T12:13', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28' } },
       { id: 'lm28-kanmon', title: '10/17 12:34　のぞみ28号・関門トンネルの手前', text: 'トンネルでGPSが途切れ、時刻表からの推定に切り替わります。', t: '2026-10-17T12:34', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28' } },
       { id: 'lm28-late', title: '10/17 13:45　のぞみ28号・5分遅れ（福山の手前）', text: 'GPSから遅れを見つけて「約5分遅れ」と表示。到着時刻とアラームもずれます。', t: '2026-10-17T13:45', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28', delay: 5 } },
+      { id: 'lm28-late30', title: '10/17 12:10　のぞみ28号・30分遅れ（博多で発車待ち）', text: '博多に止まったまま遅れの分数が増え、30分遅れて発車します。次の駅まで・到着・降車のお知らせ・駅一覧の時刻が、遅れを足した時刻になります。トンネルでGPSが途切れても、遅れを使い続けます。', t: '2026-10-17T12:10', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28', delay: 30 } },
       { id: 'lm28-arr', title: '10/17 14:36　のぞみ28号・新大阪の7分前', text: '降車アラーム（5分前・1分前）の確認に。', t: '2026-10-17T14:36', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28' } },
       { id: 'lm17', title: '10/20 11:01　のぞみ17号・新大阪を発車（復路）', t: '2026-10-20T11:01', go: '#/ride/live/nozomi17', pos: { track: 'nozomi17' } },
       { id: 'lm17-arr', title: '10/20 13:20　のぞみ17号・博多の手前', text: '降車アラームと、リレーかもめへの乗り換えカウントダウン。', t: '2026-10-20T13:20', go: '#/ride/live/nozomi17', pos: { track: 'nozomi17' } }
@@ -855,6 +858,83 @@
       <div class="sb-r"><button data-sim="toggle" aria-label="${st.paused ? '再生' : '一時停止'}">${st.paused ? '▶' : '❚❚'}</button><button data-sim="speed" aria-label="再生速度">×${st.speed}</button><button data-sim="seek">時刻</button><button data-sim="stop" class="sb-stop">終了</button></div>`;
     if (bar.dataset.v !== html) { bar.innerHTML = html; bar.dataset.v = html; }
   }
+
+  /* ========== 位置の情報の許可の案内 ==========
+     いまどのへん？は、乗車の時間帯（発車の30分前〜到着の2時間後）に、許可が済んでいればGPSを自動で使う（livemap.js）。
+     許可はブラウザの決まりで、端末ごとに一度は本人が「許可」を押す必要があるので、次のときだけ案内を出す：
+       ・旅行前（10/16 まで）に、いまどのへん？を開いたとき（まだ聞かれていない端末に一度だけ。押すと許可の確認だけ出し、GPSはすぐやめる）
+       ・乗車の時間帯に、どの画面でも（まだ聞かれていない端末は「使う」1つ。押すとすぐブラウザの確認が出る）
+       ・拒否されている端末には、設定から許可し直す方法を短く
+     ページから端末の設定を直接オンにすることはできない（ボタンを押してもらう形が限界）。おためし中は出さない（テストの差し替え ?perm= のときは出す） */
+  const GEO_PRE_END = '2026-10-16';
+  const geoNeed = st => st === 'prompt' || st === 'unknown';
+  const GEO_STEPS = {
+    android: ['Android の Chrome', ['アドレスバーの左の印（調整のつまみの形）を押す →「権限」→「位置情報」をオン。', '見つからないときは、Chrome の右上の︙ →「設定」→「サイトの設定」→「位置情報」→ このしおりを「許可」。']],
+    pwa: ['ホーム画面の「旅のしおり」から開いているとき', ['ホーム画面の「旅のしおり」を長押し →「アプリ情報」→「権限」→「位置情報」→「アプリの使用中のみ許可」。', 'それでも出ないときは、上の Chrome の手順でも許可します。']],
+    ios: ['iPhone の Safari', ['「設定」アプリ →「プライバシーとセキュリティ」→「位置情報サービス」がオンか確かめ、同じ画面の下の「Safari の Webサイト」→「使用中のみ（または次回確認）」。', 'Safari でしおりを開き、アドレスバーの「ぁあ」（または「AA」）→「Webサイトの設定」→「位置情報」→「許可」。ホーム画面から開いているときも同じです。']]
+  };
+  const GEO_OFF = {
+    android: ['Android', ['画面の上から下へ2回なぞって、クイック設定の「位置情報」をオン。', 'または「設定」アプリ →「位置情報」→「位置情報を使用」をオン。']],
+    ios: ['iPhone', ['「設定」アプリ →「プライバシーとセキュリティ」→「位置情報サービス」をオン。']]
+  };
+  const stepsHTML = ([h, l]) => `<div class="ga-steps"><h4>${h}</h4><ol>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>`;
+  function geoHelp(kind) {
+    if (kind === 'off') {
+      const order = isIOS ? ['ios', 'android'] : ['android', 'ios'];
+      sheet('端末の位置情報をオンにする', `<p class="small">位置の情報は許可されましたが、端末そのものの位置情報がオフのようです。しおりから端末の設定をオンにすることはできないので、次の手順でオンにしてください。Android の Chrome では、許可のあとに「位置情報をオンにする」確認が出ることがあります。そのときは「OK」を押すだけです。</p>
+        ${order.map(k => stepsHTML(GEO_OFF[k])).join('')}
+        <p class="note">オンにしたら、いまどのへん？を開き直すと、遅れに合わせて動きます。</p>`);
+      return;
+    }
+    const order = isIOS ? ['ios', 'android', 'pwa'] : standalone() ? ['pwa', 'android', 'ios'] : ['android', 'pwa', 'ios'];
+    sheet('位置の情報を許可し直す', `<p class="small">この端末では、しおりの位置の情報が「拒否」になっています。しおりからは許可し直せないので、次の手順で許可してください。許可しなくても、いまどのへん？は時刻表どおりに動きます（遅れには合わせられません）。</p>
+      ${order.map(k => stepsHTML(GEO_STEPS[k])).join('')}
+      <p class="note">位置の情報は、いまどのへん？で列車の遅れを測るためだけに、この端末の中で使います。どこにも送りません。</p>`);
+  }
+  function geoAskRun(btn, pre) {
+    btn.disabled = true;
+    GeoPerm.request().then(r => {
+      if (pre) store.set('geoPre', 'done');
+      if (r === 'granted') toast(pre ? '許可しました。当日、乗車の時間帯に自動で使います（いまは使いません）' : '位置の情報を使います。遅れに合わせて動かします', 3200);
+      else if (r === 'denied') geoHelp('denied');
+      else if (r === 'off') geoHelp('off');
+      geoAsk();
+    });
+  }
+  function geoAsk() {
+    let el = $('#geoask');
+    const st = GeoPerm.state(), sim = Clock.active() && !GeoPerm.test();
+    const rk = !sim && window.LiveMap && LiveMap.rideKey ? LiveMap.rideKey() : null;
+    const isLive = /^#\/ride\/live\//.test(location.hash);
+    let html = '', kind = '';
+    if (rk && !session.get('geoAskX')) {
+      if (geoNeed(st)) { kind = 'ride'; html = `<p class="ga-t"><b>遅れに合わせて動かすため、位置の情報を使います</b><span>いまどのへん？の時刻（次の駅まで・到着・降車のお知らせ）を、列車の遅れに合わせます。位置はこの端末の中だけで使います。</span></p><button class="btn fill ga-go" data-ga="go">使う</button>`; }
+      else if (st === 'denied') { kind = 'ride denied'; html = `<p class="ga-t"><b>位置の情報が「拒否」になっています</b><span>いまどのへん？は時刻表どおりに動き、遅れには合わせられません。設定で許可し直せます。</span></p><button class="btn quiet ga-go" data-ga="help">許可し直す方法</button>`; }
+    } else if (isLive && !sim && ymd(now()) <= GEO_PRE_END && !store.get('geoPre')) {
+      if (geoNeed(st)) { kind = 'pre'; html = `<p class="ga-t"><small>旅行の前に、一度だけ</small><b>当日、遅れに合わせて動かすため、位置の情報を許可してください</b><span>下のボタンを押すと、ブラウザの確認が出ます。「許可」を押してください。当日まではGPSを使いません（すぐやめます）。乗車の時間帯（発車の30分前〜到着の2時間後）に、自動で使います。</span></p><button class="btn fill ga-go" data-ga="pre">許可する</button>`; }
+      else if (st === 'denied') { kind = 'pre denied'; html = `<p class="ga-t"><small>旅行の前に</small><b>位置の情報が「拒否」になっています</b><span>当日、遅れに合わせて動かすには、設定で許可し直してください。</span></p><button class="btn quiet ga-go" data-ga="help">許可し直す方法</button>`; }
+    }
+    if (!html) { el && el.remove(); return; }
+    if (!el || !el.isConnected || !app.contains(el)) {
+      el && el.remove();
+      el = document.createElement('section'); el.id = 'geoask'; el.setAttribute('aria-label', '位置の情報の案内');
+      el.addEventListener('click', e => {
+        const b = e.target.closest('[data-ga]'); if (!b) return;
+        const k = b.dataset.ga;
+        if (k === 'go') geoAskRun(b, false);
+        if (k === 'pre') geoAskRun(b, true);
+        if (k === 'help') geoHelp('denied');
+        if (k === 'x') { if (el.dataset.kind.startsWith('pre')) store.set('geoPre', 'later'); else session.set('geoAskX', '1'); geoAsk(); }
+      });
+      /* いまどのへん？は地図の上（開くと地図の所まで自動でスクロールするため）。トップは「いまの予定」の最初の札の下（札は表紙に重なる作り）。ほかは上の帯の下 */
+      const lm = $('#lm:not(.lm-full)', app), tt = $('#today-top', app), at = $('.topbar', app) || $('.cover', app);
+      lm ? lm.prepend(el) : tt && tt.firstElementChild ? tt.firstElementChild.after(el) : at ? at.after(el) : app.prepend(el);
+    }
+    const full = `${html}<button class="ga-x" data-ga="x" aria-label="${kind.startsWith('pre') ? 'この案内を閉じる（もう出しません）' : 'この案内を閉じる（このタブを閉じるまで）'}">×</button>`;
+    el.className = 'geoask ' + kind; el.dataset.kind = kind;
+    if (el.dataset.v !== full) { el.innerHTML = full; el.dataset.v = full; }
+  }
+  GeoPerm.on(() => geoAsk());
 
   const topbar = () => `<header class="topbar"><a class="mark" href="#/"><i>し</i>しおり</a><div class="top-actions">
     <button class="tbtn" data-act="fam">${ic('user')}${esc(famName() || '家族を選ぶ')}</button><button class="tbtn" data-act="toc">${ic('menu')}目次</button></div></header>`;
@@ -1294,7 +1374,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=27').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=28').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -2026,31 +2106,46 @@
       <div class="lm-spd" id="lm-spd" hidden></div>
       <div class="lm-notice" id="lm-notice" aria-live="polite"></div>
       <div class="lm-ctrl" id="lm-ctrl"></div>
-      <p class="note">位置情報は「現在地を使う」を押したときだけ、このページを開いているあいだ使います。どこにも送りません。GPSが届かないときは時刻表から推定します。</p>
+      <p class="note">位置情報は、このページを開いているあいだだけ使います。乗る列車の発車30分前〜到着2時間後は、位置の情報を許可していれば自動で使い、それ以外は「現在地を使う」を押したときだけ使います。どこにも送りません。GPSが届かないときは、最後に測った遅れと時刻表から推定します。</p>
       <p class="note">地図：地理院タイル（国土地理院）・OpenStreetMap。線路の形：© OpenStreetMap contributors（Overture Maps 経由）。市町村：国土数値情報（行政区域データ）を加工。見どころの紹介文は、このしおり用に書いたものです。</p>`}
     </section>`;
   function updateLive() {
     const line = $('#line'); if (!line) return;
     const k = T.nozomiLine[location.hash.split('/')[3]] ? location.hash.split('/')[3] : 'nozomi28';
-    const tr = T.trains[k], s = liveState(k), t = now();
+    /* GPSで遅れを測っているときは、地図（livemap.js）と同じく遅れに合わせる：列車の印・次の駅・発車の時刻・まだ着いていない駅の時刻 */
+    const t = now(), st0 = window.LiveMap && LiveMap.schedT ? LiveMap.schedT(k) : null;
+    const dl = st0 != null && window.LiveMap ? LiveMap.delayMs() : 0, late = dl >= 2 * 6e4, gr = late ? 'ごろ' : '';
+    const tr = T.trains[k], s = liveState(k, st0 != null ? new Date(st0) : t);
     const lis = $$('li', line);
     const center = i => lis[i].offsetTop + lis[i].offsetHeight / 2;
     const i0 = Math.floor(s.pos), fr = s.pos - i0;
     const y = i0 >= lis.length - 1 ? center(lis.length - 1) : center(i0) + (center(i0 + 1) - center(i0)) * fr;
     $('.trainpin', line).style.top = y + 'px';
     const fill = $('#fill'); fill.style.top = center(0) + 'px'; fill.style.height = Math.max(0, y - center(0)) + 'px';
-    lis.forEach((li, i) => li.classList.toggle('passed', s.mode !== 'before' && i <= s.pos));
+    lis.forEach((li, i) => {
+      const done = s.mode !== 'before' && i <= s.pos;
+      li.classList.toggle('passed', done);
+      /* 遅れているときは、まだ着いていない駅に、遅れを足した時刻を添える */
+      const x = late && !done ? `${fmtHM(new Date(Math.round((+(i ? s.st[i].arr : s.st[i].dep) + dl) / 6e4) * 6e4))}ごろ` : '';
+      if ((li.dataset.lx || '') !== x) {
+        li.dataset.lx = x;
+        const ln = $('.ln', li); let e = $('.lx', ln);
+        if (!x) { e && e.remove(); } else { if (!e) { e = document.createElement('small'); e.className = 'lx num'; ln.appendChild(e); } e.textContent = '→' + x; }
+      }
+    });
     const next = s.st.slice(Math.floor(s.pos) + 1).find(x => x.stop);
     const mins = d => Math.max(0, Math.round((d - t) / 6e4));
+    const hm = d => fmtHM(new Date(Math.round((+d + dl) / 6e4) * 6e4));
+    const lateTxt = late ? `（約${Math.round(dl / 6e4)}分遅れ）` : '';
     let a, b;
-    if (s.mode === 'before') { const m = mins(s.st[0].dep); a = ['まもなく', `${tr.name} ${tr.to}`, tr.dep]; b = m < 1440 ? `発車まで あと${m >= 60 ? Math.floor(m / 60) + '時間' : ''}${m % 60}分` : `${tr.date.slice(5).replace('-', '/')} に発車します`; }
-    else if (s.mode === 'after') { a = ['到着', tr.to, tr.arr]; b = 'おつかれさまでした'; }
-    else if (s.mode === 'stopped') { a = ['停車中', s.st[s.i].name, fmtHM(s.st[s.i].dep)]; b = `${fmtHM(s.st[s.i].dep)}に発車します`; }
-    else { a = ['走行中', `${s.st[s.i].name} → ${s.st[s.i + 1].name}`, '']; b = next ? `つぎは ${next.name}　${fmtHM(next.arr)}着・あと${mins(next.arr)}分` : ''; }
+    if (s.mode === 'before') { const m = mins(+s.st[0].dep + dl); a = ['まもなく', `${tr.name} ${tr.to}`, tr.dep]; b = late && m < 1 ? `遅れて発車を待っています${lateTxt}` : m < 1440 ? `発車まで あと${m >= 60 ? Math.floor(m / 60) + '時間' : ''}${m % 60}分${lateTxt}` : `${tr.date.slice(5).replace('-', '/')} に発車します`; }
+    else if (s.mode === 'after') { a = ['到着', tr.to, late ? hm(s.st[s.st.length - 1].arr) : tr.arr]; b = 'おつかれさまでした'; }
+    else if (s.mode === 'stopped') { a = ['停車中', s.st[s.i].name, hm(s.st[s.i].dep)]; b = `${hm(s.st[s.i].dep)}${gr}に発車します${lateTxt}`; }
+    else { a = ['走行中', `${s.st[s.i].name} → ${s.st[s.i + 1].name}`, '']; b = next ? `つぎは ${next.name}　${hm(next.arr)}着${gr}・あと${mins(+next.arr + dl)}分` : ''; }
     $('#live-board').innerHTML = `<section class="board" style="margin-top:0"><div class="board-head"><span>　</span><span>${tr.name}</span><span>${fmtHM(t)}</span></div>
       <div class="board-row"><span class="k">${a[0]}</span><span class="n">${esc(a[1])}</span><span class="t num">${a[2]}</span></div>
       <div class="ticker" aria-live="polite"><span style="animation:none;padding-left:0">${esc(b)}</span></div></section>`;
-    const alert = T.castles.map(c => { const st = s.st.find(x => x.name === c.station); if (!st) return ''; const d = (st.arr - t) / 6e4; return d <= 6 && d >= -2 && s.mode !== 'before' && s.mode !== 'after' ? `<div class="alert">まもなく${c.name}。${tr.dir === 'go' ? '左' : '右'}の窓（${c.side}）をチェック</div>` : ''; }).join('');
+    const alert = T.castles.map(c => { const st = s.st.find(x => x.name === c.station); if (!st) return ''; const d = (+st.arr + dl - t) / 6e4; return d <= 6 && d >= -2 && s.mode !== 'before' && s.mode !== 'after' ? `<div class="alert">まもなく${c.name}。${tr.dir === 'go' ? '左' : '右'}の窓（${c.side}）をチェック</div>` : ''; }).join('');
     const al = $('#live-alert'); if (al && al.dataset.v !== alert) { al.innerHTML = alert; al.dataset.v = alert; }
     const tips = T.nozomiTips[k].filter(tp => s.st.findIndex(x => x.name === tp.after) <= Math.floor(s.pos));
     const tp = s.mode === 'before' ? T.nozomiTips[k][0] : tips[tips.length - 1];
@@ -2401,6 +2496,7 @@
       if (phase() === 'before') tickCountdown();
       else { const b = $('#today-top'); if (b) { const html = todayTop(); if (b.dataset.h !== html) { b.innerHTML = html; b.dataset.h = html; applyRuby(b); } } }
     }
+    geoAsk();   // 「いまの予定」の札を描き直したあとに（札の中に置くため）
     if ($('#line')) updateLive();
     /* のりもの・まっぷの略図の列車の印を進める */
     $$('svg[data-rmini]').forEach(el => { if (liveState(el.dataset.rmini).pos.toFixed(3) !== el.dataset.p) el.outerHTML = routeMini(el.dataset.rmini); });
@@ -2490,6 +2586,7 @@
     document.body.classList.toggle('lm-full-on', isLive && parts[3] === 'full' && !!$('#lm.lm-full'));
     drawNav(views[route] ? route : 'home', parts[1]);
     simBar();
+    geoAsk();
     document.title = { home: '旅のしおり｜奈良・大阪 2026', map: 'まっぷ｜旅のしおり', trip: '旅程｜旅のしおり', ride: 'のりもの｜旅のしおり', food: 'ごはん｜旅のしおり', spot: 'おでかけ｜旅のしおり', stay: 'やど・くるま｜旅のしおり', sos: 'もしも｜旅のしおり', money: '予算｜旅のしおり', help: '使い方｜旅のしおり', tips: '旅のワンポイント｜旅のしおり', trivia: 'トリビア｜旅のしおり', bag: '持ち物｜旅のしおり', memo: '思い出メモ｜旅のしおり' }[route] || '旅のしおり｜奈良・大阪 2026';
     if (route === 'map' && parts[1] === 'outing') document.title = 'おでかけマップ｜旅のしおり';
     CoverTrain.mount(route === 'home' || !views[route] ? $('.cover:not(.slim)') : null);
@@ -2500,7 +2597,7 @@
     if (route === 'ride' && parts[1] === 'live') {
       requestAnimationFrame(updateLive);
       if (!fresh) scrollTo(0, y0);
-      if (window.LiveMap && $('#lm')) window.LiveMap.mount(T.nozomiLine[parts[2]] ? parts[2] : 'nozomi28', { esc, fmtHM, sheet, toast, gmap, ext, full: parts[3] === 'full', fresh });
+      if (window.LiveMap && $('#lm')) window.LiveMap.mount(T.nozomiLine[parts[2]] ? parts[2] : 'nozomi28', { esc, fmtHM, sheet, toast, gmap, ext, geoHelp, full: parts[3] === 'full', fresh });
     }
     liveKey = liveState0();
     // スクロール位置

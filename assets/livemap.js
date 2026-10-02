@@ -6,13 +6,13 @@
    位置情報はこの端末の中だけで使い、どこにも送らない。 */
 (() => {
   'use strict';
-  const T = window.TRIP, L = window.LINE, Clock = window.Clock, Geo = window.Geo;
-  if (!T || !L || !Clock || !Geo) return;
+  const T = window.TRIP, L = window.LINE, Clock = window.Clock, Geo = window.Geo, GeoPerm = window.GeoPerm;
+  if (!T || !L || !Clock || !Geo || !GeoPerm) return;
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const MIN = 6e4;
   const MAPLIBRE = 'assets/vendor/maplibre-gl/maplibre-gl.mjs';
-  const LINE_URL = 'assets/line-sanyo.json?v=27';
+  const LINE_URL = 'assets/line-sanyo.json?v=28';
   const GPS_MAX_OFF = 0.5, GPS_MAX_ACC = 1000, GPS_MAX_AGE = 30e3, V_MAX = 330;
 
   /* ========== 線路の形（km ⇔ 緯度経度） ========== */
@@ -103,8 +103,14 @@
       return [st[st.length - 1].arr, Infinity];
     };
     S.ahead = (km, x) => (x - km) * dir;   // 進行方向に見て、x が km より先なら正
+    /* 乗車の時間帯：発車の30分前〜到着の2時間後（GPSを受け付ける・自動で使う時間帯） */
+    S.ride = t => t >= st[0].dep - RIDE_PRE && t <= st[st.length - 1].arr + RIDE_POST;
     return (schedCache[key] = S);
   }
+  const RIDE_PRE = 30 * MIN, RIDE_POST = 120 * MIN;
+  /* いま乗車の時間帯にある列車（いまどのへん？がある列車の中から。なければ null） */
+  const rideKey = (t = +Clock.now()) => Object.keys(T.nozomiLine).find(k => sched(k).ride(t)) || null;
+  const ECO_GPS = 60e3;   // 省電力中は、位置を60秒に1回だけ取る（遅れを測るのに足りる最低限）
 
   /* ========== おためし：線路を走る作り物のGPS ========== */
   const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
@@ -119,10 +125,31 @@
     };
   });
 
-  /* ========== 位置の推定（時刻表 × GPS） ========== */
+  /* ========== 位置の推定（時刻表 × GPS） ==========
+     遅れの合わせ方（停車駅を基準にする）
+     - 停車駅に止まっているあいだ（hold）：定刻の発車を過ぎても止まっていれば、遅れは1秒ずつ増える（列車は駅に置いたまま）。
+       遅れて着いたときは、着いた時刻＋最低の停車時間（最大1分）より前には発車しないとみなす。早く着いたときは、定刻の発車まで待つ。
+     - 動き出したら：その時点の遅れ（base）で、以降の時刻をすべてずらす。駅と駅のあいだは、時刻表を区間の平均の速さで割り振った推定なので、
+       加速・減速のぶん1〜2分ずれて見える。そのふらつきでは遅れを変えず、2分を超えてずれたとき（ゆっくり走った・駅の外で止まった）だけ測り直す。
+       駅の外で止まっている（速さがほぼ0）あいだは、止まった位置に合わせて遅れを増やす。
+     - 次の停車駅に着いたら、着いた時刻で遅れを更新。以降、停車駅ごとに同じ。終点では、着いた時刻の遅れのまま。
+     - トンネルなどで位置が途切れても、最後の遅れを使い続ける（このタブでいまどのへん？を開き直しても、同じ乗車のあいだは覚えておく） */
+  const HOLD_MAX = 90e3;      // 駅に止まっていた最後の位置から、この時間は駅に置いたままにする（省電力は60秒に1回なので、それより長く）
+  const DELAY_TOL = 2 * MIN;  // 駅の間で、時刻表の割り振りとのずれをこれ以上なら測り直す
   function Tracker(key) {
     const S = sched(key);
-    const tk = { S, fix: null, fixes: [], delay: 0, delayAt: null, v: null, reject: '' };
+    const tk = { S, fix: null, fixes: [], delay: 0, delayAt: null, v: null, reject: '', hold: null, base: null };
+    /* 開き直したときは、同じ乗車のあいだに測った遅れから始める */
+    const mem = PrefWatch.getDelay(key);
+    if (mem && S.ride(+Clock.now())) { tk.delay = tk.base = mem.d; tk.delayAt = mem.at || +Clock.now(); }
+    const lastI = S.st.length - 1;
+    /* 停車駅 i に止まっていて、時刻 t のときの遅れ（いつ発車するとみなすか） */
+    const holdDelay = (h, t) => {
+      const st = S.st[h.i];
+      if (h.i === lastI) return h.arrAt != null ? h.arrAt - st.arr : tk.delay;
+      const dwell = Math.min(st.dep - st.arr, MIN);
+      return Math.max(st.dep, h.arrAt != null ? h.arrAt + dwell : -Infinity, t) - st.dep;
+    };
     tk.onFix = pos => {
       if (!pos) return;
       const now = +Clock.now();
@@ -130,20 +157,32 @@
       if (!isFinite(at) || Math.abs(now - at) > 6 * 36e5) at = now;   // 端末によっては時刻の基準がずれた値が来るので、受け取った時刻で代用
       if (pos.acc > GPS_MAX_ACC) { tk.reject = 'acc'; return; }
       if (now - at > GPS_MAX_AGE) { tk.reject = 'old'; return; }
-      if (now < S.first.dep - 30 * MIN || now > S.last.arr + 120 * MIN) { tk.reject = 'time'; return; }
+      if (!S.ride(now)) { tk.reject = 'time'; return; }
       const sn = snap(pos.lat, pos.lon);
       if (sn.off > GPS_MAX_OFF) { tk.reject = 'far'; return; }
       tk.reject = '';
       let km = sn.km;
-      const slow = pos.speed != null && pos.speed < 1.5;
+      /* 速さ：GPSの値がなければ、直前の位置からの進み方で見る */
+      const prev = tk.fixes[tk.fixes.length - 1];
+      const speed = pos.speed != null ? pos.speed : prev && at - prev.at >= 5e3 ? Math.abs(km - prev.km) * 1e6 / (at - prev.at) : null;
+      const slow = speed != null && speed < 1.5;
       /* 停車駅で止まっているときは、その駅に固定 */
       const stn = S.st.find(x => x.stop && Math.abs(x.km - km) < (slow ? 0.6 : 0.15));
-      if (stn && (slow || pos.speed == null)) km = stn.km;
-      /* 終点に着いたあとは、位置から遅れが分からないので、それまでの値を使い続ける */
-      if (!(tk.delayAt != null && Math.abs(km - S.last.km) < 0.3)) {
-        const [t1, t2] = S.when(km);
-        tk.delay = at - Math.min(Math.max(at, t1), t2);
-        tk.delayAt = at;
+      const atStn = stn && (slow || speed == null);
+      if (atStn) {
+        km = stn.km;
+        const i = S.st.indexOf(stn);
+        if (!tk.hold || tk.hold.i !== i) tk.hold = { i, arrAt: i === 0 ? null : at };   // 着いた（始発駅は、着いた時刻を使わない）
+        tk.hold.at = at;
+        /* 終点に着いたあとは、着いた時刻の遅れのまま（それより前に終点で測っていたら、それを使い続ける） */
+        if (i === lastI && tk.hold.done) { /* そのまま */ }
+        else { tk.delay = tk.base = holdDelay(tk.hold, at); tk.delayAt = at; if (i === lastI) tk.hold.done = true; }
+      } else {
+        tk.hold = null;
+        const [t1, t2] = S.when(km), raw = at - Math.min(Math.max(at, t1), t2);
+        /* 駅の外で止まっている・時刻表の割り振りから2分を超えてずれた・まだ測っていない → 測り直す。それ以外は、発車したときの遅れのまま */
+        if (tk.base == null || slow || Math.abs(raw - tk.base) > DELAY_TOL) tk.base = raw;
+        tk.delay = tk.base; tk.delayAt = at;
       }
       tk.fix = { km, at, speed: pos.speed, off: sn.off };
       tk.fixes.push({ km, at }); if (tk.fixes.length > 3) tk.fixes.shift();
@@ -151,7 +190,15 @@
     tk.compute = () => {
       const now = +Clock.now();
       const fresh = !!(tk.fix && now - tk.fix.at <= GPS_MAX_AGE);
-      const s = S.at(now - tk.delay);
+      let delay = tk.delay, t = now - delay;
+      /* 停車駅に止まっているあいだは、駅に置いたまま（遅れはその場で増やす）。位置が途切れて HOLD_MAX を過ぎたら、最後に止まっていた時刻に発車したとみなす */
+      const h = tk.hold;
+      if (h && h.i !== lastI && now - h.at <= HOLD_MAX) {
+        const st = S.st[h.i];
+        delay = holdDelay(h, now);
+        t = Math.min(Math.max(now - delay, st.arr), st.dep - 1);
+      }
+      const s = S.at(t);
       const km = s.km;
       /* 速度：GPSの値 → 直近の点から計算 → 時刻表の区間平均 */
       let v = null, approx = false;
@@ -164,9 +211,10 @@
       if (v != null && v > V_MAX) v = null;                // 列車は300km/hまで。跳ねた値は捨てる
       if (v == null) { v = s.v || 0; approx = true; }
       tk.v = v === 0 ? 0 : tk.v == null || tk.v === 0 ? v : tk.v + (v - tk.v) * 0.35;
-      const gpsDelay = tk.delayAt != null && now - tk.delayAt < 15 * MIN;
-      if (gpsDelay) PrefWatch.setDelay(S.key, tk.delay);
-      return { now, km, mode: s.mode, i: s.i, src: fresh ? 'gps' : 'est', speed: tk.v, approx, delay: tk.delay, gpsDelay };
+      /* GPSで遅れを測ったことがあれば、途切れても（トンネル・画面を消していたあいだも）その遅れを使い続ける */
+      const gpsDelay = tk.delayAt != null && S.ride(now);
+      if (gpsDelay) PrefWatch.setDelay(S.key, delay, tk.delayAt);
+      return { now, km, mode: s.mode, i: s.i, src: fresh ? 'gps' : 'est', speed: tk.v, approx, delay, gpsDelay, t };
     };
     return tk;
   }
@@ -182,7 +230,8 @@
     let base = null, pend = null, el = null, hideT = 0;
     const fired = new Set();
     const RM = matchMedia('(prefers-reduced-motion: reduce)');
-    const setDelay = (key, d) => { if (mem && mem.key === key && Math.abs(mem.d - d) < 1e3) return; mem = { key, d }; try { sessionStorage.setItem(KEY, JSON.stringify(mem)); } catch { /* noop */ } };
+    const setDelay = (key, d, at) => { if (mem && mem.key === key && Math.abs(mem.d - d) < 15e3 && (!at || at - (mem.at || 0) < 60e3)) return; mem = { key, d, at }; try { sessionStorage.setItem(KEY, JSON.stringify(mem)); } catch { /* noop */ } };
+    const getDelay = key => (mem && mem.key === key && isFinite(mem.d) ? mem : null);
     const active = () => {
       const t = +Clock.now();
       for (const key of Object.keys(T.nozomiLine)) {
@@ -234,7 +283,7 @@
     setInterval(tick, 1000);
     Clock.on(kind => { if (kind === 'tick') tick(); else if (kind === 'start' || kind === 'seek' || kind === 'stop') { base = null; pend = null; fired.clear(); if (kind !== 'seek') { mem = null; try { sessionStorage.removeItem(KEY); } catch { /* noop */ } } } });
     document.addEventListener('visibilitychange', () => { base = null; pend = null; if (document.visibilityState === 'hidden') hide(true); });
-    return { setDelay, _tick: tick, _state: () => ({ base, pend, mem }) };
+    return { setDelay, getDelay, _tick: tick, _state: () => ({ base, pend, mem }) };
   })();
 
   /* ========== 表示のための小道具 ========== */
@@ -273,7 +322,8 @@
      標高は地理院の標高タイル（dem_png）。地理院独自の形式（x = R×2^16 + G×2^8 + B、x < 2^23 なら x×0.01 m、x > 2^23 なら (x − 2^24)×0.01 m、
      x = 2^23（128,0,0）は海などの無効値）なので、読み込むときに terrarium 形式（(R×256 + G + B/256) − 32768 m）へ直す。無効値は 0m。
      取れないタイル（海で無い・圏外）は、0mの平らなタイルにする（地形が平らに戻るだけで、地図は止めない）。
-     誇張は1.5倍。平面表示・省電力では使わない（setTerrain(null)） */
+     誇張は1.5倍。地図の種類が航空写真で、立体表示のときだけ使う（setTerrain）。
+     標準・淡色・OSM は地図に文字が描き込まれていて、地形で盛り上げると文字がボコボコして読みにくいので、立体（斜め）でも平らにする。省電力でも使わない */
   const DEM = 'https://cyberjapandata.gsi.go.jp/xyz/dem_png/', TERRAIN_X = 1.5;
   let demOn = false, demCv = null, demFlat = null;
   async function demPng(img) {
@@ -304,10 +354,10 @@
     const data = await demPng(img); img.close && img.close();
     return { data };
   }
-  /* 立体表示（傾き5°以上）で、省電力でなければ地形を盛り上げる。それ以外は平ら */
+  /* 航空写真の立体表示（傾き5°以上）で、省電力でなければ地形を盛り上げる。それ以外は平ら（トンネルは tunnelMode で、地形の有無に合わせて描き分ける） */
   function syncTerrain(c, to3d) {
     const m = c && c.map; if (!m || !c.loaded || !m.getSource('dem')) return;
-    const want = !c.eco && (to3d ?? m.getPitch() >= 5), has = !!m.getTerrain();
+    const want = !c.eco && (c.tmpBase || c.base) === 'photo' && (to3d ?? m.getPitch() >= 5), has = !!m.getTerrain();
     if (want === has) return;
     try { m.setTerrain(want ? { source: 'dem', exaggeration: TERRAIN_X } : null); } catch { /* 地形が使えなくても、平らなまま続ける */ }
     tunnelMode(c);
@@ -594,16 +644,27 @@
     const active = () => c.docVisible && (c.full || c.mapVisible);
     const syncGeo = () => {
       const want = c.gpsWant && active();
+      Geo.pace(c.eco && !simTrack() ? ECO_GPS : 0);
       if (want && !c.unGeo) {
         c.unGeo = Geo.watch(p => { if (c.gpsErr && p) { c.gpsErr = null; drawCtrl(); } tk.onFix(p); if (!simTrack()) tick(); }, err => {
           if (err && err.code === 3 && tk.fix) return;   // 一時的に取れないだけ（トンネルなど）
-          c.gpsErr = err && err.code === 1 ? 'denied' : 'err';
-          if (err && err.code === 1) { c.gpsWant = false; ss.set('lm-gps', null); syncGeo(); }
+          c.gpsErr = err && err.code === 1 ? 'denied' : err && err.code === 2 ? 'off' : 'err';
+          if (err && err.code === 1) { c.gpsWant = false; c.gpsAuto = false; ss.set('lm-gps', null); syncGeo(); }
           drawCtrl(); tick();
         });
       } else if (!want && c.unGeo) { c.unGeo(); c.unGeo = null; }
     };
     c.syncGeo = syncGeo; c.active = active;
+    /* 乗車の時間帯は、位置の許可が済んでいれば、ボタンを押さなくてもGPSを使う（時間帯が終わったら止める）。
+       手で「GPSを止める」を押した人は、このタブのあいだは入れ直さない。おためし中は本物のGPSを使わない */
+    const autoGeo = () => {
+      if (cur !== c || Clock.active()) return;
+      const on = S.ride(+Clock.now());
+      if (on && !c.gpsWant && GeoPerm.state() === 'granted' && ss.get('lm-gps-off') !== '1') { c.gpsWant = true; c.gpsAuto = true; c.gpsErr = null; syncGeo(); drawCtrl(); }
+      else if (!on && c.gpsWant && c.gpsAuto) { c.gpsWant = false; c.gpsAuto = false; syncGeo(); drawCtrl(); }
+    };
+    c.autoGeo = autoGeo;
+    c.offPerm = GeoPerm.on(() => { autoGeo(); drawCtrl(); });
 
     /* --- 操作 --- */
     const onClick = e => {
@@ -618,8 +679,8 @@
       const k = b.dataset.lm;
       if (k !== 'base') toggleMenu(false);
       if (k === 'gps') {
-        if (c.gpsWant) { c.gpsWant = false; ss.set('lm-gps', null); }
-        else { c.gpsErr = null; c.gpsWant = true; ss.set('lm-gps', '1'); }
+        if (c.gpsWant) { c.gpsWant = false; c.gpsAuto = false; ss.set('lm-gps', null); ss.set('lm-gps-off', '1'); }
+        else { c.gpsErr = null; c.gpsWant = true; ss.set('lm-gps', '1'); ss.set('lm-gps-off', null); }
         syncGeo(); drawCtrl(); tick();
       }
       if (k === 'alarm') {
@@ -648,6 +709,7 @@
       if (k === 'base') toggleMenu();
       if (k === 'legend') { const open = b.getAttribute('aria-expanded') !== 'true'; b.setAttribute('aria-expanded', open); const u = b.nextElementSibling; u && (u.hidden = !open); ls.set('lm-legend', open ? '1' : null); }
       if (k === 'help') helpChoice();
+      if ((k === 'geohelp' || k === 'geooff') && ui.geoHelp) ui.geoHelp(k === 'geooff' ? 'off' : 'denied');
     };
     const onChange = e => {
       if (e.target.matches('[data-lm="wake"]')) { c.wakeWant = e.target.checked; ss.set('lm-wake', c.wakeWant ? '1' : null); wake(); }
@@ -712,6 +774,7 @@
 
     function tick() {
       if (cur !== c) return;
+      autoGeo();
       const r = tk.compute(); c.last = r;
       drawPanel(r); drawSpeed(r); drawNotice(r); drawAlarm(r); drawList(r); drawPins(r); zoomTick(r); mapTick(r); drawTools();
     }
@@ -731,7 +794,7 @@
     /* おためしで線路を走っているときは、作り物のGPSを自動で使う。本物のGPSは、ボタンを押したときだけ */
     if (simTrack()) c.gpsWant = true;
     else if (ss.get('lm-gps') === '1' && !Clock.active()) c.gpsWant = true;
-    syncGeo();
+    syncGeo(); autoGeo();
     fillStatic(); fitHeight();
     drawCtrl(); tick(); startLoop(); wake();
     c.onResize = () => { fitHeight(); syncPad(); fitTools(); };
@@ -759,7 +822,7 @@
     clearTimeout(c.guideT); clearTimeout(c.actT); clearTimeout(c.hintT); c.offAct && c.offAct();
     c.setClose && c.setClose();
     window.Guide && Guide.active() && Guide.stop();
-    c.io && c.io.disconnect(); c.ro && c.ro.disconnect(); c.offBat && c.offBat(); cancelAnimationFrame(c.spdAnim);
+    c.io && c.io.disconnect(); c.ro && c.ro.disconnect(); c.offBat && c.offBat(); c.offPerm && c.offPerm(); cancelAnimationFrame(c.spdAnim);
     removeEventListener('resize', c.onResize);
     c.unGeo && c.unGeo();
     c.wake && c.wake.release().catch(() => {});
@@ -791,7 +854,7 @@
       lg.innerHTML = `<button type="button" data-lm="legend" aria-expanded="${open}">凡例</button><ul${open ? '' : ' hidden'}>${Object.values(CATS).map(k => `<li><i style="--g:${k.color}"><svg class="lm-sym" viewBox="0 0 12 12" aria-hidden="true">${k.sym}</svg></i>${esc(k.name)}</li>`).join('')}<li><i class="vis" style="--g:#67625b"></i>白い縁＝窓から見える</li><li><i class="tun" aria-hidden="true"></i>トンネル（点線）</li></ul>`;
     }
     const mn = $('.lm-basemenu', c.root);
-    if (mn) mn.innerHTML = `<p class="lm-menu-h">地図の種類</p>${Object.entries(BASES).map(([id, b]) => `<button type="button" data-base="${id}">${esc(b.name)}</button>`).join('')}<p class="lm-menu-n">航空写真は通信量が多めです。電波が弱いときは標準地図に戻します。</p>`;
+    if (mn) mn.innerHTML = `<p class="lm-menu-h">地図の種類</p>${Object.entries(BASES).map(([id, b]) => `<button type="button" data-base="${id}">${esc(b.name)}</button>`).join('')}<p class="lm-menu-n">立体の地形（山の盛り上がり）は、航空写真のときだけです。航空写真は通信量が多めで、電波が弱いときは標準地図に戻します。</p>`;
   }
   function toggleMenu(open) {
     const c = cur; if (!c) return;
@@ -814,7 +877,8 @@
     if (r.mode === 'before') {
       const m = minsTo(S.first.dep + r.delay, r.now);
       head = `<b>${S.first.name}</b>駅で発車を待っています`;
-      where = m < 24 * 60 ? `${at(S.first.dep)}発・あと${m >= 60 ? Math.floor(m / 60) + '時間' : ''}${m % 60}分` : `${S.tr.date.slice(5).replace('-', '/').replace(/^0/, '')} ${at(S.first.dep)}に発車します`;
+      /* 遅れて、定刻を過ぎても駅にいるとき：遅れの分数は横の札に出す */
+      where = late2 && m <= 0 ? `定刻${at(S.first.dep)}発・遅れて発車を待っています` : m < 24 * 60 ? `${at(S.first.dep)}発・あと${m >= 60 ? Math.floor(m / 60) + '時間' : ''}${m % 60}分` : `${S.tr.date.slice(5).replace('-', '/').replace(/^0/, '')} ${at(S.first.dep)}に発車します`;
     } else if (r.mode === 'after') {
       head = `<b>${S.last.name}</b>に到着しました`;
     } else {
@@ -829,7 +893,7 @@
     const badge = `<span class="lm-badge ${r.src}">${r.src === 'gps' ? (simTrack() ? 'GPS（おためし）' : 'GPS') : '時刻表から推定'}</span>`;
     /* 遅れを反映していない（時刻表どおりの）ときは、そう分かる一言を小さく */
     const tt = !r.gpsDelay && r.mode !== 'after' && !gn
-      ? `<p class="lm-ttnote">${Clock.active() && !simTrack() ? 'おためし中は、時刻表どおりの位置です。' : c.full ? '時刻表どおりの位置です（遅れは反映していません）。' : '時刻表どおりの位置です。遅れているときは「現在地を使う」で合わせられます。'}</p>` : '';
+      ? `<p class="lm-ttnote">${Clock.active() && !simTrack() ? 'おためし中は、時刻表どおりの位置です。' : c.full ? '時刻表どおりの位置です（遅れは反映していません）。' : c.gpsWant ? '時刻表どおりの位置です。GPSの位置が届くと、遅れに合わせます。' : '時刻表どおりの位置です。「現在地を使う」を押すと、GPSで遅れに合わせます。'}</p>` : '';
     /* 走行中・停車中は「いまどこか（現在）→ 次はどこか」の順。発車前と到着後は、今までどおり見出しが先 */
     const moving = r.mode === 'running' || r.mode === 'stopped';
     const row = `<div class="lm-row${moving ? ' lm-now' : ''}">${moving && where ? '<span class="lm-now-k">現在</span>' : ''}${where ? `<span class="lm-where">${where}</span>` : ''}${late}${badge}${tun && !moving ? '<span class="lm-badge tun">トンネル内</span>' : ''}</div>`;   // 走行中のトンネルは、すぐ下のお知らせ（出口まで約○分）で分かるので札は出さない
@@ -1123,14 +1187,18 @@
       const gps = simTrack() ? '<span class="lm-simnote">おためし中は、作り物のGPSで動きます</span>'
         : Clock.active() ? '<span class="lm-simnote">おためし中は本物のGPSを使いません（時刻表から推定）</span>'
         : `<button class="btn ${c.gpsWant ? 'fill' : 'quiet'}" data-lm="gps" aria-pressed="${c.gpsWant}">${c.gpsWant ? 'GPSを止める' : '現在地を使う'}</button>`;
+      const auto = !Clock.active() && c.gpsWant && c.gpsAuto
+        ? `<p class="lm-autonote">乗車の時間帯なので、GPSを自動で使って遅れに合わせています${c.eco ? '（省電力中は1分に1回）' : ''}。到着の2時間後に自動で止まります。</p>` : '';
       const html = `<button type="button" class="lm-sum" data-lm="settings" aria-haspopup="dialog" aria-label="お知らせと画面の設定を開く">
           <span class="lm-sum-i${alarm.on ? ' on' : ''}">お知らせ <b>${alarm.on ? 'ON' : 'OFF'}</b></span>
           ${hasWake() ? `<span class="lm-sum-i">画面 <b>${c.wakeWant ? '消さない' : '自動で消える'}</b></span>` : ''}
           <span class="lm-sum-i">省電力 <b>${c.eco ? 'ON' : 'OFF'}</b></span>
           <span class="lm-sum-go">設定</span></button>
-        <div class="lm-ctrl-row">${gps}<a class="btn quiet ext" data-lm-gm href="https://www.google.com/maps" target="_blank" rel="noopener">Googleマップで開く（現在地）</a></div>
+        ${auto}<div class="lm-ctrl-row">${gps}<a class="btn quiet ext" data-lm-gm href="https://www.google.com/maps" target="_blank" rel="noopener">Googleマップで開く（現在地）</a></div>
         ${JR_INFO}
-        ${c.gpsErr === 'denied' ? '<p class="lm-msg">位置情報が許可されませんでした。時刻表からの推定で表示します。</p>' : c.gpsErr ? '<p class="lm-msg">位置がまだ取れません。取れるまでは時刻表からの推定で表示します。</p>' : ''}`;
+        ${c.gpsErr === 'denied' ? '<p class="lm-msg">位置情報が許可されませんでした。時刻表からの推定で表示します。<button type="button" class="lm-msgbtn" data-lm="geohelp">許可し直す方法</button></p>'
+          : c.gpsErr === 'off' ? '<p class="lm-msg">位置が取れません。端末の位置情報がオフかもしれません。取れるまでは、最後に測った遅れと時刻表から推定します。<button type="button" class="lm-msgbtn" data-lm="geooff">位置情報をオンにする方法</button></p>'
+          : c.gpsErr ? '<p class="lm-msg">位置がまだ取れません。取れるまでは、最後に測った遅れと時刻表から推定します。</p>' : ''}`;
       if (el.dataset.v !== html) { el.innerHTML = html; el.dataset.v = html; }
     }
     if (c.setEl) {
@@ -1146,8 +1214,9 @@
         <p class="lm-desc">停車駅に近づくと、着く前から少しずつ拡大し、駅前の建物や道が分かるくらいまで寄ります。駅を出ると、走っているときの縮尺へ少しずつ戻ります。通過駅では寄りません。オフにすると、縮尺を自動では変えません。地図の右下の「自動ズーム：オン／オフ」でも切り替えられます。</p>
         <p class="lm-desc">指で拡大・縮小しても、自動ズームは止まりません。走っているときに変えた縮尺は「走行中の縮尺」として覚え、駅で寄ったあとはその縮尺に戻ります（停車駅の近くで変えたときは、その駅を離れるまでの間だけ）。右下の「元の縮尺に戻す」で、最初の縮尺に戻ります。</p>
         <p class="lm-desc">到着モード：終点（${ui.esc(c.S.tr.end || dest)}）が地図に映ったら、終点を画面の上にして、列車と終点が両方入る縮尺で、近づくにつれて拡大します。見下ろす角度は変えません（立体なら斜めのまま、平面なら真上から）。この設定にかかわらず働き、着いて止まると元の表示に戻ります。</p>
+        <p class="lm-desc lm-desc-sep">立体の地形：地図の種類が航空写真で、立体にしたときだけ、山を盛り上げて描きます（トンネルは山の中に点線）。標準・淡色・OpenStreetMap は文字が読みやすいよう、立体でも平らです（トンネルは地図の上の点線）。</p>
         <label class="lm-sw"><input type="checkbox" role="switch" data-lm="eco"${c.eco ? ' checked' : ''}><span>省電力</span></label>
-        <p class="lm-desc">地図の更新を10秒に1回にし、平面・淡色の地図にします。航空写真と「画面を自動で消さない」は使いません。${c.hasBattery ? '電池が20%以下になると、自動でオンになります。' : ''}</p>
+        <p class="lm-desc">地図の更新を10秒に1回にし、平面・淡色の地図にします。航空写真と「画面を自動で消さない」は使いません。GPSは、遅れを測るのに足りる1分に1回だけ使います。${c.hasBattery ? '電池が20%以下になると、自動でオンになります。' : ''}</p>
         ${c.full ? JR_INFO : ''}`;
       if (c.setEl.dataset.v !== html) { c.setEl.innerHTML = html; c.setEl.dataset.v = html; }
     }
@@ -1587,6 +1656,7 @@
     const b = c.tmpBase || c.base;
     try { Object.keys(BASES).forEach(id => c.map.setLayoutProperty(id, 'visibility', id === b ? 'visible' : 'none')); } catch { /* 地図の準備前 */ }
     try { c.map.setMaxZoom(maxZ(c)); } catch { /* noop */ }   // 地図の種類ごとの、ぼやけない縮尺の上限
+    syncTerrain(c);   // 立体の地形は航空写真のときだけ（切り替えたら、その場で地形とトンネルの描き方も切り替える）
     c.camAt = 0;
   }
   function setPitch(v) {
@@ -1626,6 +1696,7 @@
     }
     try { c.map && c.map.setPixelRatio(Math.min(window.devicePixelRatio || 1, on ? 1 : 2)); } catch { /* noop */ }
     syncTerrain(c);
+    c.syncGeo && c.syncGeo();   // 省電力中は、位置を取る間隔を空ける
     c.camAt = 0; drawCtrl();
   }
 
@@ -1931,7 +2002,7 @@
       { el: '#spots', title: '見どころの紹介と一覧', text: '紹介には、ところ・ひとこと・くわしい説明が載っています。地図の下へスクロールすると「沿線の見どころ一覧」を通る順に見られます。', before: async () => { const h = $('#spots'); if (h) { h.scrollIntoView({ block: 'start' }); await sleep(150); } }, after: toMap },
       { el: '#lm-map', title: c.full ? '地図の操作' : '押して地図を操作', text: c.full ? '1本指で地図を動かし、2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。動かすと列車を追いかけるのを止めます。「列車へ」を押すと、列車の位置と元の向きに戻ります。' : 'ふだんは1本指でページをスクロールします。地図を1回押すと枠が朱色になり、1本指で動かす・2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。「操作を終える」を押すか、地図の外を押すと戻ります。' },
       { el: () => $('.lm-zbtn', root), title: '自動ズームのボタン', text: '「自動ズーム：オン」のあいだは、停車駅に近づくと着く前から少しずつ拡大し、駅を出ると少しずつ戻ります。押すとオフ（縮尺を自動では変えない）になります。指で拡大・縮小しても自動は止まらず、その縮尺を走行中の縮尺として覚えます。「元の縮尺に戻す」で最初の縮尺に戻ります。' },
-      { el: () => $('[data-lm="tools"]', root), title: '地図の操作ボタン', text: '押すと開きます（もう一度押すと閉じます）。開くと、方位磁針（押すと北が上に、もう一度押すと進行方向が上。赤い側が北）・立体・地図の種類（標準・淡色・航空写真・OpenStreetMap）・列車へ・全画面・設定・使い方のボタンが並びます。' },
+      { el: () => $('[data-lm="tools"]', root), title: '地図の操作ボタン', text: '押すと開きます（もう一度押すと閉じます）。開くと、方位磁針（押すと北が上に、もう一度押すと進行方向が上。赤い側が北）・立体・地図の種類（標準・淡色・航空写真・OpenStreetMap）・列車へ・全画面・設定・使い方のボタンが並びます。山の盛り上がり（立体の地形）は、航空写真で立体にしたときだけです。' },
       { el: () => c.full ? $('[data-lm="tools"]', root) : $('.lm-sum', root), title: 'お知らせと画面の設定', text: `${c.full ? '「操作」を押して開き、⚙' : 'この1行か、「操作」を開いた中の ⚙'}を押すと設定が開きます。お知らせをONにすると、降りる駅の5分前と1分前にバイブと画面でお知らせします。画面を自動で消さない・省電力もここで切り替えます。`, after: toMap }
     ], { force });
   }
@@ -1941,9 +2012,13 @@
     guide: () => runGuide(true),
     /* 路線図（既存）と同じ時刻表で動かすための、GPSで分かった遅れ（ミリ秒）。分からなければ 0 */
     delayMs: () => (cur && cur.last && cur.last.gpsDelay ? cur.last.delay : 0),
+    /* 駅一覧（app.js）を地図と同じ位置にするための、時刻表の上の「いま」（遅れを引いた時刻。停車駅に止まっているあいだは駅の時刻）。GPSで遅れを測っていなければ null */
+    schedT: key => (cur && cur.key === key && cur.last && cur.last.gpsDelay ? cur.last.t : null),
+    /* いま乗車の時間帯（発車の30分前〜到着の2時間後）にある列車。なければ null */
+    rideKey,
     _internals: { sched, Tracker, snap, pointAt, PrefWatch, prefAt, splitMuni },
     _debug: () => cur && {
-      last: cur.last, fix: cur.tk.fix, reject: cur.tk.reject, follow: cur.follow, map: !!cur.map, loaded: !!cur.loaded, gpsOn: !!cur.unGeo, gpsWant: cur.gpsWant, geomFallback: !!geom.fallback && !lineGeo,
+      last: cur.last, fix: cur.tk.fix, reject: cur.tk.reject, follow: cur.follow, map: !!cur.map, loaded: !!cur.loaded, gpsOn: !!cur.unGeo, gpsWant: cur.gpsWant, gpsAuto: !!cur.gpsAuto, perm: GeoPerm.state(), geomFallback: !!geom.fallback && !lineGeo,
       pitch: cur.map ? cur.map.getPitch() : cur.pitch, bearing: cur.map ? cur.map.getBearing() : null, orient: cur.orient, free: cur.free, base: cur.tmpBase || cur.base, eco: cur.eco,
       zoom: cur.map ? cur.map.getZoom() : null, zAuto: cur.zAuto, zOff: cur.zOff, zHold: cur.zHold, zone: cur.zone && { ...cur.zone }, zd: cur.zd && { dn: cur.zd.dn, dp: cur.zd.dp, next: cur.zd.next && cur.zd.next.name, prev: cur.zd.prev && cur.zd.prev.name }, fast: cur.fast, target: cur.map ? zoomTarget(cur, cur.map.getPitch()) : null, arr: cur.arr,
       camInterval: camInterval(), mapVisible: cur.mapVisible, active: cur.active(), alarms: { ...cur.alarms }, pins: cur.pins.map(p => [p.s.id, p.lv, !p.el.classList.contains('nolabel')])

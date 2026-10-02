@@ -402,6 +402,7 @@ h3.sub { font-family: var(--f-min); font-size: calc(17px * var(--fs)); letter-sp
 .line li.stp .ln { font-weight: 700; font-size: calc(15.5px * var(--fs)); font-family: var(--f-min); }
 .line .ln { font-size: calc(13.5px * var(--fs)); }
 .line .lp { font-size: calc(11px * var(--fs)); color: var(--sumi-3); }
+.line .lx { margin-left: 8px; font-family: var(--f-got); font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--shu-ink); white-space: nowrap; }
 .line li.castle .ln::after { content: "城"; font-family: var(--f-min); font-size: calc(10px * var(--fs)); color: var(--shu); border: 1px solid var(--shu); border-radius: 50%; width: 18px; height: 18px; display: inline-grid; place-items: center; margin-left: 6px; vertical-align: 2px; font-weight: 700; }
 .line li.passed .ld { border-color: var(--ai); background: var(--ai); }
 .trainpin { position: absolute; left: 57px; width: 30px; height: 30px; margin-top: -15px; z-index: 3; transition: top .8s ease; }
@@ -973,6 +974,7 @@ body.lm-full-on .lm-tvcard.top { top: calc(64px + env(safe-area-inset-top)); rig
 .lm-seg button:last-of-type { border-radius: 0 6px 6px 0; border-left: 0; }
 .lm-seg button[aria-pressed="true"] { background: var(--sumi); color: var(--paper); border-color: var(--sumi); }
 .lm-desc { flex-basis: 100%; font-size: calc(12.5px * var(--fs)); line-height: 1.65; color: var(--sumi-2); margin-bottom: 4px; }
+.lm-desc-sep { padding-top: 8px; border-top: 1px solid var(--rule); }
 .lm-sw { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: calc(14.5px * var(--fs)); font-weight: 700; padding-top: 8px; border-top: 1px solid var(--rule); cursor: pointer; }
 .lm-sw input { appearance: none; -webkit-appearance: none; flex: none; width: 48px; height: 28px; margin: 0; border-radius: 999px; background: var(--paper-3); border: 1px solid var(--sumi-3); position: relative; cursor: pointer; transition: background .2s; }
 .lm-sw input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: transform .2s; }
@@ -983,6 +985,8 @@ body.lm-full-on .lm-tvcard.top { top: calc(64px + env(safe-area-inset-top)); rig
 .lm-ctrl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 .lm-simnote { font-size: calc(12.5px * var(--fs)); color: var(--sumi-2); border: 1px dashed var(--yamabuki); border-radius: 6px; padding: 4px 10px; }
 .lm-msg { font-size: calc(12.5px * var(--fs)); color: var(--shu-ink); }
+.lm-msgbtn { display: inline; margin-left: 6px; padding: 0; border: 0; background: none; color: var(--ai); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.lm-autonote { font-size: calc(12.5px * var(--fs)); line-height: 1.6; color: var(--sumi-2); border-left: 3px solid var(--ai); padding: 2px 0 2px 9px; margin-bottom: 6px; }
 
 /* 降車のお知らせ：上半分に大きな札 → 約15秒で画面の端の小さな印に */
 .lm-arr { position: fixed; z-index: 86; }
@@ -1626,3 +1630,21 @@ ruby { ruby-align: center; }
 .lt-lab { font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--shu-ink); letter-spacing: .06em; }
 .lt-mt { font-size: calc(13px * var(--fs)); line-height: 1.6; }
 .nav-dot { position: absolute; top: 9px; left: calc(50% + 7px); width: 9px; height: 9px; border-radius: 50%; background: var(--shu); border: 2px solid var(--paper); box-sizing: content-box; }
+
+/* 位置の情報の許可の案内（旅行前・乗車の時間帯。app.js の geoAsk） */
+.geoask { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 6px 0 14px; padding: 14px 40px 14px 16px; border: 2px solid var(--ai); border-radius: 12px; background: var(--paper); box-shadow: 0 2px 10px rgba(0, 0, 0, .08); }
+.geoask.denied { border-color: var(--shu); }
+.geoask .ga-t { flex: 1 1 220px; display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.geoask .ga-t small { font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--ai); letter-spacing: .04em; }
+.geoask .ga-t b { font-size: calc(16px * var(--fs)); line-height: 1.5; }
+.geoask .ga-t span { font-size: calc(12.5px * var(--fs)); line-height: 1.65; color: var(--sumi-2); }
+.geoask .ga-go { flex: 0 0 auto; min-width: 7.5em; min-height: 46px; font-size: calc(16px * var(--fs)); }
+.geoask .ga-x { position: absolute; top: 4px; right: 4px; width: 36px; height: 36px; border: 0; background: none; color: var(--sumi-2); font-size: 20px; line-height: 1; cursor: pointer; border-radius: 50%; }
+#lm > .geoask { margin: 0 0 12px; }
+body.lm-full-on .geoask .ga-t span { display: none; }
+body.lm-full-on .geoask { position: fixed; z-index: 92; top: calc(8px + env(safe-area-inset-top)); left: 8px; right: 8px; margin: 0; max-width: 540px; margin-inline: auto; }
+body.sim-on.lm-full-on .geoask { top: calc(54px + env(safe-area-inset-top)); }
+.ga-steps { margin-top: 14px; }
+.ga-steps h4 { font-size: calc(14px * var(--fs)); margin-bottom: 4px; }
+.ga-steps ol { padding-left: 1.4em; font-size: calc(13.5px * var(--fs)); line-height: 1.7; }
+.ga-steps li + li { margin-top: 4px; }

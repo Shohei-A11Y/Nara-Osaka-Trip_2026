@@ -59,19 +59,36 @@
        [lat, lon, 名前]      … その場所に固定
        { track, delay }      … 列車に乗って線路を進む。位置は Geo.tracks[track](時刻, delay) が作る（livemap.js が登録）
                                トンネルの中などで null を返したら、その間は位置を配らない（本物のGPSが途切れるのと同じ） */
-  let watchId = null, real = null;
+  let watchId = null, real = null, pace = 0, paceT = 0, paceOn = false;
   const geoSubs = new Set(), errSubs = new Set();
   const isTrack = () => !!(st && st.pos && !Array.isArray(st.pos) && st.pos.track);
   const trackFix = () => { const f = Geo.tracks[st.pos.track]; return f ? f(Clock.now(), st.pos.delay || 0) : null; };
-  const startReal = () => {
-    if (watchId !== null || !('geolocation' in navigator)) return;
-    watchId = navigator.geolocation.watchPosition(p => {
-      const c = p.coords;
-      real = { lat: c.latitude, lon: c.longitude, acc: c.accuracy, speed: c.speed ?? null, heading: c.heading ?? null, src: 'gps', at: new Date(p.timestamp) };
-      if (Geo.mode() === 'real') geoSubs.forEach(f => f(real));
-    }, err => errSubs.forEach(f => f(err)), { enableHighAccuracy: true, maximumAge: 5000, timeout: 60000 });
+  const gotReal = p => {
+    const c = p.coords;
+    real = { lat: c.latitude, lon: c.longitude, acc: c.accuracy, speed: c.speed ?? null, heading: c.heading ?? null, src: 'gps', at: new Date(p.timestamp) };
+    GeoPerm._ok();
+    if (Geo.mode() === 'real') geoSubs.forEach(f => f(real));
   };
-  const stopReal = () => { if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; } };
+  const badReal = err => { if (err && err.code === 1) GeoPerm._denied(); errSubs.forEach(f => f(err)); };
+  /* ふだんは位置を続けて受け取る（watchPosition）。pace（ミリ秒）を決めたときは、その間隔で1回ずつ取る（省電力。GPSを休ませる） */
+  const startReal = () => {
+    if (watchId !== null || paceOn || !('geolocation' in navigator)) return;
+    if (pace) {
+      paceOn = true;
+      const once = () => {
+        if (!paceOn) return;
+        navigator.geolocation.getCurrentPosition(p => { gotReal(p); next(); }, err => { badReal(err); next(); }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 });
+      };
+      const next = () => { clearTimeout(paceT); if (paceOn) paceT = setTimeout(once, pace); };
+      once();
+      return;
+    }
+    watchId = navigator.geolocation.watchPosition(gotReal, badReal, { enableHighAccuracy: true, maximumAge: 5000, timeout: 60000 });
+  };
+  const stopReal = () => {
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    paceOn = false; clearTimeout(paceT);
+  };
   const Geo = {
     /* 'sim'：おためしで決めた位置／'real'：端末のGPS */
     mode: () => (st && st.pos ? 'sim' : 'real'),
@@ -89,11 +106,77 @@
       else startReal();
       return () => { geoSubs.delete(fn); onErr && errSubs.delete(onErr); if (!geoSubs.size) stopReal(); };
     },
+    /* 位置を取る間隔（ミリ秒）。0 は続けて受け取る。使っている途中で変えたら、取り直す */
+    pace(ms) {
+      ms = ms || 0; if (ms === pace) return;
+      pace = ms;
+      if (watchId !== null || paceOn) { stopReal(); startReal(); }
+    },
     _simTick() { if (isTrack() && geoSubs.size) { const c = trackFix(); c && geoSubs.forEach(fn => fn(c)); } },
     /* おためし終了。本物のGPSはここでは始めない（許可を勝手に求めないため。画面が組み直されたときに必要なら頼み直す） */
     _reset() { geoSubs.forEach(fn => fn(real)); }
   };
 
+  /* ========== 位置情報の許可の状態 ==========
+     state()：'granted'（許可済み）／'prompt'（まだ聞かれていない）／'denied'（拒否）／'unknown'（調べられないブラウザ）
+     Permissions API で調べ、変わったら on() で知らせる。調べられないブラウザでも、一度位置が取れたらこの端末に覚えて「許可済み」とみなす。
+     request()：許可の確認を1回だけ出す（位置を1回だけ、精度を落として取って、すぐやめる。GPSは使い続けない）。
+       結果は 'granted'／'denied'／'off'（許可はしたが、端末の位置情報がオフ） ／'unknown'
+     テスト用：?perm=granted|prompt|denied|unknown|off で開くと、このタブのあいだ状態を差し替える（off は「まだ」で、許可すると端末の位置情報がオフ）。?perm=real で元に戻す */
+  const GeoPerm = (() => {
+    const TKEY = 'geo-perm', OK = 'geo-ok';
+    const tget = () => { try { return sessionStorage.getItem(TKEY); } catch { return null; } };
+    const tset = v => { try { v ? sessionStorage.setItem(TKEY, v) : sessionStorage.removeItem(TKEY); } catch { /* noop */ } };
+    const lok = v => { try { if (v === undefined) return localStorage.getItem(OK) === '1'; v ? localStorage.setItem(OK, '1') : localStorage.removeItem(OK); } catch { return false; } };
+    let api = null;          // Permissions API の結果（なければ null）
+    let denied = false;      // 調べられないブラウザで、拒否されたと分かったとき
+    const subs = new Set();
+    const emit = () => subs.forEach(fn => { try { fn(P.state()); } catch (e) { console.error(e); } });
+    const pq = new URLSearchParams(location.search).get('perm');
+    if (pq) {
+      tset(pq === 'real' ? null : pq);
+      const q2 = new URLSearchParams(location.search); q2.delete('perm');
+      const qs = q2.toString(); history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+    }
+    try {
+      navigator.permissions && navigator.permissions.query({ name: 'geolocation' }).then(ps => {
+        api = ps.state; emit();
+        ps.addEventListener ? ps.addEventListener('change', () => { api = ps.state; emit(); }) : (ps.onchange = () => { api = ps.state; emit(); });
+      }).catch(() => {});
+    } catch { /* 調べられないブラウザ */ }
+    const P = {
+      state() {
+        const t = tget();
+        if (t) return t === 'off' ? 'prompt' : t;
+        if (api) return api;
+        if (denied) return 'denied';
+        return lok() ? 'granted' : 'unknown';
+      },
+      test: () => tget(),
+      on(fn) { subs.add(fn); return () => subs.delete(fn); },
+      request() {
+        const t = tget();
+        if (t) {
+          const r = t === 'denied' ? 'denied' : t === 'off' ? 'off' : 'granted';
+          if (r !== 'denied') tset('granted');
+          return new Promise(res => setTimeout(() => { emit(); res(r); }, 300));
+        }
+        if (!('geolocation' in navigator)) return Promise.resolve('unknown');
+        return new Promise(res => {
+          navigator.geolocation.getCurrentPosition(() => { lok(true); denied = false; emit(); res('granted'); }, err => {
+            if (err && err.code === 1) { denied = true; lok(false); emit(); res('denied'); return; }
+            lok(true); denied = false; emit();
+            res(err && err.code === 2 ? 'off' : 'granted');   // 時間切れ（3）は、許可はできている
+          }, { enableHighAccuracy: false, maximumAge: Infinity, timeout: 15000 });
+        });
+      },
+      _ok() { if (!lok()) lok(true); if (denied) { denied = false; emit(); } },
+      _denied() { if (!api && !denied) { denied = true; lok(false); emit(); } }
+    };
+    return P;
+  })();
+
   window.Clock = Clock;
   window.Geo = Geo;
+  window.GeoPerm = GeoPerm;
 })();
