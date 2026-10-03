@@ -1404,7 +1404,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=30').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=31').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -1476,11 +1476,13 @@
       if (!x.days.includes(d.n)) x.days.push(d.n);
       const t = span(it); if (t) (x.times[d.n] = x.times[d.n] || []).push(t + (it.optional ? '（余裕があれば）' : ''));
     }));
-    /* 夕ごはん候補（1〜3日目）。新大阪の4店は JR新大阪駅の中なので、駅の位置に出す。梅田の3店は位置を確かめられないので一覧だけ */
+    /* 夕ごはん候補（1〜3日目）。新大阪の4店は JR新大阪駅の中なので、駅の位置に出す。
+       梅田の3店はどれも「新梅田食道街」の中なので、施設の位置（T.geo）に重ねて置く → 地図ではピン1つに店の数のバッジ、押すと3店の一覧 */
     const dinnerDays = T.days.filter(d => d.dinner).map(d => [d.n, new Date(d.date + 'T12:00:00+09:00').getDay()]);
     T.dinner.forEach(s => {
-      const days = dinnerDays.filter(([, w]) => !(s.closedDays || []).includes(w)).map(([n]) => n), g = s.area === 'shinosaka' && geo['新大阪'];
-      out.push({ id: 'd-' + s.id, name: s.name, cat: 'eat', ll: g ? [g[0], g[1]] : null, sub: `夕ごはん候補・${s.genre}・${s.place}`, days, times: {}, intro: { k: 'shop', id: s.id }, q: `${s.name} ${s.address}` });
+      const days = dinnerDays.filter(([, w]) => !(s.closedDays || []).includes(w)).map(([n]) => n);
+      const site = s.area === 'umeda' ? '新梅田食道街' : '', g = s.area === 'shinosaka' ? geo['新大阪'] : site ? geo[site] : null;
+      out.push({ id: 'd-' + s.id, name: s.name, cat: 'eat', ll: g ? [g[0], g[1]] : null, sub: `夕ごはん候補・${s.genre}・${s.place}`, days, times: {}, intro: { k: 'shop', id: s.id }, q: `${s.name} ${s.address}`, site });
     });
     (T.rest || []).forEach(r => out.push({ id: 'r-' + r.id, name: r.name, cat: 'rest', ll: r.ll, sub: r.near, days: r.days, times: {}, intro: null, q: `${r.ll[0]},${r.ll[1]}`, rest: r }));
     return (omItemsCache = out);
@@ -1494,6 +1496,8 @@
   const omPrio = x => (x.cat === 'eat' && x.id.startsWith('d-') ? 4.5 : ['stay', 'see', 'eat', 'move'].indexOf(x.cat) + 1 || 5);
   const OM_SHORT = { 'からくさホテルグランデ新大阪タワー': 'ホテル（からくさ）', '中之島エリアをおさんぽ': '中之島', '奈良公園近くの駐車場': '駐車場', '大阪城・大阪城公園': '大阪城', '大阪堂島浜タワー WowUs': 'WowUs', 'JO-TERRACE OSAKA': 'JO-TERRACE', 'ニッポンレンタカー 新大阪駅新幹線口': 'レンタカー営業所' };
   const omLabel = x => { const n = OM_SHORT[x.name] || (x.rest ? x.name.replace(/^Osaka Metro /, '').replace(/のトイレ$/, ' トイレ') : x.name); return n.length > 11 ? n.slice(0, 10) + '…' : n; };
+  /* 同じ施設の中のお店をまとめたピン（新梅田食道街の夕ごはん候補）：施設の名前と店の数 */
+  const omSite = xs => (xs.length > 1 && xs[0].site && xs.every(x => x.site === xs[0].site) ? xs[0].site : '');
   const omDot = cat => `<i class="om-dot" style="--c:${omCatOf(cat)[2]}" aria-hidden="true"></i>`;
   /* ピンのカード・一覧の1件 */
   function omEntry(x, day, opt = {}) {
@@ -1558,8 +1562,8 @@
         <button type="button" class="om-me" data-omme aria-label="現在地を表示">${ic('here')}<span>現在地</span></button>
         <div class="om-card" id="om-card" hidden></div></div>
       <p class="om-off" id="om-off" hidden></p>
-      <section class="sec">${secH('一覧', 'List')}<p class="sec-lead">地図と同じ絞り込みで並べています。「地図なし」は、位置を確かめられなかったので、地図には出していない場所です。</p><div id="om-list">${omListHtml(day)}</div></section>
-      <p class="note">現在地は、この端末の中で地図に出すだけで、どこにも送りません。地図の下地は、電波がないときは一度表示した所だけ出ます。地図：地理院タイル（国土地理院）。ピンの位置：しおりのデータと、地理院地図の注記から。</p>
+      <section class="sec">${secH('一覧', 'List')}<p class="sec-lead">地図と同じ絞り込みで並べています。${omItems().some(x => !x.ll) ? '「地図なし」は、位置を確かめられなかったので、地図には出していない場所です。' : '梅田の夕ごはん候補3店は、どれも「新梅田食道街」の中なので、地図では1つのピン（数字は店の数）にまとめています。'}</p><div id="om-list">${omListHtml(day)}</div></section>
+      <p class="note">現在地は、この端末の中で地図に出すだけで、どこにも送りません。地図の下地は、電波がないときは一度表示した所だけ出ます。地図：地理院タイル（国土地理院）。ピンの位置：しおりのデータと、地理院地図の注記から（新梅田食道街は、Overture Maps の施設データ〈© OpenStreetMap contributors ほか〉の店の位置と、地理院地図の線路〈高架〉で確かめました）。</p>
       <p class="note">「トイレ・休憩」は、行程で使う駅のトイレのうち、JR西日本・Osaka Metro の公式の駅の案内で確かめられたものだけを載せています（2026年10月2日に確認）。各カードに出典を添えています。公園の中のトイレは、公式の地図を確かめられなかったため、載せていません。</p></div>`;
   }
   let omMap = null, omCleanup = null;
@@ -1575,10 +1579,13 @@
       if (!offline && !map) init();
     };
     const closeCard = () => { card.hidden = true; card.innerHTML = ''; if (sel) sel.classList.remove('sel'); sel = null; };
-    const openCard = (el, xs) => {
+    /* own：押したピンそのものの地点（先頭に並ぶ）。施設にまとめたピンなら、見出しに施設の名前と店の数を出し、近くの地点はそのあとに分けて出す */
+    const openCard = (el, xs, own = xs) => {
       if (sel) sel.classList.remove('sel'); sel = el; el && el.classList.add('sel');
-      const day = omDay();
-      card.innerHTML = `<button type="button" class="om-x" aria-label="閉じる">✕</button>${xs.map(x => omEntry(x, day)).join('')}`;
+      const day = omDay(), site = omSite(own), rest = site ? xs.filter(x => !own.includes(x)) : [];
+      card.innerHTML = `<button type="button" class="om-x" aria-label="閉じる">✕</button>${site
+        ? `<p class="om-site">${omDot(own[0].cat)}<b>${esc(site)}</b>の夕ごはん候補<span class="num">${own.length}店</span></p>${own.map(x => omEntry(x, day)).join('')}${rest.length ? `<p class="om-near">近くの場所</p>${rest.map(x => omEntry(x, day)).join('')}` : ''}`
+        : xs.map(x => omEntry(x, day)).join('')}`;
       card.hidden = false; card.scrollTop = 0;
     };
     const draw = fit => {
@@ -1589,17 +1596,17 @@
       const order = OM_CAT.map(c => c[0]);
       groups.forEach(xs => {
         xs.sort((a, b) => order.indexOf(a.cat) - order.indexOf(b.cat));
-        const C = omCatOf(xs[0].cat), top = xs.slice().sort((a, b) => omPrio(a) - omPrio(b))[0];
+        const C = omCatOf(xs[0].cat), top = xs.slice().sort((a, b) => omPrio(a) - omPrio(b))[0], site = omSite(xs);
         /* ピン（押すとカード）と、その横の名前（いつも見える。重なるときは出さない） */
         const el = document.createElement('div'); el.className = 'om-mk';
-        el.innerHTML = `<button type="button" class="om-pin" style="--c:${C[2]}" aria-label="${esc(xs.map(x => x.name).join('・'))}">${ic(C[3])}${xs.length > 1 ? `<b class="num">${xs.length}</b>` : ''}</button><span class="om-lb" aria-hidden="true">${esc(omLabel(top))}</span>`;
+        el.innerHTML = `<button type="button" class="om-pin" style="--c:${C[2]}" aria-label="${esc(site ? `${site}の夕ごはん候補 ${xs.length}店：${xs.map(x => x.name).join('・')}` : xs.map(x => x.name).join('・'))}">${ic(C[3])}${xs.length > 1 ? `<b class="num">${xs.length}</b>` : ''}</button><span class="om-lb" aria-hidden="true">${esc(site || omLabel(top))}</span>`;
         const mk = new ml.Marker({ element: el, anchor: 'center' }).setLngLat([xs[0].ll[1], xs[0].ll[0]]).addTo(map);
         mk.xs = xs; mk.prio = omPrio(top) * 100 + omItems().indexOf(top) / 100; mk.lb = $('.om-lb', el); markers.push(mk);
         /* 縮小していてピンが重なっているときは、押した所の近くのピンも、まとめてカードに出す */
         $('.om-pin', el).addEventListener('click', e => {
           e.stopPropagation();
           const c = map.project(mk.getLngLat()), near = markers.map(m => [m, Math.hypot(map.project(m.getLngLat()).x - c.x, map.project(m.getLngLat()).y - c.y)]).filter(([, d]) => d < 28).sort((a, b) => a[1] - b[1]);
-          openCard(el, near.flatMap(([m]) => m.xs));
+          openCard(el, near.flatMap(([m]) => m.xs), mk.xs);
         });
       });
       if (fit && groups.size) {
@@ -1687,7 +1694,7 @@
         root.scrollIntoView({ behavior: 'smooth', block: 'center' });
         map.easeTo({ center: [x.ll[1], x.ll[0]], zoom: Math.max(map.getZoom(), 15), duration: 600 });
         const m = markers.find(mk => mk.xs.includes(x));
-        m && openCard(m.getElement(), [x, ...m.xs.filter(y => y !== x)]);
+        m && openCard(m.getElement(), [x, ...m.xs.filter(y => y !== x)], [x, ...m.xs.filter(y => y !== x)]);
       } else if (t.classList.contains('om-x')) closeCard();
     };
     app.addEventListener('click', onClick);
@@ -2354,25 +2361,58 @@
     });
     return Math.round(bal.iizuka);
   }
+  /* 予算は assets/budget.json から毎回計算する（Budget.view：assets/budget.js）。読み込めるまでは、その旨だけ出す */
+  const BAR_COLORS = ['var(--ai)', 'var(--yamabuki)', 'var(--moegi)', 'var(--shu)', 'var(--day3)'];
+  /* 決算と精算（実際に払った額を1件でも入れたら出す） */
+  function settleHtml(V) {
+    const A = V.act, S = V.settle, net = S.net;
+    const msg = !S.rows ? '立て替えた家族を入れた項目がまだありません。' : net === 0 ? 'いまは精算なしで、ぴったりです。' : net > 0 ? `山口家 → 飯塚家へ <b class="num">${yen(net)}</b>` : `飯塚家 → 山口家へ <b class="num">${yen(-net)}</b>`;
+    const diff = A.total - A.extra - A.budgetOfDone;
+    return `<div class="bd-act">
+        <dl class="bd-dl"><div><dt>実際に払った額の合計</dt><dd class="num">${yen(A.total)}</dd></div>
+          <div><dt>予算との差<small>（決算を入れた${A.rows - A.extraRows}項目の予算 ${yen(A.budgetOfDone)} と比べて）</small></dt><dd class="num">${diff > 0 ? '+' + yen(diff) : yen(diff)}</dd></div>
+          <div><dt>予定外の出費<small>（${A.extraRows}件）</small></dt><dd class="num">${yen(A.extra)}</dd></div>
+          <div><dt>立て替えた額</dt><dd class="num">飯塚家 ${yen(S.paid.iizuka)}<br>山口家 ${yen(S.paid.yamaguchi)}</dd></div>
+          <div><dt>負担する額</dt><dd class="num">飯塚家 ${yen(S.owe.iizuka)}<br>山口家 ${yen(S.owe.yamaguchi)}</dd></div></dl>
+        <p class="settle">精算：${msg}</p>
+        <p class="small muted">実際に払った額と立て替えた家族を入れた${S.rows}件で計算しています。${S.noPayer ? `立て替えた家族がまだの項目が${S.noPayer}件、` : ''}${A.todo ? `決算をまだ入れていない予算の項目が${A.todo}件あります。` : '予算の項目は、すべて決算を入れました。'}</p></div>`;
+  }
+  const bdMode = V => (V && V.act.rows && session.get('bdMode') === 'actual' ? 'actual' : 'budget');
+  function budgetHtml(V, f) {
+    if (!V) return `<p class="empty" id="bd-wait">予算を読み込んでいます…<br><span class="small muted">しばらくしても出ないときは、電波のある所で開き直してください。</span></p>`;
+    const mine = k => (f === k ? ' mine' : '');
+    const act = bdMode(V) === 'actual';
+    /* 予算／実績で切り替える数字（実績：実際に払った額。予定外の出費も入れる） */
+    const sum = g => (act ? g.asum : g.sum), famOf = g => (act ? g.afam : g.fam);
+    const max = Math.max(1, ...V.groups.map(sum));
+    const diffTxt = n => (n > 0 ? '+' + yen(n) : n < 0 ? yen(n) : '±¥0');
+    const rowsOf = g => (act ? g.rows : g.rows.filter(r => !r.extra));
+    const rowHtml = r => act
+      ? `<tr><td>${esc(r.name)}<span class="sm">${r.extra ? `予定外の出費${r.text ? '・' + esc(r.text) : ''}` : esc(r.text)}</span><span class="sm">${r.has ? (r.extra ? '' : `予算 ${yen(r.amount)}・差 ${diffTxt(r.actual - r.amount)}`) : `予算 ${yen(r.amount)}・決算はまだ`}</span></td><td class="r num">${r.has ? yen(r.actual) : '<span class="muted">—</span>'}</td></tr>`
+      : `<tr><td>${esc(r.name)}<span class="sm">${esc(r.text)}</span></td><td class="r num">${yen(r.amount)}</td></tr>`;
+    return `${V.act.rows ? `<div class="segs bd-mode" role="group" aria-label="予算と実績の切り替え">${[['budget', '予算'], ['actual', '実績（決算）']].map(([k, l]) => `<button type="button" data-bdmode="${k}" aria-pressed="${(act ? 'actual' : 'budget') === k}" class="${(act ? 'actual' : 'budget') === k ? 'on' : ''}">${l}</button>`).join('')}</div>` : ''}
+      <div class="total"><span>${act ? '実際に払った額の合計' : '合計'}</span><b class="num">${yen(act ? V.act.total : V.total)}</b></div>
+      ${act ? `<p class="small muted bd-note">決算を入れた${V.act.rows}件の合計です（予定外の出費${V.act.extraRows}件をふくむ）。決算をまだ入れていない予算の項目が${V.act.todo}件あります。</p>` : ''}
+      <div class="bars">${V.groups.map((g, i) => `<div class="bar" style="--c:${BAR_COLORS[i % BAR_COLORS.length]}"><span>${esc(g.name)}</span><i style="width:${(sum(g) / max * 100).toFixed(1)}%"></i><span class="v num">${yen(sum(g))}</span></div>`).join('')}</div>
+      <section class="sec">${secH(act ? '家族ごとの内訳（実績）' : '家族ごとの内訳', 'By family')}
+        <div class="tbl"><table class="ledger"><thead><tr><th></th><th class="r${mine('iizuka')}">飯塚家</th><th class="r${mine('yamaguchi')}">山口家</th></tr></thead><tbody>
+        ${V.groups.map(g => `<tr><td>${esc(g.name)}<span class="sm">${esc(g.famNote)}</span></td><td class="r num${mine('iizuka')}">${yen(famOf(g).iizuka)}</td><td class="r num${mine('yamaguchi')}">${yen(famOf(g).yamaguchi)}</td></tr>`).join('')}
+        </tbody><tfoot><tr><td>合計</td><td class="r num${mine('iizuka')}">${yen((act ? V.act.fam : V.fam).iizuka)}</td><td class="r num${mine('yamaguchi')}">${yen((act ? V.act.fam : V.fam).yamaguchi)}</td></tr></tfoot></table></div>
+      </section>
+      ${V.act.rows ? `<section class="sec" id="settle">${secH('決算と精算', 'Settlement')}${settleHtml(V)}</section>` : ''}
+      <section class="sec">${secH(act ? '決算の明細' : '予算の明細', 'Details')}
+        ${V.groups.map(g => `<div class="group-h"><b>${esc(g.name)}</b><span class="num" style="font-weight:700">${yen(sum(g))}</span></div>${g.note ? `<p class="small muted">${esc(g.note)}</p>` : ''}
+          <table class="ledger"><tbody>${rowsOf(g).map(rowHtml).join('')}</tbody></table>`).join('')}
+      </section>`;
+  }
   function viewMoney() {
-    const B = T.budget, f = fam();
-    const max = Math.max(...B.groups.map(g => g.sum));
-    const colors = ['var(--ai)', 'var(--yamabuki)', 'var(--moegi)', 'var(--shu)', 'var(--day3)'];
+    const f = fam();
     const exp = store.get('expenses', []);
     const net = settle(exp);
     const msg = exp.length === 0 ? 'まだ記録はありません。' : net === 0 ? 'いまは精算なしで、ぴったりです。' : net > 0 ? `山口家 → 飯塚家へ <b class="num">${yen(net)}</b>` : `飯塚家 → 山口家へ <b class="num">${yen(-net)}</b>`;
     return `<div class="wrap">${topbar()}${phead('Budget', '予算と割り勘メモ', '3泊4日・飯塚家4名＋山口家2名の積算です。レンタカー代と宿泊費は確定予約の金額です。')}
-      <div class="total"><span>合計</span><b class="num">${yen(B.total)}</b></div>
-      <div class="bars">${B.groups.map((g, i) => `<div class="bar" style="--c:${colors[i]}"><span>${g.name}</span><i style="width:${(g.sum / max * 100).toFixed(1)}%"></i><span class="v num">${yen(g.sum)}</span></div>`).join('')}</div>
-      <section class="sec">${secH('家族ごとの内訳', 'By family')}
-        <div class="tbl"><table class="ledger"><thead><tr><th></th><th class="r${f === 'iizuka' ? ' mine' : ''}">飯塚家</th><th class="r${f === 'yamaguchi' ? ' mine' : ''}">山口家</th></tr></thead><tbody>
-        ${B.families.map(([k, a, b, n]) => `<tr><td>${k}<span class="sm">${n}</span></td><td class="r num${f === 'iizuka' ? ' mine' : ''}">${yen(a)}</td><td class="r num${f === 'yamaguchi' ? ' mine' : ''}">${yen(b)}</td></tr>`).join('')}
-        </tbody><tfoot><tr><td>合計</td><td class="r num${f === 'iizuka' ? ' mine' : ''}">${yen(B.famTotal.iizuka)}</td><td class="r num${f === 'yamaguchi' ? ' mine' : ''}">${yen(B.famTotal.yamaguchi)}</td></tr></tfoot></table></div>
-      </section>
-      <section class="sec">${secH('予算の明細', 'Details')}
-        ${B.groups.map(g => `<div class="group-h"><b>${g.name}</b><span class="num" style="font-weight:700">${yen(g.sum)}</span></div>${g.note ? `<p class="small muted">${g.note}</p>` : ''}
-          <table class="ledger"><tbody>${g.rows.map(([a, b, v]) => `<tr><td>${esc(a)}<span class="sm">${esc(b)}</span></td><td class="r num">${yen(v)}</td></tr>`).join('')}</tbody></table>`).join('')}
-      </section>
+      ${budgetHtml(Budget.view(), f)}
+      ${Budget.admin.has() ? `<p class="kn-entry"><a class="btn quiet" href="#/kanri">予算を直す（管理ページ）</a><span class="small muted">この端末にはトークンが保存されています</span></p>` : ''}
       <section class="sec" id="split">${secH('割り勘メモ', 'Split')}
         <p class="sec-lead">旅行中に立て替えたお金を記録すると、最後にどちらがいくら払えばいいか計算します。記録はこの端末だけに残るので、記録係を1人決めておくと確実です。</p>
         <form class="form" id="expform" autocomplete="off">
@@ -2385,6 +2425,263 @@
         <p class="settle">${msg}</p>
         ${exp.length ? `<table class="ledger"><tbody>${exp.map((e, i) => `<tr><td>${esc(e.what)}<span class="sm">${T.families[e.payer].name}が支払い・${SPLITS[e.split]}</span></td><td class="r num">${yen(+e.amt)}</td><td class="r"><button class="del" data-del="${i}" aria-label="${esc(e.what)}を消す">×</button></td></tr>`).join('')}</tbody></table>` : ''}
       </section></div>`;
+  }
+
+  /* ========== 予算の管理ページ（#/kanri） ==========
+     メニュー・検索には出さない。GitHub のトークンを保存した端末だけ、予算のページの下に入口を出す（家族が迷い込まないように）。
+     初めての端末は、URL の最後に #/kanri を付けて開き、トークンの作り方に沿って保存する。
+     直した内容は Budget.admin.queue で端末に貯め、公開側の最新を読み直してから送る（assets/budget.js） */
+  const KN_UNTIL = '2026-11-30';
+  const KN_WHO = [['大人', '大人'], ['子ども', '子ども'], ['', '（人数を書かない）']];
+  const KN_PER = ['', '日', '泊', '回', '個', '本', '枚', '台'];
+  const knInt = v => Math.max(0, Math.round(Number(String(v ?? '').replace(/[,，\s円]/g, '')) || 0));
+  const knHM = t => new Date(t).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: 'numeric', minute: '2-digit' });
+  const knUpd = s => (s ? `${+s.slice(5, 7)}/${+s.slice(8, 10)} ${s.slice(11, 16)}` : '');
+  /* GitHub のトークン作成画面を、名前・説明・期限（11/30まで）・権限（Contents の読み書き）を入れた状態で開く（GitHub の公式の機能：URL で入力済みにできる） */
+  function knTokenUrl() {
+    const days = Math.round((Date.parse(KN_UNTIL + 'T00:00:00+09:00') - Date.parse(ymd(new Date()) + 'T00:00:00+09:00')) / 864e5);
+    const q = new URLSearchParams({ name: '旅のしおり 予算の編集', description: '旅のしおりの予算（assets/budget.json）を管理ページから直すため。公開リポジトリ Nara-Osaka-Trip_2026 だけ・Contents の読み書きだけ。', target_name: 'Shohei-A11Y', expires_in: String(Math.max(1, Math.min(366, days))), contents: 'write' });
+    return 'https://github.com/settings/personal-access-tokens/new?' + q.toString();
+  }
+  const KN_ERR = {
+    offline: '圏外です。変更はこの端末に保存してあり、電波が戻ったら自動で送ります。',
+    net: '通信できませんでした。変更はこの端末に保存してあります。電波の良い所で「今すぐ送る」を押してください（電波が戻ったときにも自動で送ります）。',
+    auth: 'トークンが使えません（期限切れか、GitHub で消されています）。下の「この端末のトークンを消す」を押し、作り直して保存してください。未送信の変更は消えません。',
+    perm: 'このトークンでは書き込めません。トークンの「Repository access」で Nara-Osaka-Trip_2026 を選んでいるか、「Contents」が「Read and write」になっているかを確かめてください。',
+    notfound: '公開しているしおりに予算のファイル（assets/budget.json）が見つかりません。',
+    conflict: '送ろうとするたびに、ほかの所で先に更新されたため、送れませんでした。少し待ってから「今すぐ送る」を押してください。'
+  };
+  const knErr = e => KN_ERR[e.kind] || `送れませんでした（${esc(e.msg || e.status || '')}）。少し待ってから「今すぐ送る」を押してください。`;
+  function knSetup() {
+    return `<div class="kn-note"><b>家族の端末では使いません。</b>トークン（GitHub の合鍵）は、この端末の中だけに保存します。しおりのファイルには入れず、使うのは GitHub に予算を送るときだけです。</div>
+      <section class="sec">${secH('1. トークンを作る', 'Step 1')}
+        <p class="sec-lead">最初に1回だけ。スマホのブラウザで、1画面ずつ進めます（5分ほど）。使えるのは、公開しているしおりのリポジトリ1つの「中身の読み書き」だけ、期限は11月30日までにします。</p>
+        <ol class="kn-steps">
+          <li><b>下のボタンで GitHub を開く。</b>ログインの画面が出たら、いつもの GitHub のアカウント（Shohei-A11Y）でログインします。<div class="btns"><a class="btn fill ext" href="${esc(knTokenUrl())}" target="_blank" rel="noopener">GitHub でトークンを作る</a></div></li>
+          <li><b>「New fine-grained personal access token」の画面。</b>いちばん上の「Token name」に「旅のしおり 予算の編集」、「Expiration」に11月30日までの日数が入っていることを確かめます。入っていないときは、Token name に同じ名前を入れ、Expiration で「Custom」を選んで 2026年11月30日 を選びます。</li>
+          <li><b>「Resource owner」を確かめる。</b>「Shohei-A11Y」になっていれば、そのままで大丈夫です。</li>
+          <li><b>下へ進み、「Repository access」で「Only select repositories」を選ぶ。</b>出てきた「Select repositories」を押して「Nara-Osaka-Trip_2026」と入れ、「Shohei-A11Y/Nara-Osaka-Trip_2026」を選びます。名前の最後が「-dev」の方は選びません。</li>
+          <li><b>「Permissions」で「Contents」が「Read and write」になっていることを確かめる。</b>「Metadata」の「Read-only」は自動で付きます（外しません）。「Contents」が無いときは「Add permissions」を押して「Contents」を選び、右の選択を「Read and write」にします。ほかの権限は足しません。</li>
+          <li><b>いちばん下の「Generate token」を押す。</b>確かめの画面が出たら、もう一度「Generate token」を押します。</li>
+          <li><b>「github_pat_」で始まる長い文字が出る。</b>この画面を閉じると二度と見られないので、横のコピーのボタンでコピーします。</li>
+          <li><b>このページに戻り、下の「2. この端末に保存する」に貼り付けて「保存して確かめる」を押す。</b>「保存しました」と出れば完了です。</li>
+        </ol>
+        <p class="note">ボタンで開けないとき：GitHub の右上の自分のアイコン →「Settings」→ メニューのいちばん下の「Developer settings」→「Personal access tokens」→「Fine-grained tokens」→「Generate new token」で、同じ画面になります（2〜7は同じ）。</p>
+      </section>
+      <section class="sec">${secH('2. この端末に保存する', 'Step 2')}
+        <form class="form" id="kn-tok" autocomplete="off">
+          <label>トークン（github_pat_ で始まる文字）<input id="kn-tok-in" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" required placeholder="github_pat_…"></label>
+          <button class="btn fill" type="submit">保存して確かめる</button>
+          <p class="small muted" id="kn-tok-msg" role="status"></p>
+        </form>
+        <p class="note">期限の11月30日を過ぎたら、同じ手順で作り直してください。この端末から消すときは、保存したあとのこのページの下にある「この端末のトークンを消す」を押します。</p>
+      </section>`;
+  }
+  function knStatus() {
+    const S = Budget.admin.status(), out = [];
+    if (S.busy) out.push('<b>送信中…</b>（送る前に、公開側の最新を読み直しています）');
+    if (S.n) out.push(`<b class="kn-pend">未送信 ${S.n}件</b>${S.online ? '' : '　圏外のため、この端末に保存しています。電波が戻ったら自動で送ります。'}`);
+    else if (!S.busy) out.push('未送信の変更はありません。');
+    if (S.err && (S.n || !['offline', 'net'].includes(S.err.kind)) && !S.busy) out.push(`<span class="kn-err">${knErr(S.err)}</span>`);
+    if (S.sent && !S.n) out.push(`${knHM(S.sent.at)} に送りました（変更${S.sent.n}件・第${S.sent.rev}版）。家族のしおりには1〜2分で反映されます。${S.sent.reread ? '<br>送る前に読み直したところ、公開側が先に更新されていたので、その最新の上に今回の変更を重ねました。' : ''}`);
+    if (S.remote) out.push(`<span class="small muted">公開側：第${S.remote.rev}版（${knUpd(S.remote.updated)} 更新）を ${knHM(S.remote.at)} に読みました</span>`);
+    return `<div class="kn-st${S.n ? ' pend' : ''}" role="status">${out.map(x => `<p>${x}</p>`).join('')}
+      <div class="btns"><button type="button" class="btn quiet" data-kn="reload"${S.busy ? ' disabled' : ''}>公開側の最新を読み直す</button>${S.n ? `<button type="button" class="btn fill" data-kn="send"${S.busy ? ' disabled' : ''}>今すぐ送る</button>` : ''}</div></div>`;
+  }
+  function knMain(V) {
+    if (!V) return '<p class="empty">予算を読み込んでいます…</p>';
+    return `<div class="kn-sum"><span>予算の合計</span><b class="num">${yen(V.total)}</b><small class="num">飯塚家 ${yen(V.fam.iizuka)}／山口家 ${yen(V.fam.yamaguchi)}</small></div>
+      ${V.groups.map(g => `<section class="kn-g">
+        <div class="kn-gh"><h3>${esc(g.name)}</h3><span class="num">${yen(g.sum)}</span></div>
+        <p class="kn-gn">${g.note ? `注記：${esc(g.note)}` : '注記なし'}　家族ごとの説明：${esc(g.famNote) || 'なし'}</p>
+        <ul class="kn-rows">${g.rows.map(r => `<li><button type="button" class="kn-row" data-kn="redit" data-r="${esc(r.id)}">
+          <span class="kn-rn">${esc(r.name)}${r.extra ? '<i class="kn-tag">予定外</i>' : ''}</span><span class="kn-ra num">${r.extra ? '' : yen(r.amount)}</span>
+          ${r.text ? `<span class="kn-rt">${esc(r.text)}</span>` : ''}
+          ${r.extra ? '' : `<span class="kn-rs">${Budget.SPLITS[r.split] || ''}　飯塚家 ${yen(r.sh.iizuka)}／山口家 ${yen(r.sh.yamaguchi)}</span>`}
+          <span class="kn-ac${r.has ? ' on' : ''}">${r.has ? `決算 ${yen(r.actual)}${r.extra ? `（${Budget.SPLITS[r.split] || ''}）` : `（予算との差 ${knDiff(r.actual - r.amount)}）`}・${r.payer ? `${T.families[r.payer].name}が立て替え` : '立て替えた家族は未入力'}` : '決算は未入力'}</span></button></li>`).join('')}</ul>
+        <div class="btns kn-ga"><button type="button" class="btn quiet" data-kn="radd" data-g="${esc(g.id)}">＋ 項目を足す</button><button type="button" class="btn quiet" data-kn="gedit" data-g="${esc(g.id)}">分類を直す</button></div>
+      </section>`).join('')}
+      <div class="btns kn-add"><button type="button" class="btn quiet" data-kn="gadd">＋ 分類を足す</button><button type="button" class="btn quiet" data-kn="xadd">＋ 予定外の出費を足す</button></div>
+      ${V.act.rows ? `<section class="sec">${secH('決算と精算', 'Settlement')}${settleHtml(V)}</section>` : ''}`;
+  }
+  function knEditor() {
+    return `<div id="kn-status">${knStatus()}</div><div id="kn-main">${knMain(Budget.view())}</div>
+      <section class="sec">${secH('この端末のトークン', 'Token')}
+        <p class="small muted">トークンは、この端末の中だけに保存しています（期限は11月30日）。この端末で予算を直さなくなったら、消してください。GitHub の側でも、トークンの一覧から消せます。</p>
+        <div class="btns"><button type="button" class="btn quiet" data-kn="logout">この端末のトークンを消す</button><a class="btn quiet ext" href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">GitHub のトークンの一覧</a></div>
+      </section>`;
+  }
+  function viewKanri() {
+    const has = Budget.admin.has();
+    return `<div class="wrap">${topbar()}${phead('Budget admin', '予算の管理', has ? '項目を直すと、公開しているしおりの予算ファイルを書き換えます。家族全員のしおりには1〜2分で反映されます。' : 'このページは、予算を直す人の端末だけで使います。最初に1回、GitHub の「トークン」を作って、この端末に保存してください。')}
+      ${has ? knEditor() : knSetup()}</div>`;
+  }
+  /* 予算が変わった・送信の状態が変わったときは、管理ページの中身だけ描き直す（開いている入力のシートはそのまま） */
+  function knRefresh() {
+    const st = $('#kn-status'), mn = $('#kn-main');
+    if (st) st.innerHTML = knStatus();
+    if (mn) { mn.innerHTML = knMain(Budget.view()); applyRuby(mn); }
+  }
+  const knFind = id => { for (const g of (Budget.data() || {}).groups || []) { const r = (g.rows || []).find(x => x.id === id); if (r) return [g, r]; } return [null, null]; };
+  const knSaved = () => toast(navigator.onLine === false ? `圏外のため、この端末に保存しました（未送信 ${Budget.admin.pending().length}件）` : '保存しました。送信しています…', 2600);
+
+  /* 項目の入力（分類・項目名・内訳・金額・分担ルール） */
+  const knPart = p => `<div class="kf-part">
+      <select data-pf="who" aria-label="区分">${KN_WHO.map(([v, l]) => `<option value="${v}"${(p.who || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      <label class="kf-in"><input data-pf="n" type="number" inputmode="numeric" min="0" step="1" value="${p.n ?? ''}" aria-label="人数">名</label>
+      <label class="kf-in">@<input data-pf="unit" type="number" inputmode="numeric" min="0" step="1" value="${p.unit ?? ''}" aria-label="単価（円）">円</label>
+      <label class="kf-in">×<input data-pf="times" type="number" inputmode="numeric" min="1" step="1" value="${p.times > 1 ? p.times : ''}" placeholder="1" aria-label="回数"></label>
+      <select data-pf="per" aria-label="回数の単位">${KN_PER.map(v => `<option value="${v}"${(p.per || '') === v ? ' selected' : ''}>${v || '単位なし'}</option>`).join('')}</select>
+      <button type="button" class="kf-x" data-kf="pdel" aria-label="この行を消す">×</button></div>`;
+  const knDiff = n => (n > 0 ? '+' + yen(n) : n < 0 ? yen(n) : '±¥0');
+  function knRowSheet(rowId, gid, extra = false) {
+    const D = Budget.data(); if (!D) return;
+    const [g0, r0] = rowId ? knFind(rowId) : [D.groups.find(g => g.id === gid) || D.groups[0], null];
+    if (rowId && !r0) return toast('この項目は、ほかの所で消されたようです');
+    const r = r0 ? JSON.parse(JSON.stringify(r0)) : extra ? { id: Budget.admin.newId('r'), name: '', memo: '', split: 'half', extra: true } : { id: Budget.admin.newId('r'), name: '', calc: { parts: [{ who: '大人', n: '', unit: '' }] }, split: 'half' };
+    const ex = !!r.extra, has = r.actual !== undefined && r.actual !== null && r.actual !== '';
+    const calc = r.calc || { parts: [{ who: '大人', n: '', unit: '' }] };
+    const opt = (v, l, on) => `<option value="${esc(v)}"${on ? ' selected' : ''}>${esc(l)}</option>`;
+    const rows = g0 ? (g0.rows || []) : [], at = rows.findIndex(x => x.id === r.id);
+    sheet(r0 ? (ex ? '予定外の出費を直す' : '項目を直す') : ex ? '予定外の出費を足す' : '項目を足す', `<form class="form kn-form${ex ? ' kf-extra' : ''}" id="kn-rf" autocomplete="off">
+        ${ex ? '<p class="kf-help">予定外の出費は、予算（合計・グラフ・家族ごとの内訳）には入れず、決算と精算だけに入れます。</p>' : ''}
+        <label>分類<select id="kf-g">${D.groups.map(g => opt(g.id, g.name, g0 && g.id === g0.id)).join('')}${opt('__new', '＋ 新しい分類を作る', !g0)}</select></label>
+        <label id="kf-gnew-l"${g0 ? ' hidden' : ''}>新しい分類の名前<input id="kf-gnew" placeholder="例：おみやげ"></label>
+        <label>項目名<input id="kf-name" required value="${esc(r.name)}" placeholder="${ex ? '例：追加のたこ焼き' : '例：3日目 夕食'}"></label>
+        <fieldset class="kf-mode"${ex ? ' hidden' : ''}><legend>内訳</legend>
+          <label><input type="radio" name="kf-mode" value="calc"${r.calc ? ' checked' : ''}> 人数×単価で作る</label>
+          <label><input type="radio" name="kf-mode" value="memo"${r.calc ? '' : ' checked'}> 自由に書く</label></fieldset>
+        <div class="kf-calc"${r.calc ? '' : ' hidden'}>
+          <label>前に付ける言葉（なくてもよい）<input id="kf-pre" value="${esc(calc.pre || '')}" placeholder="例：早得7・新幹線車内"></label>
+          <div id="kf-parts">${(calc.parts || []).map(knPart).join('')}</div>
+          <button type="button" class="btn quiet kf-padd" data-kf="padd">＋ 行を足す（例：子ども）</button>
+          <label>後ろに付ける言葉（なくてもよい）<input id="kf-post" value="${esc(calc.post || '')}" placeholder="例：（子どもは無料）"></label>
+          <p class="kf-help">区分を「（人数を書かない）」にすると、内訳の文に人数を書きません（例「@1,500×2日」）。金額には人数をかけます。</p>
+        </div>
+        <div class="kf-memo"${r.calc ? ' hidden' : ''}>
+          <label>内訳（${ex ? 'メモ。なくてもよい' : '自由に'}）<input id="kf-memo" value="${esc(r.memo || '')}" placeholder="${ex ? '例：道頓堀で' : '例：朝食付・2部屋・3泊'}"></label>
+          <label${ex ? ' hidden' : ''}>金額（円）<input id="kf-amt" type="number" inputmode="numeric" min="0" step="1" value="${r.calc ? '' : esc(r.amount ?? '')}"></label>
+        </div>
+        <div class="kf-prev" aria-live="polite"${ex ? ' hidden' : ''}><span id="kf-text"></span><b class="num" id="kf-sum"></b></div>
+        <fieldset class="kf-split"><legend>分担ルール</legend>${Object.entries(Budget.SPLITS).map(([k, l]) => `<label><input type="radio" name="kf-split" value="${k}"${(r.split || 'half') === k ? ' checked' : ''}> ${l}</label>`).join('')}</fieldset>
+        <p class="kf-share num" id="kf-share"></p>
+        <p class="kf-help">人数で按分：内訳の「大人」の行は大人の人数（飯塚家2・山口家2）、「子ども」の行は子どもの人数（飯塚家2・山口家0）で分けます。人数を書かない行・自由に書いた内訳は、全員の人数（飯塚家4・山口家2）で分けます。</p>
+        <fieldset class="kf-act"><legend>決算（払ったあとに入れる）</legend>
+          <label class="kf-actual">実際に払った額（円）<input id="kf-actual" type="number" inputmode="numeric" min="0" step="1" value="${has ? esc(r.actual) : ''}" placeholder="${ex ? '例：1200' : 'まだなら空のまま'}"${ex ? ' required' : ''}></label>
+          <div class="kf-payer"><span>立て替えた家族</span>${[['', 'まだ決めない'], ['iizuka', '飯塚家'], ['yamaguchi', '山口家']].map(([v, l]) => `<label><input type="radio" name="kf-payer" value="${v}"${(r.payer || '') === v ? ' checked' : ''}> ${l}</label>`).join('')}</div>
+          <p class="kf-share num" id="kf-act"></p>
+          <p class="kf-help">立て替えた家族：その項目のお金を、実際にまとめて払った家族。自分の家族の分だけを払った宿泊費なども、払った家族を選びます。精算は、払った額と立て替えた家族を入れた項目だけで計算します。</p>
+        </fieldset>
+        <button class="btn fill" type="submit">保存する</button>
+        ${r0 ? `<div class="btns kf-more"><button type="button" class="btn quiet" data-kf="up"${at <= 0 ? ' disabled' : ''}>上へ</button><button type="button" class="btn quiet" data-kf="down"${at < 0 || at >= rows.length - 1 ? ' disabled' : ''}>下へ</button><button type="button" class="btn quiet kf-del" data-kf="del">この項目を消す</button></div>` : ''}
+      </form>`, (el, close) => {
+      const f = $('#kn-rf', el);
+      const read = () => {
+        const out = { id: r.id, name: $('#kf-name', el).value.trim(), split: ($('[name=kf-split]:checked', el) || {}).value || 'half' };
+        if (($('[name=kf-mode]:checked', el) || {}).value === 'calc') {
+          const parts = $$('.kf-part', el).map(pe => {
+            const v = k => $(`[data-pf="${k}"]`, pe).value, p = { who: v('who'), n: knInt(v('n')), unit: knInt(v('unit')) }, t = knInt(v('times'));
+            if (t > 1) { p.times = t; if (v('per')) p.per = v('per'); }
+            return p;
+          }).filter(p => p.n || p.unit);
+          const pre = $('#kf-pre', el).value.trim(), post = $('#kf-post', el).value.trim();
+          out.calc = { ...(pre ? { pre } : {}), parts, ...(post ? { post } : {}) };
+        } else { out.memo = $('#kf-memo', el).value.trim(); if (!ex) out.amount = knInt($('#kf-amt', el).value); }
+        if (ex) out.extra = true;
+        const av = $('#kf-actual', el).value.trim(), pv = ($('[name=kf-payer]:checked', el) || {}).value || '';
+        if (av !== '') out.actual = knInt(av);
+        if (pv) out.payer = pv;
+        return out;
+      };
+      const prev = () => {
+        const x = read(), a = Budget.rowAmount(x), sh = Budget.shares(x, D.people || {});
+        $('#kf-text', el).textContent = Budget.rowText(x) || '（内訳の文なし）';
+        $('#kf-sum', el).textContent = yen(a);
+        $('#kf-share', el).textContent = ex ? '' : `飯塚家 ${yen(sh.iizuka)}　山口家 ${yen(sh.yamaguchi)}`;
+        if (x.actual === undefined) $('#kf-act', el).textContent = '';
+        else { const as = Budget.actualShares(x, D.people || {}); $('#kf-act', el).textContent = `${ex ? '' : `予算との差 ${knDiff(x.actual - a)}　`}飯塚家 ${yen(as.iizuka)}　山口家 ${yen(as.yamaguchi)}`; }
+      };
+      f.addEventListener('input', prev); f.addEventListener('change', e => {
+        if (e.target.name === 'kf-mode') { const c = e.target.value === 'calc'; $('.kf-calc', el).hidden = !c; $('.kf-memo', el).hidden = c; }
+        if (e.target.id === 'kf-g') $('#kf-gnew-l', el).hidden = e.target.value !== '__new';
+        prev();
+      });
+      f.addEventListener('click', e => {
+        const b = e.target.closest('[data-kf]'); if (!b) return;
+        const k = b.dataset.kf, ids = rows.map(x => x.id);
+        if (k === 'padd') { $('#kf-parts', el).insertAdjacentHTML('beforeend', knPart({ who: '子ども', n: '', unit: '' })); prev(); }
+        if (k === 'pdel') { b.closest('.kf-part').remove(); prev(); }
+        if (k === 'up' || k === 'down') {
+          const j = k === 'up' ? at - 1 : at + 1; [ids[at], ids[j]] = [ids[j], ids[at]];
+          Budget.admin.queue({ t: 'rord', g: g0.id, ids }); close(); knSaved();
+        }
+        if (k === 'del' && confirm(`「${r.name}」を消しますか？`)) { Budget.admin.queue({ t: 'rdel', r: r.id }); close(); knSaved(); }
+      });
+      f.addEventListener('submit', e => {
+        e.preventDefault();
+        const x = read(); if (!x.name) return $('#kf-name', el).focus();
+        if (ex && x.actual === undefined) return $('#kf-actual', el).focus();
+        let g = $('#kf-g', el).value, gname = '';
+        if (g === '__new') {
+          gname = $('#kf-gnew', el).value.trim(); if (!gname) return $('#kf-gnew', el).focus();
+          g = Budget.admin.newId('g'); Budget.admin.queue({ t: 'g', g, v: { name: gname, note: '', famNote: '' } });
+        } else gname = (D.groups.find(x2 => x2.id === g) || {}).name || '';
+        Budget.admin.queue({ t: 'r', g, gname, v: x }); close(); knSaved();
+      });
+      prev();
+    }, { noFocus: true });
+  }
+  /* 分類の入力（名前・明細の注記・家族ごとの内訳の説明・並び・削除） */
+  function knGroupSheet(gid) {
+    const D = Budget.data(); if (!D) return;
+    const g = gid ? D.groups.find(x => x.id === gid) : null, at = g ? D.groups.indexOf(g) : -1;
+    if (gid && !g) return toast('この分類は、ほかの所で消されたようです');
+    sheet(g ? '分類を直す' : '分類を足す', `<form class="form kn-form" id="kn-gf" autocomplete="off">
+        <label>分類の名前<input id="kg-name" required value="${esc(g ? g.name : '')}" placeholder="例：おみやげ"></label>
+        <label>明細の注記（なくてもよい）<input id="kg-note" value="${esc(g ? g.note || '' : '')}" placeholder="例：子ども2名分は含めず"></label>
+        <label>家族ごとの内訳の説明（なくてもよい）<input id="kg-fam" value="${esc(g ? g.famNote || '' : '')}" placeholder="例：2家族で折半"></label>
+        <button class="btn fill" type="submit">保存する</button>
+        ${g ? `<div class="btns kf-more"><button type="button" class="btn quiet" data-kf="up"${at <= 0 ? ' disabled' : ''}>上へ</button><button type="button" class="btn quiet" data-kf="down"${at >= D.groups.length - 1 ? ' disabled' : ''}>下へ</button><button type="button" class="btn quiet kf-del" data-kf="del">この分類を消す</button></div>` : ''}
+      </form>`, (el, close) => {
+      const f = $('#kn-gf', el);
+      f.addEventListener('click', e => {
+        const b = e.target.closest('[data-kf]'); if (!b) return;
+        const k = b.dataset.kf, ids = D.groups.map(x => x.id);
+        if (k === 'up' || k === 'down') { const j = k === 'up' ? at - 1 : at + 1; [ids[at], ids[j]] = [ids[j], ids[at]]; Budget.admin.queue({ t: 'gord', ids }); close(); knSaved(); }
+        if (k === 'del') {
+          const n = (g.rows || []).length;
+          if (confirm(n ? `分類「${g.name}」と、その中の項目${n}件を消しますか？` : `分類「${g.name}」を消しますか？`)) { Budget.admin.queue({ t: 'gdel', g: g.id }); close(); knSaved(); }
+        }
+      });
+      f.addEventListener('submit', e => {
+        e.preventDefault();
+        const name = $('#kg-name', el).value.trim(); if (!name) return $('#kg-name', el).focus();
+        Budget.admin.queue({ t: 'g', g: g ? g.id : Budget.admin.newId('g'), v: { name, note: $('#kg-note', el).value.trim(), famNote: $('#kg-fam', el).value.trim() } });
+        close(); knSaved();
+      });
+    }, { noFocus: true });
+  }
+  async function knAct(el) {
+    const k = el.dataset.kn, A = Budget.admin;
+    if (k === 'redit') knRowSheet(el.dataset.r);
+    if (k === 'radd') knRowSheet(null, el.dataset.g);
+    if (k === 'xadd') knRowSheet(null, (Budget.data().groups[0] || {}).id, true);
+    if (k === 'gedit') knGroupSheet(el.dataset.g);
+    if (k === 'gadd') knGroupSheet(null);
+    if (k === 'send') A.flush();
+    if (k === 'reload') { await A.refresh(); toast('公開側の最新を読み直しました'); }
+    if (k === 'logout') {
+      const n = A.pending().length;
+      if (confirm(n ? `未送信の変更が${n}件あります。トークンを消すと、送れなくなります（変更は端末に残ります）。消しますか？` : 'この端末のトークンを消しますか？')) { A.clearToken(); render(); toast('この端末のトークンを消しました'); }
+    }
+  }
+  async function knSaveToken(form) {
+    const inp = $('#kn-tok-in', form), msg = $('#kn-tok-msg', form), btn = $('button[type=submit]', form), t = inp.value.trim();
+    if (!/^(github_pat_|ghp_)[A-Za-z0-9_]{20,}$/.test(t)) { msg.textContent = '「github_pat_」で始まるトークンを、全部貼り付けてください。'; return; }
+    btn.disabled = true; msg.textContent = '確かめています…';
+    try { await Budget.admin.setToken(t); inp.value = ''; toast('保存しました'); render(); scrollTo(0, 0); }
+    catch (e) { msg.textContent = e.kind === 'auth' ? 'このトークンは使えません。貼り付けた文字が全部そろっているか、期限が切れていないかを確かめてください。' : e.kind === 'net' ? '通信できませんでした。電波の良い所で、もう一度押してください。' : `確かめられませんでした（${e.message}）。`; }
+    finally { btn.disabled = false; }
   }
 
   /* ========== トリビア（#/trivia、#/trivia/分類、#/trivia/d1〜d4 はその日の分類を開く） ==========
@@ -2592,7 +2889,7 @@
   }
   /* しおりの中で奥のページ（下のタブのページではないところ）では、左上に「‹ 戻る」を出す */
   const isDeep = (route, sub) => !(route === 'home' || route === 'trip' || (route === 'map' && sub !== 'outing') || (route === 'ride' && !sub));
-  function backTarget(route, sub) { return navHref(tabOf(route, sub)) || '#/'; }
+  function backTarget(route, sub) { return route === 'kanri' ? '#/money' : navHref(tabOf(route, sub)) || '#/'; }
   function goBack(route, sub) {
     const st = history.state;
     if (st && st.n > 0) history.back(); else location.hash = backTarget(route, sub);
@@ -2613,7 +2910,7 @@
     window.LiveMap && window.LiveMap.unmount();
     const views = {
       home: viewHome, trip: () => viewTrip(+parts[1] || todayN()), ride: () => viewRide(parts[1], parts[2], parts[3]), food: () => viewFood(parts[1]),
-      spot: () => viewSpots(parts[1]), stay: viewStay, sos: viewSos, money: viewMoney, bag: viewBag, memo: viewMemo, map: () => (parts[1] === 'outing' ? viewOuting() : viewMap()), help: () => viewHelp(parts[1]), tips: viewTips, trivia: () => viewTrivia(parts[1])
+      spot: () => viewSpots(parts[1]), stay: viewStay, sos: viewSos, money: viewMoney, bag: viewBag, memo: viewMemo, map: () => (parts[1] === 'outing' ? viewOuting() : viewMap()), help: () => viewHelp(parts[1]), tips: viewTips, trivia: () => viewTrivia(parts[1]), kanri: viewKanri
     };
     if (dmMap) { try { dmMap.remove(); } catch { /* noop */ } dmMap = null; }
     if (omCleanup) { omCleanup(); omCleanup = null; }
@@ -2624,13 +2921,15 @@
     drawNav(views[route] ? route : 'home', parts[1]);
     simBar();
     geoAsk();
-    document.title = { home: '旅のしおり｜奈良・大阪 2026', map: 'まっぷ｜旅のしおり', trip: '旅程｜旅のしおり', ride: 'のりもの｜旅のしおり', food: 'ごはん｜旅のしおり', spot: 'おでかけ｜旅のしおり', stay: 'やど・くるま｜旅のしおり', sos: 'もしも｜旅のしおり', money: '予算｜旅のしおり', help: '使い方｜旅のしおり', tips: '旅のワンポイント｜旅のしおり', trivia: 'トリビア｜旅のしおり', bag: '持ち物｜旅のしおり', memo: '思い出メモ｜旅のしおり' }[route] || '旅のしおり｜奈良・大阪 2026';
+    document.title = { home: '旅のしおり｜奈良・大阪 2026', map: 'まっぷ｜旅のしおり', trip: '旅程｜旅のしおり', ride: 'のりもの｜旅のしおり', food: 'ごはん｜旅のしおり', spot: 'おでかけ｜旅のしおり', stay: 'やど・くるま｜旅のしおり', sos: 'もしも｜旅のしおり', money: '予算｜旅のしおり', kanri: '予算の管理｜旅のしおり', help: '使い方｜旅のしおり', tips: '旅のワンポイント｜旅のしおり', trivia: 'トリビア｜旅のしおり', bag: '持ち物｜旅のしおり', memo: '思い出メモ｜旅のしおり' }[route] || '旅のしおり｜奈良・大阪 2026';
     if (route === 'map' && parts[1] === 'outing') document.title = 'おでかけマップ｜旅のしおり';
     CoverTrain.mount(route === 'home' || !views[route] ? $('.cover:not(.slim)') : null);
     if (route === 'home') loadWeather($('#weather'));
     if (route === 'trip') loadRain(T.days.find(d => d.n === (+parts[1] || todayN())) || T.days[0]);
     if (route === 'map') parts[1] === 'outing' ? mountOutingMap() : mountDriveMap();
     if (route === 'help') drawMarks();
+    if ((route === 'money' || route === 'kanri') && fresh) Budget.load();
+    if (route === 'kanri' && fresh && Budget.admin.has()) Budget.admin.refresh();
     if (route === 'ride' && parts[1] === 'live') {
       requestAnimationFrame(updateLive);
       if (!fresh) scrollTo(0, y0);
@@ -2789,7 +3088,7 @@
     add('チェックインQR', 'ホテル・予約とQR', 'QRコード 自動チェックイン 予約番号 合言葉 画像として保存', null, null, { act: 'qr' });
     const C = T.car;
     add(C.shop, 'レンタカー・10/18', J([C.klass, C.klassNote, C.address, C.tel, C.access, C.pay, ...C.notes.map(x => x.join(' ')), ...C.included]), '#/stay/car', '#car');
-    T.budget.groups.forEach(g => add(g.name, '予算', g.rows.map(r => r[0] + ' ' + r[1]).join(' '), '#/money'));
+    ((Budget.data() || {}).groups || []).forEach(g => add(g.name, '予算', (g.rows || []).map(r => r.name + ' ' + Budget.rowText(r)).join(' '), '#/money'));
     add('割り勘メモ', '予算', '立て替え 精算 割り勘', '#/money', '#split');
     T.stamps.forEach(st => add(`スタンプ：${st.name}`, `スタンプ帳・${st.day}日目`, '', '#/spot/stamps', `[data-stamp="${st.id}"]`));
     (T.officialMaps || []).forEach(m => add(m.name, `公式の案内図・${m.by}`, m.when, '#/map/official', '#official', { k: '地図 案内図 構内図' }));
@@ -3041,6 +3340,8 @@
       }
       return;
     }
+    if ((el = q('[data-kn]'))) { knAct(el); return; }
+    if ((el = q('[data-bdmode]'))) { session.set('bdMode', el.dataset.bdmode); const y = scrollY; render(); scrollTo(0, y); return; }
     if ((el = q('[data-del]'))) { const l = store.get('expenses', []); l.splice(+el.dataset.del, 1); store.set('expenses', l); const y = scrollY; render(); scrollTo(0, y); return; }
     if ((el = q('[data-bagdel]'))) { store.set('bagExtra', store.get('bagExtra', []).filter(x => x !== el.dataset.bagdel)); const y = scrollY; render(); scrollTo(0, y); }
   });
@@ -3059,6 +3360,7 @@
       l.push({ what: $('#ex-what').value.trim(), amt: +$('#ex-amt').value, payer: $('#ex-payer').value, split: $('#ex-split').value });
       store.set('expenses', l); render(); setTimeout(() => $('#split') && $('#split').scrollIntoView(), 50); toast('記録しました');
     }
+    if (e.target.id === 'kn-tok') knSaveToken(e.target);
     if (e.target.id === 'bagform') {
       const v = $('#bag-new').value.trim(); if (!v) return;
       const l = store.get('bagExtra', []); if (!l.includes(v)) l.push(v); store.set('bagExtra', l); const y = scrollY; render(); scrollTo(0, y);
@@ -3068,6 +3370,13 @@
   const th = store.get('theme'); if (th) document.documentElement.dataset.theme = th;
   document.addEventListener('input', e => { if (e.target.id === 'meet-time') { meetTime = e.target.value || null; redrawMeet(); } });
   window.addEventListener('hashchange', render);
+  /* 予算（budget.json）が届いた・変わったら、予算のページを開いているときだけ描き直す */
+  Budget.on(() => {
+    const r = location.hash.replace(/^#\/?/, '').split('/')[0];
+    if (r === 'money') { const y = scrollY; render(); scrollTo(0, y); }
+    if (r === 'kanri') knRefresh();
+  });
+  Budget.load();
   window.addEventListener('resize', () => $('#line') && updateLive());
   render();
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});

@@ -1,18 +1,19 @@
 /* 電波が弱い場所でも見られるように、しおり本体を端末に保存する */
-const CACHE = 'shiori-v30';
+const CACHE = 'shiori-v31';
 const TILES = 'shiori-tiles';     // 地図タイル：見た分だけ保存（地図の種類は分けず、全体でおよそ300枚まで。古いものから消す。航空写真は保存しない）
 const TILE_MAX = 300;
 const ML = 'assets/vendor/maplibre-gl/';
 const TH = 'assets/vendor/three/';      // 駅の乗り換え（3D）だけで使う。ページを開いたときだけ読み込むが、電波がなくても開けるように保存しておく
 const MAN = 'assets/manual/';          // 使い方ページの写真（電波がなくても見られるように保存）
 const INTRO = 'assets/intro/';         // 機能紹介の動画と、止まった1コマ（電波がなくても再生できるように保存）
-const FILES = ['./', 'index.html', 'assets/style.css?v=30', 'assets/sim.js?v=30', 'assets/data.js?v=30', 'assets/timetable.js?v=30', 'assets/timetable-data.js?v=30', 'assets/line-data.js?v=30', 'assets/guide.js?v=30', 'assets/news.js?v=30', 'assets/latest.js?v=30', 'assets/livemap.js?v=30', 'assets/app.js?v=30', 'assets/line-sanyo.json?v=30', 'assets/line-relay.json?v=30', 'assets/drive-route.json?v=30',
+const BUDGET = 'assets/budget.json';     // 予算：管理ページから公開側を直接直すので、?v= を付けずにいつも最新を取りに行く
+const FILES = ['./', 'index.html', 'assets/style.css?v=31', 'assets/sim.js?v=31', 'assets/data.js?v=31', 'assets/timetable.js?v=31', 'assets/timetable-data.js?v=31', 'assets/line-data.js?v=31', 'assets/guide.js?v=31', 'assets/news.js?v=31', 'assets/latest.js?v=31', 'assets/budget.js?v=31', 'assets/livemap.js?v=31', 'assets/app.js?v=31', 'assets/line-sanyo.json?v=31', 'assets/line-relay.json?v=31', 'assets/drive-route.json?v=31', BUDGET,
   ML + 'maplibre-gl.mjs', ML + 'maplibre-gl-shared.mjs', ML + 'maplibre-gl-worker.mjs', ML + 'maplibre-gl.css',
-  'transfer.html', TH + 'three.module.min.js?v=30', TH + 'addons/controls/OrbitControls.js', TH + 'addons/renderers/CSS2DRenderer.js', TH + 'addons/utils/BufferGeometryUtils.js',
+  'transfer.html', TH + 'three.module.min.js?v=31', TH + 'addons/controls/OrbitControls.js', TH + 'addons/renderers/CSS2DRenderer.js', TH + 'addons/utils/BufferGeometryUtils.js',
   TH + 'addons/lines/Line2.js', TH + 'addons/lines/LineMaterial.js', TH + 'addons/lines/LineGeometry.js', TH + 'addons/lines/LineSegments2.js', TH + 'addons/lines/LineSegmentsGeometry.js',
-  'assets/train-sprite.webp?v=30', 'assets/train-787.webp?v=30',   // いまどのへん？の列車の印（36方向。のぞみ・リレーかもめ）
-  MAN + 'marks.json?v=30', ...['top', 'today', 'shift', 'search', 'ride', 'xfer', 'live', 'sim', 'qr', 'a2hs', 'fs', 'offline', 'news', 'intro', 'xhelp'].map(k => MAN + k + '.webp?v=30'),
-  ...['live', 'xfer'].flatMap(k => [INTRO + k + '.mp4?v=30', INTRO + k + '.webp?v=30']),
+  'assets/train-sprite.webp?v=31', 'assets/train-787.webp?v=31',   // いまどのへん？の列車の印（36方向。のぞみ・リレーかもめ）
+  MAN + 'marks.json?v=31', ...['top', 'today', 'shift', 'search', 'ride', 'xfer', 'live', 'sim', 'qr', 'a2hs', 'fs', 'offline', 'news', 'intro', 'xhelp'].map(k => MAN + k + '.webp?v=31'),
+  ...['live', 'xfer'].flatMap(k => [INTRO + k + '.mp4?v=31', INTRO + k + '.webp?v=31']),
   'assets/icon.svg', 'assets/icon-192.png', 'assets/icon-512.png', 'manifest.webmanifest'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE && k !== TILES).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
@@ -27,6 +28,10 @@ self.addEventListener('fetch', e => {
       if (res.ok && res.status === 200) { const cp = res.clone(); e.waitUntil(c.put(e.request.url, cp)); }
       return res;
     })).then(res => ranged(e.request, res))));
+  } else if (url.origin === location.origin && url.pathname.endsWith('/' + BUDGET)) {
+    // 予算：ネット優先（ブラウザの保存も使わずに最新を取りに行く）。取れたら保存し、圏外のときは最後に取れた値
+    e.respondWith(fetch(e.request.url, { cache: 'no-store' }).then(r => { if (r.ok) { const cp = r.clone(); e.waitUntil(caches.open(CACHE).then(c => c.put(BUDGET, cp))); } return r; })
+      .catch(() => caches.open(CACHE).then(c => c.match(BUDGET, { ignoreSearch: true })).then(r => r || Response.error())));
   } else if (url.origin === location.origin) {
     // 自分のファイル：まずネット、だめなら保存分
     e.respondWith(fetch(e.request).then(r => { const cp = r.clone(); caches.open(CACHE).then(c => c.put(e.request, cp)); return r; }).catch(() => caches.match(e.request).then(r => r || caches.match(e.request, { ignoreSearch: true })).then(r => r || (e.request.mode === 'navigate' ? caches.match('index.html') : Response.error()))));

@@ -1,0 +1,55 @@
+{
+  "v": 1,
+  "rev": 1,
+  "updated": "2026-10-03T16:00:00+09:00",
+  "people": {
+    "iizuka": { "大人": 2, "子ども": 2 },
+    "yamaguchi": { "大人": 2, "子ども": 0 }
+  },
+  "groups": [
+    {
+      "id": "kotsu", "name": "交通費", "note": "早得予約運賃", "famNote": "人数で按分。復路のぞみは除く（子ども2名は飯塚家分）",
+      "rows": [
+        { "id": "kotsu-1", "name": "1日目 新大村→博多", "calc": { "pre": "早得7", "parts": [{ "who": "大人", "n": 4, "unit": 3400 }, { "who": "子ども", "n": 2, "unit": 1700 }] }, "split": "people" },
+        { "id": "kotsu-2", "name": "1日目 博多→新大阪", "calc": { "pre": "EX早得7", "parts": [{ "who": "大人", "n": 4, "unit": 13600 }, { "who": "子ども", "n": 2, "unit": 6800 }] }, "split": "people" },
+        { "id": "kotsu-3", "name": "4日目 新大阪→博多", "calc": { "pre": "EX早特7", "parts": [{ "who": "大人", "n": 2, "unit": 13600 }] }, "split": "yamaguchi" },
+        { "id": "kotsu-4", "name": "4日目 新大阪→博多", "calc": { "pre": "EX通常", "parts": [{ "who": "大人", "n": 2, "unit": 15820 }, { "who": "子ども", "n": 2, "unit": 7900 }] }, "split": "iizuka" },
+        { "id": "kotsu-5", "name": "4日目 博多→新大村", "calc": { "pre": "早得7", "parts": [{ "who": "大人", "n": 4, "unit": 3400 }, { "who": "子ども", "n": 2, "unit": 1700 }] }, "split": "people" }
+      ]
+    },
+    {
+      "id": "shuku", "name": "宿泊費", "note": "確定予約の実額", "famNote": "確定予約の実額",
+      "rows": [
+        { "id": "shuku-1", "name": "飯塚家4名（大人2・子ども2）", "memo": "朝食付・2部屋・3泊", "amount": 107450, "split": "iizuka" },
+        { "id": "shuku-2", "name": "山口家2名（大人2）", "memo": "朝食付・1部屋・3泊", "amount": 74550, "split": "yamaguchi" }
+      ]
+    },
+    {
+      "id": "car", "name": "レンタカー関連", "note": "", "famNote": "2家族で折半",
+      "rows": [
+        { "id": "car-1", "name": "レンタカー", "memo": "ミニバンクラス", "amount": 15730, "split": "half" },
+        { "id": "car-2", "name": "ETC", "memo": "高速・有料道路", "amount": 2670, "split": "half" },
+        { "id": "car-3", "name": "ガソリン代", "memo": "ノア想定", "amount": 2000, "split": "half" },
+        { "id": "car-4", "name": "駐車代", "memo": "奈良公園近くのコインパーキング", "amount": 1000, "split": "half" }
+      ]
+    },
+    {
+      "id": "food", "name": "食費", "note": "子ども2名分は含めず", "famNote": "2家族で折半",
+      "rows": [
+        { "id": "food-1", "name": "1日目 朝食", "calc": { "pre": "新幹線車内", "parts": [{ "who": "", "n": 4, "unit": 1000 }] }, "split": "half" },
+        { "id": "food-2", "name": "2〜3日目 昼食", "calc": { "parts": [{ "who": "", "n": 4, "unit": 1500, "times": 2, "per": "日" }] }, "split": "half" },
+        { "id": "food-3", "name": "4日目 昼食", "calc": { "parts": [{ "who": "", "n": 4, "unit": 1500 }] }, "split": "half" },
+        { "id": "food-4", "name": "1〜2日目 夕食", "calc": { "parts": [{ "who": "", "n": 4, "unit": 2000, "times": 2, "per": "日" }] }, "split": "half" },
+        { "id": "food-5", "name": "3日目 夕食", "calc": { "parts": [{ "who": "", "n": 4, "unit": 2000 }] }, "split": "half" }
+      ]
+    },
+    {
+      "id": "ticket", "name": "乗車券・入場料", "note": "子ども2名分は含めず", "famNote": "大人4名で按分・子どもは無料",
+      "rows": [
+        { "id": "ticket-1", "name": "1日目 地下鉄", "calc": { "parts": [{ "who": "大人", "n": 4, "unit": 480 }], "post": "（子どもは無料）" }, "split": "people" },
+        { "id": "ticket-2", "name": "3日目 地下鉄1日乗車券", "calc": { "parts": [{ "who": "大人", "n": 4, "unit": 820 }] }, "split": "people" },
+        { "id": "ticket-3", "name": "3日目 JR大阪城公園→新大阪", "calc": { "parts": [{ "who": "大人", "n": 4, "unit": 200 }] }, "split": "people" }
+      ]
+    }
+  ]
+}
