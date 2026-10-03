@@ -1,1 +1,3 @@
 .relay-cache/
+.area-cache/
+__pycache__/

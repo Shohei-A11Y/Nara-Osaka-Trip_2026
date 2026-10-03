@@ -15,7 +15,7 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const MIN = 6e4;
   const MAPLIBRE = 'assets/vendor/maplibre-gl/maplibre-gl.mjs';
-  const LINE_URLS = { sanyo: 'assets/line-sanyo.json?v=31', relay: 'assets/line-relay.json?v=31' };
+  const LINE_URLS = { sanyo: 'assets/line-sanyo.json?v=32', relay: 'assets/line-relay.json?v=32' };
   const GPS_MAX_OFF = 0.5, GPS_MAX_ACC = 1000, GPS_MAX_AGE = 30e3, V_MAX = 330;
 
   /* ========== 線路の形（km ⇔ 緯度経度） ========== */
@@ -363,8 +363,11 @@
     std: { name: '地理院 標準', url: GSI + 'std/{z}/{x}/{y}.png', max: 18, attr: GSI_ATTR },
     pale: { name: '地理院 淡色', url: GSI + 'pale/{z}/{x}/{y}.png', max: 18, attr: GSI_ATTR },
     photo: { name: '地理院 航空写真', url: GSI + 'seamlessphoto/{z}/{x}/{y}.jpg', max: 18, attr: GSI_ATTR },
-    osm: { name: 'OpenStreetMap', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', max: 19, attr: OSM_ATTR }
+    osm: { name: 'OpenStreetMap', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', max: 19, attr: OSM_ATTR },
+    /* 住所：淡色の地図（under）の上に、市区町村の色分け・境界線・名前を重ねる（assets/area.json） */
+    addr: { name: '住所（市区町村）', under: 'pale' }
   };
+  const rasterOf = id => (BASES[id] && BASES[id].under) || id;
   const PITCH_3D = 55;
   /* ---------- 3D地形（立体表示のときだけ） ----------
      標高は地理院の標高タイル（dem_png）。地理院独自の形式（x = R×2^16 + G×2^8 + B、x < 2^23 なら x×0.01 m、x > 2^23 なら (x − 2^24)×0.01 m、
@@ -620,6 +623,192 @@
       ${s.tmp ? '<p class="note">位置は目安です。</p>' : ''}</div>`);
   }
 
+  /* ---------- 住所の地図・境界線・地名（assets/area.json。作り方は tools/make-area.py） ----------
+     市区町村の形は、隣どうしの境目を共有した線（arcs）と、形ごとに使う arc の番号で持つ（TopoJSON と同じ考え方。線は約5mの格子の差を polyline の書き方の文字にしたもの）。
+     - 「住所」の地図：淡色の地図に、市区町村の薄い色分け・境界線・名前（ふりがな）を重ねる
+     - 境界線（設定）：どの地図にも重ねる。府県境は太線、市区町村境は細線。隣と共有する線だけ描く（海岸は描かない）。座標から線として描くので、立体の地形の上でもくっきり
+     - 地名・自然地名（設定）：画面に向かって立てた文字。placeLabels で見どころ・駅名のあとに置き、重なるものは出さない（市区町村名 → 自然地名の順）
+     - 「いま ○○県○○市」：列車の位置が、どの市区町村の形に入るかで決める（電波は使わない） */
+  const AREA_URL = 'assets/area.json?v=32';
+  let AREA = null, areaReq = null;
+  const perf = { decode: 0, place: [] };   // 重さの記録（_debug で見る）：形の組み立て（ms）・名前の配置（ms、最近20回）
+  const loadArea = () => areaReq || (areaReq = fetch(AREA_URL).then(r => r.json()).then(d => { const t0 = performance.now(); AREA = decodeArea(d); perf.decode = performance.now() - t0; return AREA; }).catch(() => { areaReq = null; return null; }));
+  function decodeArea(d) {
+    const [sx, sy, tx, ty] = d.tf;
+    const arcs = d.arcs.map(s => {
+      const out = []; let i = 0, x = 0, y = 0;
+      const num = () => { let r = 0, sh = 0, b; do { b = s.charCodeAt(i++) - 63; r |= (b & 0x1f) << sh; sh += 5; } while (b >= 0x20); return r & 1 ? ~(r >> 1) : r >> 1; };
+      while (i < s.length) { x += num(); y += num(); out.push([x * sx + tx, y * sy + ty]); }
+      return out;
+    });
+    const ring = ids => { const out = []; ids.forEach((a, k) => { const p = a < 0 ? arcs[~a].slice().reverse() : arcs[a]; out.push(...(k ? p.slice(1) : p)); }); return out; };
+    const own = arcs.map(() => []);
+    const geoms = d.m.map(([id, name, kana, p, col, polys], gi) => {
+      polys.forEach(rs => rs.forEach(r => r.forEach(a => own[a < 0 ? ~a : a].push(gi))));
+      const rings = polys.map(rs => rs.map(ring));
+      let x0 = 180, y0 = 90, x1 = -180, y1 = -90;
+      rings.forEach(rs => rs[0].forEach(([x, y]) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }));
+      return { id, name, kana, pref: d.prefs[p], col, rings, bb: [x0, y0, x1, y1] };
+    });
+    /* 境界線：2つの形が共有する arc だけ（府県が違えば府県境）。1つの形だけが使う arc は海岸か、線路沿いに切り出した縁なので描かない */
+    const pl = [], ml = [];
+    own.forEach((o, i) => { if (o.length >= 2) (geoms[o[0]].pref !== geoms[o[1]].pref ? pl : ml).push(arcs[i]); });
+    return {
+      geoms, lab: d.lab, nat: d.nat,
+      fill: { type: 'FeatureCollection', features: geoms.map(g => ({ type: 'Feature', properties: { c: g.col }, geometry: { type: 'MultiPolygon', coordinates: g.rings } })) },
+      lines: { type: 'FeatureCollection', features: [{ type: 'Feature', properties: { t: 'p' }, geometry: { type: 'MultiLineString', coordinates: pl } }, { type: 'Feature', properties: { t: 'm' }, geometry: { type: 'MultiLineString', coordinates: ml } }] }
+    };
+  }
+  /* 点（経度・緯度）が入る市区町村の形。どれにも入らなければ null（線路沿いの範囲の外・海の上） */
+  function areaAt(lon, lat) {
+    if (!AREA) return null;
+    const inRing = r => { let k = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) k = !k; } return k; };
+    return AREA.geoms.find(g => lon >= g.bb[0] && lon <= g.bb[2] && lat >= g.bb[1] && lat <= g.bb[3] && g.rings.some(rs => inRing(rs[0]) && !rs.slice(1).some(inRing))) || null;
+  }
+  /* 色分けの6色（隣どうしは別の色。淡色の地図の上で薄く塗る） */
+  const AREA_COL = ['#efbe74', '#97cb7c', '#8db8e4', '#e79cba', '#bea8de', '#e3d36e'];
+  const AREA_ATTR = '<a href="https://nlftp.mlit.go.jp/ksj/" target="_blank" rel="noopener">国土数値情報</a>';   // 行政区域データ（市区町村の形）
+  const NAME_ATTR = '<a href="https://maps.gsi.go.jp/development/vt.html" target="_blank" rel="noopener">地理院ベクトルタイル</a>';   // 地名・山の標高
+  function addAreaLayers(c) {
+    const m = c.map; if (!m || !AREA || m.getSource('area')) return;
+    const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+    const W = (p, mm) => ['interpolate', ['linear'], ['zoom'], 6, ['match', ['get', 't'], 'p', p[0], mm[0]], 11, ['match', ['get', 't'], 'p', p[1], mm[1]], 16, ['match', ['get', 't'], 'p', p[2], mm[2]]];
+    try {
+      m.addSource('area', { type: 'geojson', data: AREA.fill, attribution: AREA_ATTR, tolerance: 0.25 });
+      m.addSource('bnd', { type: 'geojson', data: AREA.lines, attribution: AREA_ATTR, tolerance: 0.25 });
+      m.addSource('plsrc', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, attribution: NAME_ATTR });   // 地名を出しているときだけ、出典に地理院ベクトルタイルを出すための空の層
+      m.addLayer({ id: 'area-fill', type: 'fill', source: 'area', layout: { visibility: 'none' },
+        paint: { 'fill-color': ['match', ['get', 'c'], ...AREA_COL.slice(1).flatMap((x, i) => [i + 1, x]), AREA_COL[0]], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 9, dark ? 0.2 : 0.4, 14, dark ? 0.14 : 0.28, 16, dark ? 0.08 : 0.16] } }, 'line-case');
+      m.addLayer({ id: 'bnd-case', type: 'line', source: 'bnd', layout: { visibility: 'none', 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': dark ? '#1b1a18' : '#ffffff', 'line-opacity': dark ? 0.7 : 0.85, 'line-width': W([3.4, 5, 6.6], [2, 2.8, 4]) } }, 'line-case');
+      m.addLayer({ id: 'bnd', type: 'line', source: 'bnd', layout: { visibility: 'none', 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': ['match', ['get', 't'], 'p', dark ? '#c39be6' : '#7a3fa8', dark ? '#a98cc4' : '#8f6db0'], 'line-width': W([1.4, 2.6, 3.6], [0.5, 1.1, 1.8]) } }, 'line-case');
+      m.addLayer({ id: 'pl-attr', type: 'circle', source: 'plsrc', layout: { visibility: 'none' } });
+    } catch { return; }
+    syncArea(c);
+  }
+  /* 住所の地図・境界線・地名の出し方を、いまの地図の種類・角度・設定に合わせる */
+  const isAddr = c => (c.tmpBase || c.base) === 'addr';
+  /* 地名・自然地名は、地図の文字が寝る立体のとき・文字のない航空写真・住所の地図のときに出す（平面の標準・淡色・OSM は、地図に描かれた文字のまま） */
+  const plOn = c => !!AREA && !!c.map && (isAddr(c) || (c.tmpBase || c.base) === 'photo' || c.map.getPitch() >= 5);
+  const showU = c => plOn(c) && (isAddr(c) || c.plU);
+  const showY = c => plOn(c) && c.plY;
+  function syncArea(c) {
+    const m = c && c.map; if (!m || !m.getLayer('area-fill')) return;
+    const set = (id, on) => { const v = on ? 'visible' : 'none'; try { m.getLayoutProperty(id, 'visibility') !== v && m.setLayoutProperty(id, 'visibility', v); } catch { /* noop */ } };
+    set('area-fill', isAddr(c));
+    set('bnd-case', isAddr(c) || c.bnd); set('bnd', isAddr(c) || c.bnd);
+    set('pl-attr', showU(c) || showY(c));
+    layoutLabels();
+  }
+  /* 地図の上の1行「いま ○○県 ○○市」：列車の位置（推定・GPS とも線路の上の km）から。形のどれにも入らないときは出さない */
+  function drawWhere(r) {
+    const c = cur, el = c && c.whereEl; if (!el) return;
+    let html = '';
+    if (r) {
+      const p = pointAt(r.km), g = areaAt(p[0], p[1]);
+      if (g) html = `<span class="lm-addr-k">いま</span><small>${g.pref}</small><b>${g.name}</b>`;
+      else if (muniAt(r.km) === '関門海峡の海底') html = '<span class="lm-addr-k">いま</span><b>関門海峡の海底</b>';
+    }
+    c.whereOn = !!html;
+    if (el.dataset.v !== html) { el.dataset.v = html; el.innerHTML = html; el.hidden = !html; c.wrap && c.wrap.classList.toggle('lm-has-addr', !!html); layoutLabels(); }
+  }
+  /* 地名・自然地名の文字（初めて出すときに作る。ふだんは地図から外しておき、出すものだけ地図に載せる） */
+  const PL_Z = { u: [5, 8.8, 10.3], ua: [5, 8.2, 9.6], y: [7.4, 9.8, 11.3] };   // 種類ごとの、順位（0〜2）を出し始める縮尺。ua は住所の地図
+  const plMax = (k, z) => k === 'u' ? (z < 9 ? 6 : z < 11 ? 10 : 14) : (z < 9 ? 4 : z < 11 ? 7 : 10);
+  function plItems(c) {
+    if (c.pl || !AREA) return c.pl;
+    const { esc } = ui;
+    /* 市区町村名：置き場所の候補は、地理院の注記の位置（先頭）と、形の中に数kmおきの点。見えている候補から1つだけ出す */
+    const u = AREA.lab.map(([lon, lat, name, kana, rank, more]) => ({ k: 'u', pts: [[lon, lat]].concat(more || []), rank, name, html: `<ruby>${esc(name)}<rt>${esc(kana)}</rt></ruby>`, cls: 'lm-pl r' + rank, side: ['c'] }));
+    const y = AREA.nat.map(([lon, lat, kind, name, kana, alt, rank]) => {
+      const mt = kind === 'm', fmt = a => a >= 1000 ? `${Math.floor(a / 1000)},${String(a % 1000).padStart(3, '0')}` : String(a);
+      return { k: 'y', pts: [[lon, lat]], rank, name, alt, kind,
+        html: mt ? `<i aria-hidden="true">▲</i><span>${esc(name)}<small>${fmt(alt)}m</small></span>` : esc(name),
+        cls: 'lm-nt k-' + kind, side: mt ? ['m'] : kind === 'w' ? ['r', 'l'] : ['c'] };   // 山は▲を山頂に。川は線路と交わる所の右か左
+    });
+    return (c.pl = u.concat(y));
+  }
+  /* 寸法は、初めて出すときに一度だけ測る（地図の外の見えない箱で） */
+  function plSize(c, p) {
+    if (p.w) return;
+    let box = c.plMeasure;
+    if (!box || !box.isConnected) { box = c.plMeasure = document.createElement('div'); box.className = 'lm-plm'; box.setAttribute('aria-hidden', 'true'); c.wrap.appendChild(box); }
+    const el = p.el || (p.el = Object.assign(document.createElement('div'), { className: p.cls, innerHTML: p.html }));
+    box.appendChild(el); p.w = el.offsetWidth || 40; p.h = el.offsetHeight || 16; el.remove();
+  }
+  function placePlaces(c, map, W, H, hit, blocked0, tb) {
+    let blocked = blocked0;
+    const items = plItems(c); if (!items) return;
+    const z = map.getZoom(), addr = isAddr(c), su = showU(c), sy = showY(c);
+    const ref = tb ? [(tb.l + tb.r) / 2, (tb.t + tb.b) / 2] : [W / 2, H / 2];
+    const inside = q => q.l >= 2 && q.r <= W - 2 && q.t >= 2 && q.b <= H - 2;
+    /* 置き方ごとの、点から文字の真ん中までのずれ：c＝点の上に真ん中、m＝▲（幅10px）の真ん中を点に、r／l＝点の右／左に12px空けて */
+    const offOf = (p, sd) => sd === 'm' ? [p.w / 2 - 5, 0] : sd === 'r' ? [12 + p.w / 2, 0] : sd === 'l' ? [-12 - p.w / 2, 0] : [0, 0];
+    const rectAt = (p, x, y, o) => ({ l: x + o[0] - p.w / 2, t: y + o[1] - p.h / 2, r: x + o[0] + p.w / 2, b: y + o[1] + p.h / 2 });
+    const want = new Map();
+    /* 線路（列車の前後40km。列車によって km の増える向きが逆なので両側）も、地名で隠さない */
+    if ((su || sy) && c.disp != null) {
+      blocked = blocked0.slice();
+      for (let k = c.disp - 40; k <= c.disp + 40; k += 0.4) {
+        const q = map.project(pointAt(k));
+        if (q.x > -10 && q.x < W + 10 && q.y > -10 && q.y < H + 10) blocked.push({ l: q.x - 4, t: q.y - 4, r: q.x + 4, b: q.y + 4 });
+      }
+    }
+    [['u', su], ['y', sy]].forEach(([k, on]) => {
+      if (!on) return;
+      const zs = PL_Z[k === 'u' && addr ? 'ua' : k];
+      const cand = [];
+      items.forEach(p => {
+        if (p.k !== k || z < zs[p.rank]) return;
+        /* 画面に入っている置き場所（地理院の注記の位置を先に、ほかは列車に近い順） */
+        const vis = [];
+        p.pts.forEach((pt, i) => {
+          const q = map.project(pt);
+          if (q.x < -40 || q.x > W + 40 || q.y < -20 || q.y > H + 20) return;
+          vis.push({ pt, x: q.x, y: q.y, d: i === 0 ? -1 : Math.hypot(q.x - ref[0], q.y - ref[1]) });
+        });
+        if (!vis.length) return;
+        vis.sort((a, b) => a.d - b.d);
+        /* いま出している置き場所がまだ使えるなら、そこを先に試す（列車が進むたびに名前が跳ばないように） */
+        const cu = p.onMap ? vis.findIndex(v => v.pt === p.at) : -1;
+        if (cu > 0) vis.unshift(vis.splice(cu, 1)[0]);
+        p.vis = vis.slice(0, 5); p.dr = Math.hypot(vis[0].x - ref[0], vis[0].y - ref[1]);
+        cand.push(p);
+      });
+      /* 順位の高いもの → 列車（画面の中心）に近いものから */
+      cand.sort((a, b) => a.rank - b.rank || a.dr - b.dr);
+      let n = 0;
+      const max = plMax(k, z);
+      for (const p of cand) {
+        if (n >= max) break;
+        plSize(c, p);
+        let ok = false;
+        for (const v of p.vis) {
+          for (const sd of p.side) {
+            const o = offOf(p, sd), q = rectAt(p, v.x, v.y, o), m = { l: q.l - 6, t: q.t - 3, r: q.r + 6, b: q.b + 3 };   // 見どころの名前などと、少し間をあける
+            if (!inside(q) || blocked.some(r => hit(r, m))) continue;
+            blocked.push(q); want.set(p, [v.pt, o]); n++; ok = true;
+            break;
+          }
+          if (ok) break;
+        }
+      }
+    });
+    items.forEach(p => {
+      const [pt, o] = want.get(p) || [];
+      if (pt && !p.mk) {
+        if (!p.el) p.el = Object.assign(document.createElement('div'), { className: p.cls, innerHTML: p.html });
+        p.mk = new c.ml.Marker({ element: p.el, anchor: 'center', offset: o, pitchAlignment: 'viewport', rotationAlignment: 'viewport' }).setLngLat(pt);
+        p.at = pt; p.o = o;
+      }
+      if (pt && p.at !== pt) { p.mk.setLngLat(pt); p.at = pt; }
+      if (pt && (p.o[0] !== o[0] || p.o[1] !== o[1])) { p.mk.setOffset(o); p.o = o; }
+      if (pt && !p.onMap) { p.mk.addTo(map); p.onMap = true; }
+      else if (!pt && p.onMap) { p.mk.remove(); p.onMap = false; }
+    });
+  }
+
   /* ========== 画面 ========== */
   let cur = null;          // 表示中のライブ地図
   const ss = {
@@ -720,10 +909,15 @@
       eco: ls.get('lm-eco') === '1', docVisible: document.visibilityState !== 'hidden', mapVisible: true, pins: [], camAt: 0, nearCur: null, nearSeen: new Set(),
       /* 縮尺：zAuto＝自動ズーム（停車駅の近くで寄る。初めはオン。端末に覚える）／zOff＝手で決めた走行中の縮尺（標準からの差。端末に覚える）／
          zHold＝駅の近く・到着モードで手で止めた縮尺（その駅のあいだだけ）／zd＝前後の停車駅までの距離／arr＝到着モード */
-      zAuto: ls.get('lm-autozoom') !== '0', zOff: (z => (z && isFinite(+z) ? +z : null))(ls.get('lm-zoff2')), zHold: null, zd: null, zone: null, arr: false
+      zAuto: ls.get('lm-autozoom') !== '0', zOff: (z => (z && isFinite(+z) ? +z : null))(ls.get('lm-zoff2')), zHold: null, zd: null, zone: null, arr: false,
+      /* 境界線（初めはオフ）・地名（市区町村。初めはオン）・自然地名（山・川・海。初めはオン）。どれも端末に覚える */
+      bnd: ls.get('lm-bnd') === '1', plU: ls.get('lm-plu') !== '0', plY: ls.get('lm-ply') !== '0', pl: null, whereEl: null, whereOn: false
     };
     if (c.eco) { c.pitch = 0; c.wakeWant = false; if (c.base === 'photo') c.base = 'pale'; }
     c.passSt = passStations(key);   // この列車の通過駅（紹介・ピン・お知らせ・一覧）
+    /* 地図の左上の「いま ○○県 ○○市」 */
+    if (c.wrap) { c.whereEl = $('.lm-addr', c.wrap) || c.wrap.appendChild(Object.assign(document.createElement('p'), { className: 'lm-addr', hidden: true })); c.whereEl.dataset.v = ''; }
+    loadArea().then(() => { if (cur === c) { c.last && drawWhere(c.last); c.last && drawPanel(c.last); } });
     setTools(ls.get('lm-tools') === '1', false);
 
     /* --- GPS（本物はボタンを押したときだけ。画面を離れた・地図が画面外のあいだは止める） --- */
@@ -760,6 +954,7 @@
       if (tv) { const open = cur && cur.tvCard && cur.tvCard.isConnected; open ? tvClose() : tvCard(tv.dataset.tvid); return; }
       const bb = e.target.closest('[data-base]');
       if (bb) { setBase(bb.dataset.base, true); toggleMenu(false); return; }
+      if (e.target.closest('.lm-basemenu')) return;   // メニューの中のスイッチ（境界線）を押しても、メニューは閉じない
       if (e.target.closest('[data-arr]')) { arriveSheet(); return; }
       const b = e.target.closest('[data-lm]'); if (!b) { toggleMenu(false); return; }
       const k = b.dataset.lm;
@@ -801,6 +996,14 @@
       if (e.target.matches('[data-lm="wake"]')) { c.wakeWant = e.target.checked; ss.set('lm-wake', c.wakeWant ? '1' : null); wake(); }
       if (e.target.matches('[data-lm="eco"]')) { setEco(e.target.checked); ss.set('lm-eco-manual', e.target.checked ? 'on' : 'off'); }
       if (e.target.matches('[data-lm="autozoom"]')) setAutoZoom(e.target.checked);
+      /* 境界線・地名・自然地名（地図の種類のメニューと設定の、どちらのスイッチでも） */
+      const pk = e.target.matches('[data-lm="bnd"], [data-lm="plu"], [data-lm="ply"]') && e.target.dataset.lm;
+      if (pk) {
+        const on = e.target.checked, prop = { bnd: 'bnd', plu: 'plU', ply: 'plY' }[pk];
+        c[prop] = on; ls.set('lm-' + pk, pk === 'bnd' ? (on ? '1' : null) : (on ? null : '0'));
+        $$(`[data-lm="${pk}"]`).forEach(x => { x.checked = on; });
+        syncArea(c); drawCtrl();
+      }
     };
     root.addEventListener('click', onClick); root.addEventListener('change', onChange);
     c.onClick = onClick; c.onChange = onChange;
@@ -862,7 +1065,7 @@
       if (cur !== c) return;
       autoGeo();
       const r = tk.compute(); c.last = r;
-      drawPanel(r); drawSpeed(r); drawNotice(r); drawAlarm(r); drawList(r); drawPins(r); zoomTick(r); mapTick(r); drawTools();
+      drawWhere(r); drawPanel(r); drawSpeed(r); drawNotice(r); drawAlarm(r); drawList(r); drawPins(r); zoomTick(r); mapTick(r); drawTools();
     }
     c.tick = tick;
 
@@ -908,7 +1111,7 @@
     clearTimeout(c.guideT); clearTimeout(c.actT); clearTimeout(c.hintT); c.offAct && c.offAct();
     c.setClose && c.setClose();
     window.Guide && Guide.active() && Guide.stop();
-    c.io && c.io.disconnect(); c.ro && c.ro.disconnect(); c.offBat && c.offBat(); c.offPerm && c.offPerm(); cancelAnimationFrame(c.spdAnim);
+    c.io && c.io.disconnect(); c.ro && c.ro.disconnect(); c.roAt && c.roAt.disconnect(); c.offBat && c.offBat(); c.offPerm && c.offPerm(); cancelAnimationFrame(c.spdAnim);
     removeEventListener('resize', c.onResize);
     c.unGeo && c.unGeo();
     c.wake && c.wake.release().catch(() => {});
@@ -937,10 +1140,10 @@
     const lg = $('.lm-legend', c.root);
     if (lg) {
       const open = ls.get('lm-legend') === '1';
-      lg.innerHTML = `<button type="button" data-lm="legend" aria-expanded="${open}">凡例</button><ul${open ? '' : ' hidden'}>${Object.values(CATS).map(k => `<li><i style="--g:${k.color}"><svg class="lm-sym" viewBox="0 0 12 12" aria-hidden="true">${k.sym}</svg></i>${esc(k.name)}</li>`).join('')}<li><i class="vis" style="--g:#67625b"></i>白い縁＝窓から見える</li><li><i class="tun" aria-hidden="true"></i>トンネル（点線）</li></ul>`;
+      lg.innerHTML = `<button type="button" data-lm="legend" aria-expanded="${open}">凡例</button><ul${open ? '' : ' hidden'}>${Object.values(CATS).map(k => `<li><i style="--g:${k.color}"><svg class="lm-sym" viewBox="0 0 12 12" aria-hidden="true">${k.sym}</svg></i>${esc(k.name)}</li>`).join('')}<li><i class="vis" style="--g:#67625b"></i>白い縁＝窓から見える</li><li><i class="tun" aria-hidden="true"></i>トンネル（点線）</li><li><i class="bnd" aria-hidden="true"></i>境界（太い線＝府県）</li><li><i class="mt" aria-hidden="true">▲</i>山・<span class="lm-lg-w">川・海</span>の名前</li></ul>`;
     }
     const mn = $('.lm-basemenu', c.root);
-    if (mn) mn.innerHTML = `<p class="lm-menu-h">地図の種類</p>${Object.entries(BASES).map(([id, b]) => `<button type="button" data-base="${id}">${esc(b.name)}</button>`).join('')}<p class="lm-menu-n">立体の地形（山の盛り上がり）は、航空写真のときだけです。航空写真は通信量が多めで、電波が弱いときは標準地図に戻します。</p>`;
+    if (mn) mn.innerHTML = `<p class="lm-menu-h">地図の種類</p>${Object.entries(BASES).map(([id, b]) => `<button type="button" data-base="${id}">${esc(b.name)}</button>`).join('')}<label class="lm-sw lm-menu-sw"><input type="checkbox" role="switch" data-lm="bnd"${c.bnd ? ' checked' : ''}><span>境界線を重ねる</span></label><p class="lm-menu-n">「住所」は市区町村を色分けし、境界線と名前を出します。立体の地形（山の盛り上がり）は、航空写真のときだけです。航空写真は通信量が多めで、電波が弱いときは標準地図に戻します。</p>`;
   }
   function toggleMenu(open) {
     const c = cur; if (!c) return;
@@ -973,7 +1176,7 @@
         head = `<span class="lm-k">つぎは</span><b>${next.name}</b><span class="lm-eta num">${m >= 1 ? `あと約<em>${m}</em>分` : 'まもなく'}・${at(eta)}着${late2 ? 'ごろ' : ''}<small>（${kmTxt(d)}km）</small></span>`;
       }
       if (r.mode === 'stopped') { const st = S.st[r.i]; where = `${st.name}駅に停車中・${at(st.dep + r.delay)}発${late2 ? 'ごろ' : ''}`; }
-      else where = whereHTML(muniAt(r.km));
+      else if (!c.whereOn || c.root.classList.contains('lm-nomap')) where = whereHTML(muniAt(r.km));   // ふだんは地図の左上の「いま ○○」に出すので、ここには出さない（地図がない・形の外のときだけ）
     }
     const late = late2 ? `<span class="lm-late">約${Math.round(r.delay / MIN)}分遅れ</span>` : '';
     const badge = `<span class="lm-badge ${r.src}">${r.src === 'gps' ? (simTrack() ? 'GPS（おためし）' : 'GPS') : '時刻表から推定'}</span>`;
@@ -1308,6 +1511,12 @@
         <p class="lm-desc">停車駅に近づくと、着く前から少しずつ拡大し、駅前の建物や道が分かるくらいまで寄ります。駅を出ると、走っているときの縮尺へ少しずつ戻ります。通過駅では寄りません。オフにすると、縮尺を自動では変えません。地図の右下の「自動ズーム：オン／オフ」でも切り替えられます。</p>
         <p class="lm-desc">指で拡大・縮小しても、自動ズームは止まりません。走っているときに変えた縮尺は「走行中の縮尺」として覚え、駅で寄ったあとはその縮尺に戻ります（停車駅の近くで変えたときは、その駅を離れるまでの間だけ）。右下の「元の縮尺に戻す」で、最初の縮尺に戻ります。</p>
         <p class="lm-desc">到着モード：終点（${ui.esc(c.S.tr.end || dest)}）が地図に10秒ほど続けて映ったら、終点を画面の上の方にして、そのときの縮尺のまま始め、近づくにつれて拡大します（途中で縮小はしません）。見下ろす角度は変えません（立体なら斜めのまま、平面なら真上から）。この設定にかかわらず働き、着いて止まると元の表示に戻ります。</p>
+        <p class="lm-set-h">地図に重ねるもの</p>
+        <label class="lm-sw"><input type="checkbox" role="switch" data-lm="bnd"${c.bnd ? ' checked' : ''}><span>境界線（府県・市区町村）</span></label>
+        <p class="lm-desc">どの地図の種類にも、府県の境を太い線、市区町村の境を細い線で重ねます（地図の種類のメニューでも切り替えられます）。地図の種類を「住所（市区町村）」にすると、この設定にかかわらず、市区町村を薄く色分けして、境界線と名前（ふりがな付き）を出します。</p>
+        <label class="lm-sw"><input type="checkbox" role="switch" data-lm="plu"${c.plU ? ' checked' : ''}><span>地名（市区町村の名前）</span></label>
+        <label class="lm-sw"><input type="checkbox" role="switch" data-lm="ply"${c.plY ? ' checked' : ''}><span>自然地名（山・川・海など）</span></label>
+        <p class="lm-desc">立体のとき・航空写真・住所の地図で、名前を画面に向けて立てて出します（平面の標準・淡色・OpenStreetMap は、地図に描かれた文字のままです）。山は▲と標高、川は線路が渡る所、海・湾・灘は青い文字です。縮尺に合わせて数を絞り、見どころ・駅名と重なるときは、市区町村名、自然地名の順に省きます。名前・位置・標高は、国土地理院の地図のデータで確かめたものです。</p>
         <p class="lm-desc lm-desc-sep">立体の地形：地図の種類が航空写真で、立体にしたときだけ、山を盛り上げて描きます（トンネルは山の中に点線）。標準・淡色・OpenStreetMap は文字が読みやすいよう、立体でも平らです（トンネルは地図の上の点線）。</p>
         <label class="lm-sw"><input type="checkbox" role="switch" data-lm="eco"${c.eco ? ' checked' : ''}><span>省電力</span></label>
         <p class="lm-desc">地図の更新を10秒に1回にし、平面・淡色の地図にします。航空写真と「画面を自動で消さない」は使いません。GPSは、遅れを測るのに足りる1分に1回だけ使います。${c.hasBattery ? '電池が20%以下になると、自動でオンになります。' : ''}</p>
@@ -1426,8 +1635,9 @@
     const rasterPaint = id => dark ? { 'raster-brightness-max': 0.42, 'raster-saturation': -0.4, 'raster-contrast': 0.1 } : id === 'photo' ? {} : { 'raster-saturation': -0.25 };
     const sources = {}, layers = [{ id: 'bg', type: 'background', paint: { 'background-color': col('--paper-2') } }];
     Object.entries(BASES).forEach(([id, b]) => {
+      if (b.under) return;
       sources[id] = { type: 'raster', tiles: [b.url], tileSize: 256, minzoom: id === 'osm' ? 0 : 2, maxzoom: b.max, attribution: b.attr };
-      layers.push({ id, type: 'raster', source: id, layout: { visibility: id === baseNow ? 'visible' : 'none' }, paint: rasterPaint(id) });
+      layers.push({ id, type: 'raster', source: id, layout: { visibility: id === rasterOf(baseNow) ? 'visible' : 'none' }, paint: rasterPaint(id) });
     });
     let map;
     try {
@@ -1474,6 +1684,12 @@
     /* ふだんの画面で地図を押したら「操作中」に */
     map.on('click', () => { if (!c.act) setActive(true); else poke(); });
     map.addControl(new ml.AttributionControl({ compact: false }), 'bottom-left');
+    /* 出典は、住所の地図や地名を出すと2行になることがある。その高さ（--at-h）だけ、右下の自動ズームのボタンと全画面の凡例を上げる */
+    const atEl = $('.maplibregl-ctrl-attrib', box);
+    if (atEl && 'ResizeObserver' in window) {
+      c.roAt = new ResizeObserver(() => { if (cur !== c) return; const h = Math.round(atEl.offsetHeight) || 16; if (c.atH !== h) { c.atH = h; c.root.style.setProperty('--at-h', h + 'px'); fitTools(); layoutLabels(); } });
+      c.roAt.observe(atEl);
+    }
     /* タイルが取れないときの記録（航空写真が続けて取れなければ、標準地図に戻す） */
     const errs = [];
     map.on('error', e => {
@@ -1538,7 +1754,7 @@
     c.trainEl = tel; c.frame = -1;
     map.on('move', () => cur === c && c.disp != null && trainFace(c));
     c.disp = c.tgt = r.km; trainFace(c);
-    map.on('pitchend', () => syncTerrain(c));
+    map.on('pitchend', () => { syncTerrain(c); syncArea(c); });
     map.on('load', () => {
       if (cur !== c) return;
       c.loaded = true;
@@ -1547,6 +1763,7 @@
         map.addLayer(c.tunLayer.layer, 'stn');
       } catch { c.tunLayer = null; }   // 立体のトンネルが描けなくても、平面の点線で続ける
       syncTerrain(c); tunnelMode(c); c.camAt = 0; drawPins(c.last || r); mapTick(c.last || r, true); layoutLabels();
+      loadArea().then(() => { if (cur === c) addAreaLayers(c); });   // 住所の地図・境界線・地名
     });
     drawCtrl(); drawPins(r); layoutLabels();
   }
@@ -1611,7 +1828,12 @@
     layoutReq = requestAnimationFrame(() => { layoutReq = 0; placeLabels(); });
   }
   function placeLabels() {
-    const c = cur; if (!c || !c.map || !c.pins.length) return;
+    const t0 = performance.now();
+    placeLabels0();
+    perf.place.push(performance.now() - t0); if (perf.place.length > 20) perf.place.shift();
+  }
+  function placeLabels0() {
+    const c = cur; if (!c || !c.map) return;
     const map = c.map, box = map.getContainer(), W = box.clientWidth, H = box.clientHeight;
     if (!W || !H) return;
     const now = performance.now(), before = c.last && c.last.mode === 'before';
@@ -1621,6 +1843,12 @@
     const tools = $('.lm-tools', c.root);
     if (tools) obst.push({ l: W - (tools.offsetWidth + 16), t: 0, r: W, b: tools.offsetTop + tools.offsetHeight + 6 });
     obst.push({ l: 0, t: 0, r: 80, b: 46 }, { l: 0, t: H - 22, r: Math.min(W, 300), b: H });
+    /* 出典（地図の種類によって1〜2行） */
+    const at = $('.maplibregl-ctrl-attrib', box);
+    if (at) { const r = at.getBoundingClientRect(), b0 = box.getBoundingClientRect(); r.width && obst.push({ l: r.left - b0.left, t: r.top - b0.top - 2, r: r.right - b0.left, b: H }); }
+    /* 左上の「いま ○○県 ○○市」と凡例 */
+    const br0 = box.getBoundingClientRect();
+    [c.whereOn && c.whereEl, $('.lm-legend', c.root)].forEach(e => { if (!e) return; const r = e.getBoundingClientRect(); r.width && obst.push({ l: r.left - br0.left - 4, t: r.top - br0.top - 4, r: r.right - br0.left + 4, b: r.bottom - br0.top + 4 }); });
     /* 右下の自動ズームのボタンと、その左の札（見えているものだけ） */
     const zr = box.getBoundingClientRect();
     $$('.lm-zoom > :not([hidden])', c.wrap).forEach(e => { const r = e.getBoundingClientRect(); r.width && obst.push({ l: r.left - zr.left - 4, t: r.top - zr.top - 4, r: r.right - zr.left + 4, b: r.bottom - zr.top + 4 }); });
@@ -1629,6 +1857,7 @@
     let tb = null;
     if (c.train && c.disp != null) { const q = map.project(pointAt(c.disp)); q.x += c.tdx || 0; q.y += c.tdy || 0; tb = { l: q.x - 28, t: q.y - 30, r: q.x + 28, b: q.y + 22 }; obst.push(tb); }
     /* 駅名：列車の印と重ならない向きを選ぶ（下→上→右→左）。どこも重なるなら、名前を列車の印より上に出す */
+    const stRects = [];
     (c.stns || []).forEach(st => {
       const q = map.project(st.ll);
       if (q.x < -150 || q.x > W + 150 || q.y < -60 || q.y > H + 60) return;
@@ -1640,6 +1869,7 @@
       if (st.lp !== k) { st.lp = k; st.mk.setOffset(OFF[k]); }
       st.el.classList.toggle('lm-over', !free(k));
       if (st.stop) obst.push(rect(k));
+      stRects.push(rect(k));
     });
     /* ピンの位置と優先度 */
     const ps = c.pins.map(p => {
@@ -1682,6 +1912,8 @@
       p.el.classList.toggle('lm-over', !!(lab && tb && hit(tb, lab)));
       if (pos && p.el.dataset.lp !== pos) p.el.dataset.lp = pos;
     });
+    /* 地名・自然地名：見どころの名前・ピン・駅名・ボタンなどに重ならない所にだけ（市区町村名 → 自然地名の順） */
+    placePlaces(c, map, W, H, hit, obst.concat(placed, heads, stRects), tb);
   }
 
   /* ---------- 地図の操作中（ふだんの画面） ---------- */
@@ -1766,7 +1998,8 @@
   function applyBase() {
     const c = cur; if (!c || !c.map) return;
     const b = c.tmpBase || c.base;
-    try { Object.keys(BASES).forEach(id => c.map.setLayoutProperty(id, 'visibility', id === b ? 'visible' : 'none')); } catch { /* 地図の準備前 */ }
+    try { Object.keys(BASES).forEach(id => BASES[id].under || c.map.setLayoutProperty(id, 'visibility', id === rasterOf(b) ? 'visible' : 'none')); } catch { /* 地図の準備前 */ }
+    syncArea(c);   // 住所の地図：色分け・境界線・名前
     try { c.map.setMaxZoom(maxZ(c)); } catch { /* noop */ }   // 地図の種類ごとの、ぼやけない縮尺の上限
     syncTerrain(c);   // 立体の地形は航空写真のときだけ（切り替えたら、その場で地形とトンネルの描き方も切り替える）
     c.camAt = 0;
@@ -1912,13 +2145,13 @@
   const RUN_Z = { sanyo: { d3: 12.0, flat: 11.2 }, relay: { d3: 12.5, flat: 11.7 } };
   const baseZoom = pitch => (RUN_Z[ln.id] || RUN_Z.sanyo)[pitch >= 5 ? 'd3' : 'flat'];
   /* 地図の縮尺の上限。MapLibre の縮尺 z では、256pxのタイルは z+1 の段を読む（地理院のタイルは18段まで → 縮尺17、OSM は19段まで → 縮尺18）。これより寄るとぼやける */
-  const MAX_Z = { std: 17, pale: 17, photo: 17, osm: 18 };
+  const MAX_Z = { std: 17, pale: 17, photo: 17, osm: 18, addr: 17 };
   const maxZ = c => MAX_Z[c.tmpBase || c.base] || 17;
   /* 駅の縮尺（駅前の建物の外観や道が見分けられるくらい）。新大阪・新神戸・岡山・広島・小倉・博多で、立体・平面・地図の種類ごとに撮り比べて決めた。
      15で、航空写真は屋根の形・色・影で建物が1棟ずつ分かり、地図は建物の輪郭とまわりの道・近くの見どころまで入る（車窓と見比べやすい）。
      16以上は画面が駅の建物だけになり、地理院の標準・淡色の18段（縮尺16.5以上）は線路の斜線と大きな文字でごちゃつく。14.5では建物が小さい。
      立体（斜め）は遠くまで写るぶん、少し控える */
-  const STN_Z = { flat: { std: 15, pale: 15, photo: 15, osm: 15 }, d3: { std: 14.8, pale: 14.8, photo: 14.8, osm: 14.8 } };
+  const STN_Z = { flat: { std: 15, pale: 15, photo: 15, osm: 15, addr: 15 }, d3: { std: 14.8, pale: 14.8, photo: 14.8, osm: 14.8, addr: 14.8 } };
   /* 航空写真の細かさが足りない駅（寄るとぼやける所）は、ここで控える。駅名 → 縮尺の上限。
      のぞみの停車駅（新大阪〜博多）は、どこも18段の写真に細かさがあり（引き伸ばしでない）、控える駅はない。
      リレーかもめの停車駅（武雄温泉・江北・佐賀・新鳥栖・鳥栖・二日市・博多）も、16〜18段の写真を取り寄せて見比べ、どれも車や駐車場の白線まで写っていて（引き伸ばしでない）、控える駅はない */
@@ -2183,6 +2416,8 @@
       last: cur.last, disp: cur.disp, dir: cur.S.dir, fix: cur.tk.fix, reject: cur.tk.reject, follow: cur.follow, map: !!cur.map, loaded: !!cur.loaded, gpsOn: !!cur.unGeo, gpsWant: cur.gpsWant, gpsAuto: !!cur.gpsAuto, perm: GeoPerm.state(), geomFallback: !!ln.geom.fallback && !ln.lineGeo, line: ln.id,
       pitch: cur.map ? cur.map.getPitch() : cur.pitch, bearing: cur.map ? cur.map.getBearing() : null, orient: cur.orient, free: cur.free, base: cur.tmpBase || cur.base, eco: cur.eco,
       zoom: cur.map ? cur.map.getZoom() : null, zAuto: cur.zAuto, zOff: cur.zOff, zHold: cur.zHold, zone: cur.zone && { ...cur.zone }, zd: cur.zd && { dn: cur.zd.dn, dp: cur.zd.dp, next: cur.zd.next && cur.zd.next.name, prev: cur.zd.prev && cur.zd.prev.name }, fast: cur.fast, target: cur.map ? zoomTarget(cur, cur.map.getPitch()) : null, arr: cur.arr,
+      perf: { decode: +perf.decode.toFixed(1), place: perf.place.length ? +(perf.place.reduce((a, b) => a + b, 0) / perf.place.length).toFixed(2) : null, placeMax: perf.place.length ? +Math.max(...perf.place).toFixed(2) : null },
+      area: !!AREA, pl: cur.pl ? cur.pl.filter(p => p.onMap).map(p => p.name) : null, plU: showU(cur), plY: showY(cur), where: cur.whereEl && cur.whereEl.textContent,
       camInterval: camInterval(), mapVisible: cur.mapVisible, active: cur.active(), alarms: { ...cur.alarms }, pins: cur.pins.map(p => [p.s.id, p.lv, !p.el.classList.contains('nolabel')])
     },
     _map: () => cur && cur.map

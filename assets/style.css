@@ -798,6 +798,38 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 .lm-stn { font-family: var(--f-min); font-size: calc(11px * var(--fs)); font-weight: 700; color: var(--sumi); line-height: 1; padding: 2px 4px; border-radius: 3px; background: rgba(253, 252, 249, .82); background: color-mix(in srgb, var(--paper) 82%, transparent); white-space: nowrap; pointer-events: none; }
 .lm-stn.lm-over, .lm-pin.lm-over { z-index: 7 !important; }   /* 列車の印（6）より上。ピンは濃さで z-index を直接付けるので !important */
 .lm-stn.stop { font-size: calc(13px * var(--fs)); color: var(--ai); }
+/* 地図の左上の1行「いま ○○県 ○○市」（列車の位置から。市区町村の形の外では出さない）。出ているあいだ、凡例はその下へ */
+.lm-addr { position: absolute; z-index: 4; top: 10px; left: 10px; max-width: calc(100% - var(--tl-w, 46px) - 34px); display: flex; align-items: baseline; gap: 5px; margin: 0; padding: 4px 12px 5px 9px; border-radius: 999px; background: rgba(253, 252, 249, .92); background: color-mix(in srgb, var(--paper) 92%, transparent); border: 1px solid var(--rule); box-shadow: 0 2px 6px rgba(28, 24, 20, .15); font-size: calc(13px * var(--fs)); line-height: 1.3; white-space: nowrap; overflow: hidden; pointer-events: none; }
+.lm-addr[hidden], .lm.lm-nomap .lm-addr { display: none; }
+.lm-addr-k { font-size: calc(10.5px * var(--fs)); font-weight: 700; color: var(--shu-ink); letter-spacing: .08em; }
+.lm-addr small { font-size: calc(11px * var(--fs)); color: var(--sumi-2); }
+.lm-addr b { font-family: var(--f-min); font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+.lm:not(.lm-full) .lm-has-addr .lm-legend { top: 48px; }
+/* 凡例を開いたとき、地図の下の出典・右下のボタンにかからない高さまで（はみ出す分は凡例の中で送る） */
+.lm:not(.lm-full) .lm-legend ul { max-height: calc(var(--lm-h, 52svh) - 96px - var(--at-h, 16px)); overflow-y: auto; overscroll-behavior: contain; }
+.lm-full .lm-addr { top: calc(58px + env(safe-area-inset-top)); }
+body.sim-on .lm-full .lm-addr { margin-top: calc(0px - env(safe-area-inset-top)); }
+/* 地名（市区町村）：画面に向けて立てた文字。ふりがなは上に小さく。地図に描かれた同じ名前の上に重なっても読めるよう、薄い下地を敷く */
+.lm-pl { pointer-events: none; font-family: var(--f-min); font-weight: 700; font-size: calc(12px * var(--fs)); line-height: 1.15; color: var(--sumi); white-space: nowrap; text-align: center; padding: 0 5px 2px; border-radius: 4px; background: rgba(253, 252, 249, .6); background: color-mix(in srgb, var(--paper) 60%, transparent); text-shadow: 0 0 2px var(--paper), 0 0 2px var(--paper), 0 0 4px var(--paper); }
+.lm-pl.r0 { font-size: calc(14px * var(--fs)); letter-spacing: .06em; }
+.lm-pl.r1 { font-size: calc(13px * var(--fs)); }
+.lm-pl rt { font-family: var(--f-got); font-size: .5em; font-weight: 500; line-height: 1.2; color: var(--sumi-2); letter-spacing: 0; }
+/* 自然地名：札やピンを付けない、控えめな文字だけ（山＝▲と標高・茶、山地・平野・半島＝茶で字間を空ける、川・湖・海＝青） */
+.lm-nt { pointer-events: none; font-size: calc(11px * var(--fs)); font-weight: 500; line-height: 1.15; white-space: nowrap; color: #6e4b2a; opacity: .92; text-shadow: 0 0 2px var(--paper), 0 0 2px var(--paper), 0 0 3px var(--paper), 0 0 4px var(--paper); }
+.lm-nt.k-m { display: flex; align-items: center; gap: 1px; }
+.lm-nt.k-m i { flex: none; width: 10px; font-style: normal; font-size: calc(9px * var(--fs)); text-align: center; color: #8b5a2b; }
+.lm-nt.k-m span { display: grid; }
+.lm-nt.k-m small { font-size: .82em; opacity: .85; }
+.lm-nt.k-r { letter-spacing: .3em; font-size: calc(11.5px * var(--fs)); }
+.lm-nt.k-w, .lm-nt.k-l, .lm-nt.k-s { color: #2a679c; }
+.lm-nt.k-s { letter-spacing: .3em; font-size: calc(12px * var(--fs)); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lm-nt { color: #d9b48a; } :root:not([data-theme="light"]) .lm-nt.k-m i { color: #d9a46e; } :root:not([data-theme="light"]) .lm-nt.k-w, :root:not([data-theme="light"]) .lm-nt.k-l, :root:not([data-theme="light"]) .lm-nt.k-s { color: #93c4ee; } }
+:root[data-theme="dark"] .lm-nt { color: #d9b48a; }
+:root[data-theme="dark"] .lm-nt.k-m i { color: #d9a46e; }
+:root[data-theme="dark"] .lm-nt.k-w, :root[data-theme="dark"] .lm-nt.k-l, :root[data-theme="dark"] .lm-nt.k-s { color: #93c4ee; }
+/* 地名の寸法を測るための、見えない箱 */
+.lm-plm { position: absolute; left: -9999px; top: 0; visibility: hidden; pointer-events: none; }
+.lm-plm > * { position: absolute; left: 0; top: 0; }
 
 /* 右上のボタン群（押しやすい大きさで縦に） */
 /* 開いたときは、右下の縮尺の札にかからない段数（--tl-rows。livemap.js の fitTools が決める）で折り返し、残りは左へもう1列並べる */
@@ -829,12 +861,16 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 .lm-basemenu button[aria-pressed="true"] { background: var(--shu-tint); color: var(--shu-ink); font-weight: 700; }
 .lm-basemenu button[aria-pressed="true"]::after { content: " ✓"; }
 .lm-basemenu button:disabled { opacity: .4; }
+.lm-menu-sw { font-size: calc(13.5px * var(--fs)); padding: 8px 6px 4px; margin-top: 4px; }
+.lm-menu-sw input { width: 42px; height: 24px; }
+.lm-menu-sw input::after { width: 18px; height: 18px; }
+.lm-menu-sw input:checked::after { transform: translateX(18px); }
 .lm-menu-n { font-size: calc(11.5px * var(--fs)); line-height: 1.6; color: var(--sumi-2); padding: 6px 6px 2px; border-top: 1px solid var(--rule); margin-top: 4px; }
 /* 凡例（開閉できる） */
 /* 自動ズームのボタン（右下）：「自動ズーム：オン／オフ」。左に小さな札（知らせ・いま寄っている理由）か「元の縮尺に戻す」 */
-.lm-zoom { position: absolute; z-index: 4; right: 10px; left: calc(var(--ov-w, 0px) + 84px); bottom: 28px; display: flex; align-items: center; justify-content: flex-end; gap: 6px; pointer-events: none; }   /* 左下の出典（地理院タイル…）より上。左は凡例の分をあける */
+.lm-zoom { position: absolute; z-index: 4; right: 10px; left: calc(var(--ov-w, 0px) + 84px); bottom: calc(var(--at-h, 16px) + 12px); display: flex; align-items: center; justify-content: flex-end; gap: 6px; pointer-events: none; }   /* 左下の出典（地理院タイル…）より上。左は凡例の分をあける */
 .lm-zoom[hidden] { display: none; }
-.lm-full .lm-zoom { bottom: calc(var(--ov-h, 0px) + 26px); }
+.lm-full .lm-zoom { bottom: calc(var(--ov-h, 0px) + var(--at-h, 16px) + 10px); }   /* --at-h：左下の出典の高さ（1〜2行。livemap.js が入れる） */
 .lm-zbtn { flex: none; pointer-events: auto; display: inline-flex; align-items: center; height: 38px; padding: 0 13px; border-radius: 999px; background: var(--paper); border: 1.5px solid var(--sumi-3); color: var(--sumi); font-size: calc(12.5px * var(--fs)); white-space: nowrap; box-shadow: 0 2px 8px rgba(28, 24, 20, .22); touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: transform .12s, background-color .2s, border-color .2s; }
 .lm-zbtn .lm-zk { color: var(--sumi-2); }
 .lm-zbtn b { font-weight: 700; color: var(--ai); }
@@ -858,7 +894,10 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 .lm-legend i { width: 16px; height: 16px; border-radius: 50%; background: var(--g); display: grid; place-items: center; flex: none; }
 .lm-legend i.vis { background: var(--sumi-3); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--sumi-3); }
 .lm-legend .lm-sym { width: 11px; height: 11px; }
-.lm-legend i.tun { width: 18px; height: 6px; border-radius: 3px; background: repeating-linear-gradient(90deg, var(--ai) 0 5px, transparent 5px 9px) var(--paper); box-shadow: 0 0 0 1px var(--rule); }
+.lm-legend i.bnd { width: 18px; height: 10px; border-radius: 0; background: linear-gradient(#7a3fa8, #7a3fa8) 0 2px / 100% 3px no-repeat, linear-gradient(#8f6db0, #8f6db0) 0 7px / 100% 1px no-repeat; }
+.lm-legend i.mt { width: auto; height: auto; background: none; font-style: normal; font-size: calc(10px * var(--fs)); color: #8b5a2b; }
+.lm-lg-w { color: #2a679c; }
+.lm-legend i.tun {width: 18px; height: 6px; border-radius: 3px; background: repeating-linear-gradient(90deg, var(--ai) 0 5px, transparent 5px 9px) var(--paper); box-shadow: 0 0 0 1px var(--rule); }
 .lm-sym { fill: none; stroke: #fff; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 
 /* 見どころのピン：頭に記号・横に名前。地図を傾けても立てる */
@@ -990,6 +1029,8 @@ body.lm-full-on .lm-tvcard.top { top: calc(64px + env(safe-area-inset-top)); rig
 .lm-seg button[aria-pressed="true"] { background: var(--sumi); color: var(--paper); border-color: var(--sumi); }
 .lm-desc { flex-basis: 100%; font-size: calc(12.5px * var(--fs)); line-height: 1.65; color: var(--sumi-2); margin-bottom: 4px; }
 .lm-desc-sep { padding-top: 8px; border-top: 1px solid var(--rule); }
+.lm-set-h { font-size: calc(12px * var(--fs)); font-weight: 700; color: var(--sumi-3); letter-spacing: .1em; padding-top: 10px; border-top: 1px solid var(--rule); }
+.lm-set-h + .lm-sw { border-top: 0; padding-top: 2px; }
 .lm-sw { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: calc(14.5px * var(--fs)); font-weight: 700; padding-top: 8px; border-top: 1px solid var(--rule); cursor: pointer; }
 .lm-sw input { appearance: none; -webkit-appearance: none; flex: none; width: 48px; height: 28px; margin: 0; border-radius: 999px; background: var(--paper-3); border: 1px solid var(--sumi-3); position: relative; cursor: pointer; transition: background .2s; }
 .lm-sw input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: transform .2s; }
@@ -1037,7 +1078,7 @@ body.sim-on .lm.lm-full { top: calc(50px + env(safe-area-inset-top)); }
 body.sim-on .lm-full .lm-tools, body.sim-on .lm-full .lm-back, body.sim-on .lm-full .lm-ov { margin-top: calc(0px - env(safe-area-inset-top)); }
 .lm-back { position: absolute; z-index: 4; top: calc(10px + env(safe-area-inset-top)); left: 10px; height: 40px; display: inline-flex; align-items: center; padding: 0 14px; border-radius: 999px; background: var(--paper); border: 1px solid var(--rule); box-shadow: 0 2px 6px rgba(28, 24, 20, .2); font-weight: 700; font-size: calc(14px * var(--fs)); text-decoration: none; }
 /* 情報の札は画面の下（列車の印の下・通り過ぎた側）にまとめ、進む先（印の上）には置かない。--ov-h は札の高さ（livemap.js が入れる） */
-.lm-full .lm-legend { top: auto; bottom: calc(var(--ov-h, 160px) + 26px); }
+.lm-full .lm-legend { top: auto; bottom: calc(var(--ov-h, 160px) + var(--at-h, 16px) + 10px); }
 .lm-full .lm-legend ul { position: absolute; bottom: 36px; left: 0; }
 .lm-full .lm-map .maplibregl-ctrl-bottom-left { bottom: var(--ov-h, 160px); }
 .lm-ov { position: absolute; z-index: 3; left: 0; right: 0; bottom: 0; display: grid; gap: 6px; pointer-events: none; }
@@ -1055,6 +1096,7 @@ body.sim-on .lm-full .lm-tools, body.sim-on .lm-full .lm-back, body.sim-on .lm-f
   .lm-full .lm-ov { top: calc(60px + env(safe-area-inset-top)); right: auto; width: min(380px, 46%); align-content: end; overflow-y: auto; overscroll-behavior: contain; }
   .lm-full .lm-sheet { border-radius: 0 14px 0 0; border-right: 1px solid var(--rule); }
   .lm-full .lm-legend { left: calc(var(--ov-w, 0px) + 10px); }
+  .lm-full .lm-addr { top: calc(10px + env(safe-area-inset-top)); left: calc(var(--ov-w, 0px) + 10px); max-width: calc(100% - var(--ov-w, 0px) - var(--tl-w, 46px) - 34px); }
   .lm-full .lm-map .maplibregl-ctrl-bottom-left { left: var(--ov-w, 0px); }
 }
 

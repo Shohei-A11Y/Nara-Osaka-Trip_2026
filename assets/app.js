@@ -642,6 +642,8 @@
       { t: '乗車の時間帯（発車の30分前〜到着の2時間後）は、位置の情報を許可していれば、ボタンを押さなくてもGPSで遅れを測り、「約○分遅れ」と出して、次の駅まで・到着・降車のお知らせ・駅一覧の時刻をずらします。時間帯が終わると、自動で止まります。' },
       { t: '位置の情報の許可は、端末ごとに一度だけ必要です。旅行の前に、いまどのへん？を開くと出る案内の「許可する」を押しておいてください（当日まではGPSを使いません）。許可していない端末には、乗車の時間帯に画面の上に「使う」が出ます。' },
       { t: '「GPSを止める」を押すと、そのタブのあいだは自動で使いません。それ以外の時間は、「現在地を使う」を押したときだけ使います。運行の状況は、地図の下の「JR公式の運行情報」で確かめられます。' },
+      { t: '地図の左上の「いま ○○県 ○○市」は、列車の位置から決めた、いまいる市区町村です（電波がなくても出ます）。地図の種類を「住所（市区町村）」にすると、市区町村を薄く色分けして、境界線と名前（ふりがな付き）を出します。境界線は、設定か地図の種類のメニューで、どの地図にも重ねられます。' },
+      { t: '立体のとき・航空写真・住所の地図では、市区町村の名前と、山（▲と標高）・川（線路が渡る所）・海や湾などの名前を、画面に向けて立てて出します。縮尺に合わせて数を絞り、見どころ・駅名と重なるときは省きます。設定の「地名」「自然地名」で消せます。' },
       { t: '止まらずに通る駅（通過駅）に近づくと、2分ほど前から「まもなく○○駅を通過」と、駅の読み・府県・ひとことが出ます。地図の駅のピンと、下の見どころ一覧からも紹介を開けます。' },
       { t: '写真はのぞみの画面です。リレーかもめ（武雄温泉〜博多）も同じ画面で、列車の印は黒い787系、時速の線は130kmでいっぱいになります。見出しの右上の「のぞみ（…）へ」「リレーかもめ（…）へ」で、もう一方の列車に移れます。' }] },
     { id: 'search', tab: 'すべての画面', where: '右上の「目次」か、〈その他〉のいちばん下の「しおりの目次」から開く、目次と検索の説明です。', ic: 'search', title: '目次と検索', sub: 'あの情報はどこ？', pts: [
@@ -1404,7 +1406,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=31').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=32').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -2151,7 +2153,7 @@
       <div class="lm-notice" id="lm-notice" aria-live="polite"></div>
       <div class="lm-ctrl" id="lm-ctrl"></div>
       <p class="note">位置情報は、このページを開いているあいだだけ使います。乗る列車の発車30分前〜到着2時間後は、位置の情報を許可していれば自動で使い、それ以外は「現在地を使う」を押したときだけ使います。どこにも送りません。GPSが届かないときは、最後に測った遅れと時刻表から推定します。</p>
-      <p class="note">地図：地理院タイル（国土地理院）・OpenStreetMap。線路の形：© OpenStreetMap contributors（Overture Maps 経由）。市町村：国土数値情報（行政区域データ）を加工。見どころの紹介文は、このしおり用に書いたものです。</p>`}
+      <p class="note">地図：地理院タイル（国土地理院）・OpenStreetMap。線路の形：© OpenStreetMap contributors（Overture Maps 経由）。市町村：国土数値情報（行政区域データ・国土交通省）を加工。地名・山の標高：地理院ベクトルタイル（国土地理院）を加工。川の線：© OpenStreetMap contributors（Overture Maps 経由）。見どころの紹介文は、このしおり用に書いたものです。</p>`}
     </section>`;
   function updateLive() {
     const line = $('#line'); if (!line) return;
