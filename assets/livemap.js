@@ -15,7 +15,7 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const MIN = 6e4;
   const MAPLIBRE = 'assets/vendor/maplibre-gl/maplibre-gl.mjs';
-  const LINE_URLS = { sanyo: 'assets/line-sanyo.json?v=29', relay: 'assets/line-relay.json?v=29' };
+  const LINE_URLS = { sanyo: 'assets/line-sanyo.json?v=30', relay: 'assets/line-relay.json?v=30' };
   const GPS_MAX_OFF = 0.5, GPS_MAX_ACC = 1000, GPS_MAX_AGE = 30e3, V_MAX = 330;
 
   /* ========== 線路の形（km ⇔ 緯度経度） ========== */
@@ -720,7 +720,7 @@
       eco: ls.get('lm-eco') === '1', docVisible: document.visibilityState !== 'hidden', mapVisible: true, pins: [], camAt: 0, nearCur: null, nearSeen: new Set(),
       /* 縮尺：zAuto＝自動ズーム（停車駅の近くで寄る。初めはオン。端末に覚える）／zOff＝手で決めた走行中の縮尺（標準からの差。端末に覚える）／
          zHold＝駅の近く・到着モードで手で止めた縮尺（その駅のあいだだけ）／zd＝前後の停車駅までの距離／arr＝到着モード */
-      zAuto: ls.get('lm-autozoom') !== '0', zOff: (z => (z && isFinite(+z) ? +z : null))(ls.get('lm-zoff')), zHold: null, zd: null, zone: null, arr: false
+      zAuto: ls.get('lm-autozoom') !== '0', zOff: (z => (z && isFinite(+z) ? +z : null))(ls.get('lm-zoff2')), zHold: null, zd: null, zone: null, arr: false
     };
     if (c.eco) { c.pitch = 0; c.wakeWant = false; if (c.base === 'photo') c.base = 'pale'; }
     c.passSt = passStations(key);   // この列車の通過駅（紹介・ピン・お知らせ・一覧）
@@ -785,7 +785,7 @@
         drawCtrl();
       }
       if (k === 'view') setPitch(c.map ? (c.map.getPitch() >= 5 ? 0 : PITCH_3D) : (c.pitch >= 5 ? 0 : PITCH_3D));
-      if (k === 'recenter') recenter();
+      if (k === 'recenter') { if (b.getAttribute('aria-disabled') === 'true') ui.toast('いまは地図が列車を追いかけています。指で地図を動かすと押せます'); else recenter(); }
       if (k === 'zoom') toggleZoom(b);
       if (k === 'zreset') resetZoom();
       if (k === 'settings') openSettings();
@@ -1307,7 +1307,7 @@
         <label class="lm-sw"><input type="checkbox" role="switch" data-lm="autozoom"${c.zAuto ? ' checked' : ''}><span>自動ズーム（停車駅の近くで、地図を自動で拡大）</span></label>
         <p class="lm-desc">停車駅に近づくと、着く前から少しずつ拡大し、駅前の建物や道が分かるくらいまで寄ります。駅を出ると、走っているときの縮尺へ少しずつ戻ります。通過駅では寄りません。オフにすると、縮尺を自動では変えません。地図の右下の「自動ズーム：オン／オフ」でも切り替えられます。</p>
         <p class="lm-desc">指で拡大・縮小しても、自動ズームは止まりません。走っているときに変えた縮尺は「走行中の縮尺」として覚え、駅で寄ったあとはその縮尺に戻ります（停車駅の近くで変えたときは、その駅を離れるまでの間だけ）。右下の「元の縮尺に戻す」で、最初の縮尺に戻ります。</p>
-        <p class="lm-desc">到着モード：終点（${ui.esc(c.S.tr.end || dest)}）が地図に映ったら、終点を画面の上にして、列車と終点が両方入る縮尺で、近づくにつれて拡大します。見下ろす角度は変えません（立体なら斜めのまま、平面なら真上から）。この設定にかかわらず働き、着いて止まると元の表示に戻ります。</p>
+        <p class="lm-desc">到着モード：終点（${ui.esc(c.S.tr.end || dest)}）が地図に10秒ほど続けて映ったら、終点を画面の上の方にして、そのときの縮尺のまま始め、近づくにつれて拡大します（途中で縮小はしません）。見下ろす角度は変えません（立体なら斜めのまま、平面なら真上から）。この設定にかかわらず働き、着いて止まると元の表示に戻ります。</p>
         <p class="lm-desc lm-desc-sep">立体の地形：地図の種類が航空写真で、立体にしたときだけ、山を盛り上げて描きます（トンネルは山の中に点線）。標準・淡色・OpenStreetMap は文字が読みやすいよう、立体でも平らです（トンネルは地図の上の点線）。</p>
         <label class="lm-sw"><input type="checkbox" role="switch" data-lm="eco"${c.eco ? ' checked' : ''}><span>省電力</span></label>
         <p class="lm-desc">地図の更新を10秒に1回にし、平面・淡色の地図にします。航空写真と「画面を自動で消さない」は使いません。GPSは、遅れを測るのに足りる1分に1回だけ使います。${c.hasBattery ? '電池が20%以下になると、自動でオンになります。' : ''}</p>
@@ -1337,7 +1337,18 @@
       cb.setAttribute('aria-label', `方位磁針（いまは${c.free ? '回した向き' : t === '北が上' ? '北が上' : '進行方向が上'}）。押すと${c.free ? (c.orient === 'north' ? '北が上' : '進行方向が上') : c.orient === 'north' ? '進行方向が上' : '北が上'}`);
       needle();
     }
-    const rc = $('[data-lm="recenter"]', c.root); rc && rc.classList.toggle('on', !c.follow && !!c.map);
+    /* 「列車へ」：地図が列車を追いかけているあいだ（指で動かしていない・回していない）は、押しても何も起きないので、薄いグレーにして押せない見た目にする。
+       指で動かして追いかけが外れた（または2本指で回した）ら、朱色にして押せるようにする。自動ズームのオン・オフとは関係なく、追いかけているかで決める */
+    const rc = $('[data-lm="recenter"]', c.root);
+    if (rc) {
+      const can = !!c.map && (!c.follow || c.free), v = String(can);
+      if (rc.dataset.can !== v) {
+        rc.dataset.can = v;
+        rc.classList.toggle('on', can); rc.classList.toggle('dim', !can);
+        rc.setAttribute('aria-disabled', String(!can));
+        rc.setAttribute('aria-label', can ? '列車に戻る（追いかけを再開）' : '列車へ（いまは地図が列車を追いかけています）');
+      }
+    }
     drawZoom();
     const gm = $('[data-lm-gm]', c.root); if (gm && c.last) { const p = pointAt(c.last.km); gm.href = gmapAt(p[1], p[0]); }
   }
@@ -1544,19 +1555,27 @@
      （assets/train-sprite.webp）から、画面の上での進行方向に一番近い1枚を選ぶ。印は地図に寝かせず、画面に向かって立てる。
      絵は仰角38°で描いてあるので、地図の回転・傾きから求めた画面上の向き σ を、絵の中の地面の向き a に直して選ぶ */
   const TRAIN = { w: 56, h: 52, cols: 6, n: 36, oy: 30.1, elev: 38 * Math.PI / 180 };   // oy：地面の中心の位置（絵の上から）
+  /* 向きは、地図の向き（進行方向のとき）と同じ headingAt から決める：列車の位置から、その向きへ少し（40m）進んだ点を画面に写し、
+     画面の上での向き σ を求める（前後の遠い点を写すと、斜めのときは手前の点ほど大きく写り、手前の線路の向きに引っぱられて、地図の向きとずれるため） */
   function trainFace(c) {
-    const map = c.map, d = c.S.dir;
-    const prj = km => { const ll = pointAt(km), alt = c.tunLayer && map.getTerrain() ? tunAlt(L.tunnels, km) : null, q = alt != null && c.tunLayer.project(ll, alt * TERRAIN_X); return q ? { x: q[0], y: q[1] } : map.project(ll); };   // トンネルの中は山の中の高さで
-    const p0 = prj(c.disp - 1.5 * d), p1 = prj(c.disp + 1.5 * d);
-    let sg = Math.hypot(p1.x - p0.x, p1.y - p0.y) > 4 ? Math.atan2(p1.x - p0.x, p0.y - p1.y) : (headingAt(c.disp) - map.getBearing()) * Math.PI / 180;
+    const map = c.map, km = c.disp, ll = pointAt(km), h = rad(headingAt(km)), step = 0.04;
+    const ll1 = [ll[0] + Math.sin(h) * step / (111.32 * Math.cos(rad(ll[1]))), ll[1] + Math.cos(h) * step / 110.57];
+    const alt = c.tunLayer && map.getTerrain() ? tunAlt(L.tunnels, km) : null;   // トンネルの中は山の中の高さで
+    const prj = x => { const q = alt != null && c.tunLayer.project(x, alt * TERRAIN_X); return q ? { x: q[0], y: q[1] } : map.project(x); };
+    const p0 = prj(ll), p1 = prj(ll1);
+    let sg = Math.hypot(p1.x - p0.x, p1.y - p0.y) > 0.5 ? Math.atan2(p1.x - p0.x, p0.y - p1.y) : rad(headingAt(km) - map.getBearing());
     const a = Math.atan2(Math.sin(TRAIN.elev) * Math.sin(sg), Math.cos(sg)) * 180 / Math.PI;
     const k = ((Math.round(a / 10) % TRAIN.n) + TRAIN.n) % TRAIN.n;
     if (k === c.frame) return;
     c.frame = k;
     c.trainEl.style.backgroundPosition = `${-(k % TRAIN.cols) * TRAIN.w}px ${-Math.floor(k / TRAIN.cols) * TRAIN.h}px`;
   }
-  /* 進行方向（線路の向き。細かい揺れを拾わないよう、前後1.5kmで見る） */
-  const headingAt = km => { const d = cur ? cur.S.dir : 1; return bearing(pointAt(km - 1.5 * d), pointAt(km + 1.5 * d)); };
+  /* 進行方向（線路の向き）。地図の向き（「進行方向」のとき）と列車の印の向きは、どちらもこれで決める。
+     前後0.3kmで見る：前後1.5kmで見ていたときは、カーブの手前から地図が回り始め、列車のまわりの線路の向きと、リレーかもめで中央5°・最大34°ずれていた
+     （0.3kmなら中央0.3°・最大8°。線路の形の点と点のあいだも、0.6kmかけて少しずつ向きが変わるので、角で急に回らない） */
+  const HEAD_W = 0.3;
+  const headingAt = km => { const d = cur ? cur.S.dir : 1; return bearing(pointAt(km - HEAD_W * d), pointAt(km + HEAD_W * d)); };
+  const angGap = (a, b) => Math.abs(((a - b + 540) % 360) - 180);
 
   /* ---------- 見どころのピンの濃さ ----------
      遠いものは薄く小さく、近づくと濃く大きく、通り過ぎたら薄く。窓から見えるもの・次に来るものは、はっきり */
@@ -1761,6 +1780,7 @@
       /* 立体・平面それぞれの自動の縮尺へ（走行中の縮尺は、手で決めた分を保ったまま立体で1段寄る）。手で止めていた駅の縮尺は、角度を変えたら自動に戻す。
          到着モードの縮尺は、角度を変えたあとに arrCamera が決める */
       if (c.zHold) c.zHold = null;
+      if (c.arr) c.arrZ = null;   // 角度を変えたら、到着モードの縮尺はその角度で両方入る縮尺から決め直す（手の操作なので、引くこともある）
       const nz = c.arr ? z : zoomTarget(c, v);
       if (v >= 5) syncTerrain(c, true);   // 立体へは、傾け始めから地形を出す（平面へは傾け終わってから消す）
       camEase(c, { pitch: v, zoom: nz, duration: 700 });
@@ -1803,9 +1823,9 @@
     c.tgt = r.km;
     if (c.gest && !c.fingers && !c.map.isMoving()) c.gest = c.pg = false;   // 指が離れて止まっているのに残った印は消す（カメラが止まったままにならないように）
     if (!c.eco || due) animTrain(force || Math.abs(r.km - (c.disp ?? r.km)) > 60);
+    arrCheck(r);   // 終点が画面に入っているかは毎秒見る（続けて入っている時間を数える）
     if (!due) return;
     c.camAt = performance.now();
-    arrCheck(r);
     camera(false);
     if (c.loaded) {
       const sp = r.mode === 'before' ? { open: [], tun: [] } : tunnelSplit(L.tunnels, sliceLine, c.S.first.km, r.km);
@@ -1863,7 +1883,11 @@
     const kc = km + c.S.dir * lead;
     const opt = { center: pointAt(kc) };
     if (c.full && c.pad) opt.padding = c.pad;
-    if (!c.free) opt.bearing = c.orient === 'north' ? 0 : headingAt(kc);
+    /* 向きは、この動きが終わるころに列車の印がいる所の線路の向きにする（列車の印と同じ headingAt）。
+       列車の印は、毎秒の更新で届いた位置（km）へ0.9秒かけて進むので、いまは1回分（1秒ぶん）手前にいる。先取り（lead）からその1秒ぶんを引く
+       （引かないと、おためしの早送りでは地図の向きが列車より先のカーブの向きになり、印と最大20°ずれた） */
+    const blead = lead && Math.max(0, lead - (r.speed || 0) * 1000 * k / 3.6e6);
+    if (!c.free) opt.bearing = c.orient === 'north' ? 0 : headingAt(km + c.S.dir * blead);
     const z = c.map.getZoom(), dz = zoomTarget(c, c.map.getPitch(), lead) - z;
     let zooming = false;
     if (snap) opt.zoom = z + dz;
@@ -1879,7 +1903,14 @@
      走っているときの縮尺（標準＋手で決めた分）より寄るときだけ使う。通過駅では寄らない（停車駅だけ）。時刻表から推定・GPS・おためしで同じ（どれも r.km で動く）。
      GPSの揺れでふらつかないよう、同じ区間のあいだは「次の駅までの距離は縮むだけ・出た駅からの距離は伸びるだけ」にする（大きく飛んだら測り直す）。
      列車の路線を問わない作り：使うのは時刻表の停車駅（c.S.st の stop と km）と線路の形（pointAt）だけ */
-  const baseZoom = pitch => (pitch >= 5 ? 11.3 : 10.3);   // 走っているときの標準（立体は1段寄せる）
+  /* 走っているときの標準の縮尺。路線ごとに決める（速さも駅の間隔も違うため）。立体は奥まで写るぶん、平面より寄せる。
+     のぞみ・リレーかもめの走行中を、立体・平面・地図の種類（航空写真・淡色・標準）ごとに撮り比べ、「進む方向の数km先の線路と、近くの見どころ・駅が入る」縮尺にした。
+     - リレーかもめ（最高130km/h・駅の間隔2〜5km）：立体12.5・平面11.7。前は立体11.3で、15km以上先まで写って景色と見比べにくかった。
+       12.5で、立体は4〜5km先（二日市→天拝山・原田、吉野ヶ里→神埼・伊賀屋）までの線路と見どころ・駅が入り、田畑や町の様子も分かる。13では2km先までしか入らない。
+     - のぞみ（最高300km/h・駅の間隔が長い）：立体12.0・平面11.2（前は11.3・10.3）。前は立体で40km先（福山の先から東広島まで）写っていた。
+       12.0で、立体は1〜2分先（福山→新尾道・三原城跡、広島の手前→東広島）までの線路と見どころ・駅が入る。速いので、リレーかもめほどは寄せない */
+  const RUN_Z = { sanyo: { d3: 12.0, flat: 11.2 }, relay: { d3: 12.5, flat: 11.7 } };
+  const baseZoom = pitch => (RUN_Z[ln.id] || RUN_Z.sanyo)[pitch >= 5 ? 'd3' : 'flat'];
   /* 地図の縮尺の上限。MapLibre の縮尺 z では、256pxのタイルは z+1 の段を読む（地理院のタイルは18段まで → 縮尺17、OSM は19段まで → 縮尺18）。これより寄るとぼやける */
   const MAX_Z = { std: 17, pale: 17, photo: 17, osm: 18 };
   const maxZ = c => MAX_Z[c.tmpBase || c.base] || 17;
@@ -1942,7 +1973,10 @@
     c.zone = zone;
     /* 列車が画面の上で速く動く（寄っている）ときは、カメラを1秒ごとに動かして、なめらかに追う */
     const zNow = c.map ? c.map.getZoom() : runZoom(c, pitch), v = r.mode === 'running' ? r.speed || 0 : 0;
-    c.fast = v / 3.6 / mpp(zNow, pointAt(r.km)[1]) > 3 || Math.abs(zoomTarget(c, pitch) - zNow) > 0.25;
+    /* カーブ（進行方向のとき、この先4秒で線路の向きが1.5°より大きく変わる）も1秒ごとにして、地図を列車の印と一緒に少しずつ回す
+       （4秒ごとだと、地図の向きが列車より先に回ったり遅れたりして、印と地図の向きがずれる） */
+    const turn = c.orient !== 'north' && !c.free && v > 0 && angGap(headingAt(r.km), headingAt(r.km + S.dir * v * 4 / 3600)) > 1.5;
+    c.fast = v / 3.6 / mpp(zNow, pointAt(r.km)[1]) > 3 || Math.abs(zoomTarget(c, pitch) - zNow) > 0.25 || turn;
     drawZoom();
   }
   /* 指で拡大・縮小したとき：自動は止めない。
@@ -1961,7 +1995,8 @@
   function setRunZoom(off) {
     const c = cur; if (!c) return;
     c.zOff = off == null || Math.abs(off) < 0.05 ? null : Math.round(off * 100) / 100;
-    ls.set('lm-zoff', c.zOff == null ? null : String(c.zOff));
+    /* 標準の縮尺を路線ごとに寄せたので（16d）、前に覚えた差（lm-zoff）は使わず、新しい名前で覚え直す（前の差のままだと、寄せた分と重なって寄りすぎる） */
+    ls.set('lm-zoff2', c.zOff == null ? null : String(c.zOff)); ls.set('lm-zoff', null);
   }
   /* 縮尺のボタンの左に、短い知らせを数秒だけ出す（そのあとは「元の縮尺に戻す」） */
   function zoomMsg(t) { const c = cur; if (!c) return; c.zMsg = t; clearTimeout(c.zMsgT); c.zMsgT = setTimeout(() => { if (cur === c) { c.zMsg = null; drawZoom(); } }, 4000); drawZoom(); }
@@ -2015,29 +2050,40 @@
   }
 
   /* ---------- 到着モード ----------
-     終点（便ごとのデータ T.trains[key].end。なければ時刻表の最後の駅）が地図に映り込んだら入る。距離では決めない。
-     終点を画面の上の端に置き、列車を下に置いて、両方が画面に収まる縮尺で、近づくにつれて拡大する（終点の方向を上に）。
+     いまどのへん？のすべての列車に共通の仕組み（列車ごとに分けない）。終点は便ごとのデータ T.trains[key].end、なければ時刻表の最後の駅。距離では決めない。
+     終点が、時計で10秒（ARR_HOLD）続けて画面に（端ではなく内側に）入っていたら始める。カーブなどで一瞬入っただけでは始めない（途中で外れたら数え直す）。
+     終点を画面の上の方に置き、列車を下に置いて、近づくにつれて拡大する（終点の方向を上に）。
+     縮尺は引かない：始めたときの縮尺のまま始め（c.arrZ に覚える）、あとは「列車と終点が両方入る縮尺」がそれより寄ったときだけ、それに合わせて寄る（c.arrZ も上がるだけ）。
      見下ろす角度は変えない：立体（斜め）ならその角度のまま最後まで、平面なら真上から。
-     入ったときは手動の縮尺も自動に戻す。途中で指で拡大・縮小したら手動になり、「自動に戻す」でまた到着駅へ向けた拡大に戻る。
+     入ったときは手動の縮尺も自動に戻す。途中で指で拡大・縮小したら手動になり、「元の縮尺に戻す」でまた到着駅へ向けた拡大に戻る。
      終点に着いて止まったら、ふだんの表示に戻す */
+  const ARR_HOLD = 10e3;
   const endKm = c => { const k = stationKm(c.S.tr.end || c.S.last.name); return k == null ? c.S.last.km : k; };
+  /* 終点が、いま地図の見える範囲（下の札に隠れる所を除く）に、安定して入っているか。
+     端にかすっているだけ（上の端から見える範囲の2割まで・左右と下の端から16pxまで）は数えない：
+     上の端ぎりぎりで始めると、そのあと下に札が出て見える範囲が狭くなったとき、縮尺を引かないので終点が画面の外に出てしまう */
+  function endInView(c, ek) {
+    const map = c.map, box = map.getContainer(), pad = c.full && c.pad ? c.pad : { bottom: 0, left: 0 }, W = box.clientWidth, H = box.clientHeight - pad.bottom;
+    const q = map.project(pointAt(ek)), m = 16;
+    return Number.isFinite(q.x) && Number.isFinite(q.y) && q.x >= (pad.left || 0) + m && q.x <= W - m && q.y >= 0.2 * H && q.y <= H - m;
+  }
   function arrCheck(r) {
     const c = cur; if (!c || !c.map || !c.loaded) return;
     const ek = endKm(c);
     const done = r.mode === 'after' || (r.mode === 'stopped' && Math.abs(r.km - ek) < 0.3);
     if (c.arr) { if (done || r.mode === 'before') arrExit(); return; }
-    if (done || r.mode === 'before' || !c.follow || c.gest) return;
-    const map = c.map, box = map.getContainer(), pad = c.full && c.pad ? c.pad : { bottom: 0, left: 0 }, W = box.clientWidth, H = box.clientHeight - pad.bottom;
-    const q = map.project(pointAt(ek));
-    if (Number.isFinite(q.x) && Number.isFinite(q.y) && q.x >= pad.left && q.x <= W && q.y >= 0 && q.y <= H) {
-      c.arr = true; c.arrFirst = true; c.camAt = 0;
-      c.zHold = null;   // 駅の近くで手で止めた縮尺のまま終点が映ったときも、ここから到着モード（到着駅に向けた拡大）にする
-      drawZoom();
-    }
+    if (done || r.mode === 'before' || !c.follow || c.gest || !endInView(c, ek)) { c.arrSeen = null; return; }
+    const now = +Clock.now();
+    if (c.arrSeen == null) c.arrSeen = now;
+    if (now - c.arrSeen < ARR_HOLD) return;
+    c.arr = true; c.arrFirst = true; c.camAt = 0; c.arrSeen = null;
+    c.arrZ = c.map.getZoom();   // この縮尺より引かない
+    c.zHold = null;   // 駅の近くで手で止めた縮尺のまま終点が映ったときも、ここから到着モード（到着駅に向けた拡大）にする
+    drawZoom();
   }
   function arrExit() {
     const c = cur; if (!c || !c.arr) return;
-    c.arr = false; c.camAt = 0; drawZoom();
+    c.arr = false; c.arrZ = null; c.camAt = 0; drawZoom();
     if (c.map) {
       const opt = { pitch: c.pitch, duration: 1200 };
       if (c.zHold && c.zHold.arr) c.zHold = null;
@@ -2051,23 +2097,45 @@
   }
   /* 列車を画面の yA、終点を yB に置く縮尺と中心。斜めのときは遠近（奥ほど小さく見える）を入れて求める：
      画面の中心から上へ u（px）に見える地面は、中心から奥へ s = u·D / (D·cos p − u·sin p)（D は中心までのカメラの距離、p は傾き）。
-     平面（p = 0）では s = u になり、今までと同じ */
+     平面（p = 0）では s = u になり、今までと同じ。
+     縮尺は c.arrZ（始めたときの縮尺。上がるだけ）より引かない。両方入る縮尺よりまだ寄っているあいだは、列車を yA に置き、終点は画面の上の方（近づけば yB に来る）。
+     両方入る縮尺に余裕があるあいだは、終点は yB より少し下に見える */
   function arrCamera(km, ease) {
     const c = cur, map = c.map, M = c.ml.MercatorCoordinate;
     const a = M.fromLngLat(pointAt(km)), b = M.fromLngLat(pointAt(endKm(c)));
     const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy);
-    const box = map.getContainer(), H = box.clientHeight, pad = c.full && c.pad ? c.pad : { bottom: 0, left: 0 }, Hv = H - pad.bottom;
+    /* 余白（遠近の中心）は、追いかけているときと同じにする（全画面は c.pad：中心が列車の高さ）。到着モードだけ違う余白にすると、
+       追いかけているときに画面の上の方に見えていた終点が、同じ縮尺では画面の外に出てしまい、縮尺を引かないと入らなくなる */
+    const box = map.getContainer(), H = box.clientHeight, pad = c.full && c.pad ? c.pad : { top: 0, bottom: 0, left: 0 }, Hv = H - pad.bottom;
+    const yc = ((pad.top || 0) + Hv) / 2;                     // 遠近の中心（余白を除いた範囲の中心）
     const yB = 44, yA = Math.max(yB + 60, Hv - 72);           // 終点は上の端から44px（駅名が下に出る）、列車は下から72px
     const pitch = map.getPitch(), p = rad(pitch);
     const fov = rad((map.getVerticalFieldOfView && map.getVerticalFieldOfView()) || 36.87), D = H / 2 / Math.tan(fov / 2);
     const ground = u => u * D / Math.max(1e-3, D * Math.cos(p) - u * Math.sin(p));
-    const sA = ground(Hv / 2 - yA), sB = ground(Hv / 2 - yB);  // 列車（中心より下＝負）と終点（中心より上＝正）
+    const uB = p > 0.01 ? Math.min(yc - yB, 0.8 * D / Math.tan(p)) : yc - yB;   // 地平線より上には置かない（傾きが大きいとき）
+    const sA = ground(yc - yA), sB = ground(uB);              // 列車（中心より下＝負）と終点（中心より上＝正）
+    /* 寄る縮尺は、下に札（「まもなく○○駅を通過」・見どころ・乗り換えの案内）が増えて見える範囲が狭くなっても終点が入るよう、
+       終点を余裕 R だけ下に置いたつもりで決める（全画面だけ。縮尺は引かないので、札が出たあとで引いて合わせることはできないため）。
+       札が出ると、遠近の中心（列車の高さ）も上へ移り、斜めのときは画面の上の端までに写る奥行きが大きく縮む（札で120px狭くなると約4割）。
+       そのため余裕は、下の札の側ではなく、奥の終点の側で取る */
+    const R = c.full ? Math.max(0, Math.min(0.2 * H, uB - 120)) : 0;
+    const sR = ground(uB - R);
     const zEnd = stationZoom(c, pitch, c.S.tr.end || c.S.last.name);   // 着いたときは、ほかの停車駅と同じ駅の縮尺まで
-    const z = dist > 0 ? Math.max(5, Math.min(zEnd, Math.log2((sB - sA) / (dist * 512)))) : zEnd;
-    const f = -sA / (sB - sA);                                 // 画面の中心に来る点（列車→終点の割合）
-    const center = new M(a.x + dx * f, a.y + dy * f).toLngLat();
+    let z = dist > 0 ? Math.max(5, Math.min(zEnd, Math.log2((sR - sA) / (dist * 512)))) : zEnd;
+    if (c.arrZ == null) c.arrZ = z;                            // 角度を変えたあとなどは、そのときの両方入る縮尺から
+    z = Math.max(z, c.arrZ); c.arrZ = z;
+    /* 縮尺を引かないために、両方入る縮尺より寄っているとき（下に「まもなく○○駅を通過」などの札が出て、見える範囲が狭くなったときなど）は、
+       列車を見える範囲の下の方（下の端から24pxまで）へ、終点を上の端近く（8px）へ寄せて、両方をできるだけ画面に残す */
+    let sT = sA;                                               // 列車を置く所（遠近の中心からの地面の長さ。下は負）
+    const g = dist * 512 * 2 ** z;                             // 列車→終点の地面の長さ（px）
+    if (g > sB - sA + 0.5) {
+      const sTop = ground(p > 0.01 ? Math.min(yc - 8, 0.8 * D / Math.tan(p)) : yc - 8);
+      sT = Math.max(ground(yc - (Hv - 24)), Math.min(sA, sTop - g));
+    }
+    const k = dist > 0 ? -sT / g : 0;                          // 画面の中心に来る点（列車から終点の方へ、列車→終点の何倍の所か）
+    const center = new M(a.x + dx * k, a.y + dy * k).toLngLat();
     const brg = dist > 0 ? Math.atan2(dx, -dy) * 180 / Math.PI : map.getBearing();
-    const opt = { center, zoom: z, bearing: brg, pitch, padding: { top: 0, bottom: pad.bottom, left: pad.left || 0, right: 0 } };
+    const opt = { center, zoom: z, bearing: brg, pitch, padding: { top: pad.top || 0, bottom: pad.bottom || 0, left: pad.left || 0, right: 0 } };
     if (ease || c.arrFirst) { c.arrFirst = false; camEase(c, { ...opt, duration: 1500 }); }
     else camEase(c, { ...opt, duration: Math.min(1500, camInterval() * 0.9), easing: t => t });
   }
@@ -2094,7 +2162,7 @@
     Guide.run('livemap', [
       { el: () => pinTarget() || $('#lm-map', root), title: '見どころのピン', text: '名前を押すと、紹介が下から開きます。ピンの色と記号は種類（城・寺社・自然・川・街・通過駅）を表します。通過駅に近づくと「まもなく○○駅を通過」と紹介が出ます。', before: toMap },
       { el: '#spots', title: '見どころの紹介と一覧', text: '紹介には、ところ・ひとこと・くわしい説明が載っています。地図の下へスクロールすると「沿線の見どころ一覧」を通る順に見られます。', before: async () => { const h = $('#spots'); if (h) { h.scrollIntoView({ block: 'start' }); await sleep(150); } }, after: toMap },
-      { el: '#lm-map', title: c.full ? '地図の操作' : '押して地図を操作', text: c.full ? '1本指で地図を動かし、2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。動かすと列車を追いかけるのを止めます。「列車へ」を押すと、列車の位置と元の向きに戻ります。' : 'ふだんは1本指でページをスクロールします。地図を1回押すと枠が朱色になり、1本指で動かす・2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。「操作を終える」を押すか、地図の外を押すと戻ります。' },
+      { el: '#lm-map', title: c.full ? '地図の操作' : '押して地図を操作', text: c.full ? '1本指で地図を動かし、2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。動かすと列車を追いかけるのを止めます。「列車へ」を押すと、列車の位置と元の向きに戻ります（追いかけているあいだは、「列車へ」は薄いグレーで押せません）。' : 'ふだんは1本指でページをスクロールします。地図を1回押すと枠が朱色になり、1本指で動かす・2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。「操作を終える」を押すか、地図の外を押すと戻ります。' },
       { el: () => $('.lm-zbtn', root), title: '自動ズームのボタン', text: '「自動ズーム：オン」のあいだは、停車駅に近づくと着く前から少しずつ拡大し、駅を出ると少しずつ戻ります。押すとオフ（縮尺を自動では変えない）になります。指で拡大・縮小しても自動は止まらず、その縮尺を走行中の縮尺として覚えます。「元の縮尺に戻す」で最初の縮尺に戻ります。' },
       { el: () => $('[data-lm="tools"]', root), title: '地図の操作ボタン', text: '押すと開きます（もう一度押すと閉じます）。開くと、方位磁針（押すと北が上に、もう一度押すと進行方向が上。赤い側が北）・立体・地図の種類（標準・淡色・航空写真・OpenStreetMap）・列車へ・全画面・設定・使い方のボタンが並びます。山の盛り上がり（立体の地形）は、航空写真で立体にしたときだけです。' },
       { el: () => c.full ? $('[data-lm="tools"]', root) : $('.lm-sum', root), title: 'お知らせと画面の設定', text: `${c.full ? '「操作」を押して開き、⚙' : 'この1行か、「操作」を開いた中の ⚙'}を押すと設定が開きます。お知らせをONにすると、降りる駅の5分前と1分前にバイブと画面でお知らせします。画面を自動で消さない・省電力もここで切り替えます。`, after: toMap }
@@ -2112,7 +2180,7 @@
     rideKey,
     _internals: { sched, Tracker, snap: (lat, lon) => ln.snap(lat, lon), pointAt, PrefWatch, prefAt: km => ln.prefAt(km), splitMuni, lines: LN, lineOf },
     _debug: () => cur && {
-      last: cur.last, fix: cur.tk.fix, reject: cur.tk.reject, follow: cur.follow, map: !!cur.map, loaded: !!cur.loaded, gpsOn: !!cur.unGeo, gpsWant: cur.gpsWant, gpsAuto: !!cur.gpsAuto, perm: GeoPerm.state(), geomFallback: !!ln.geom.fallback && !ln.lineGeo, line: ln.id,
+      last: cur.last, disp: cur.disp, dir: cur.S.dir, fix: cur.tk.fix, reject: cur.tk.reject, follow: cur.follow, map: !!cur.map, loaded: !!cur.loaded, gpsOn: !!cur.unGeo, gpsWant: cur.gpsWant, gpsAuto: !!cur.gpsAuto, perm: GeoPerm.state(), geomFallback: !!ln.geom.fallback && !ln.lineGeo, line: ln.id,
       pitch: cur.map ? cur.map.getPitch() : cur.pitch, bearing: cur.map ? cur.map.getBearing() : null, orient: cur.orient, free: cur.free, base: cur.tmpBase || cur.base, eco: cur.eco,
       zoom: cur.map ? cur.map.getZoom() : null, zAuto: cur.zAuto, zOff: cur.zOff, zHold: cur.zHold, zone: cur.zone && { ...cur.zone }, zd: cur.zd && { dn: cur.zd.dn, dp: cur.zd.dp, next: cur.zd.next && cur.zd.next.name, prev: cur.zd.prev && cur.zd.prev.name }, fast: cur.fast, target: cur.map ? zoomTarget(cur, cur.map.getPitch()) : null, arr: cur.arr,
       camInterval: camInterval(), mapVisible: cur.mapVisible, active: cur.active(), alarms: { ...cur.alarms }, pins: cur.pins.map(p => [p.s.id, p.lv, !p.el.classList.contains('nolabel')])

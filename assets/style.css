@@ -819,6 +819,9 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 .lm-short .lm-tool b { font-size: calc(16px * var(--fs)); }
 .lm-tool.on { background: var(--shu); border-color: var(--shu); color: #fff; }
 .lm-tool.on small { color: #fff; }
+/* 押しても何も起きないとき（「列車へ」：地図が列車を追いかけているあいだ）は、薄いグレーにして押せない見た目に */
+.lm-tool.dim { background: var(--paper-2); color: var(--sumi-3); box-shadow: none; opacity: .7; }
+.lm-tool.dim small { color: var(--sumi-3); }
 .lm-tool[aria-expanded="true"] { border-color: var(--sumi); }
 .lm-basemenu { position: absolute; top: 10px; right: calc(var(--tl-w, 46px) + 18px); z-index: 5; width: min(230px, calc(100% - 84px)); background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; box-shadow: var(--shade), 0 4px 14px rgba(28, 24, 20, .18); padding: 8px; }
 .lm-menu-h { font-size: calc(11.5px * var(--fs)); color: var(--sumi-3); letter-spacing: .1em; padding: 2px 6px 4px; }
@@ -884,7 +887,7 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 .lm-pin.st .lm-pin-in::after { top: 21px; height: 9px; }
 .lm-pin.st.lv-far, .lm-pin.st.lv-mid, .lm-pin.st.lv-past { visibility: hidden; pointer-events: none; }
 .lm-train { width: 56px; height: 52px; background: url("train-sprite.webp?v=15") 0 0 / 336px 312px no-repeat; z-index: 6; pointer-events: none; transition: opacity .6s; }   /* トンネルの中は半透明（livemap.js の trainTunnel）。出入りでなめらかに */
-.lm-train[data-car="relay"] { background-image: url("train-787.webp?v=29"); }   /* リレーかもめは黒い（濃いグレーの）787系（tools/make-train-sprite.js --car 787） */
+.lm-train[data-car="relay"] { background-image: url("train-787.webp?v=30"); }   /* リレーかもめは黒い（濃いグレーの）787系（tools/make-train-sprite.js --car 787） */
 
 /* 地図のすぐ下：次の停車駅と残り時間・速さ */
 .lm-panel { padding: 10px 0 8px; border-bottom: 1px solid var(--rule); }
