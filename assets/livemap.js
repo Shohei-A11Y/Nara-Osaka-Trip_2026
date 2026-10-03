@@ -1,80 +1,108 @@
-/* ライブ地図（のぞみ車内用）
-   「新大阪から何km地点か」という1つの数値で、列車の位置を管理する。
+/* ライブ地図（のぞみ・リレーかもめの車内用）
+   「路線の起点から何km地点か」という1つの数値で、列車の位置を管理する（山陽新幹線は新大阪から、リレーかもめは博多の少し北から）。
    - 時刻表からの推定：駅と駅の間は、時間に比例して進む（＝区間の平均速度で走る）とみなす
    - GPS：線路に吸着してkmに直し、時刻表とのずれ（遅れ）を記録。GPSが途切れたら「時刻表＋記録した遅れ」で進める
+   路線（線路の形・駅・市町村・トンネル・見どころ・トリビア）は列車ごとに入れ替える：列車のデータ T.trains[key].line（なければ山陽新幹線）で、
+   window.LINES の路線を選ぶ。時刻表は T.liveLine[key]（のぞみ・リレーかもめの駅一覧を合わせたもの）。
    地図（MapLibre GL JS）は後から読み込む。読み込めなくても、位置・パネル・お知らせ・一覧はそのまま動く。
    位置情報はこの端末の中だけで使い、どこにも送らない。 */
 (() => {
   'use strict';
-  const T = window.TRIP, L = window.LINE, Clock = window.Clock, Geo = window.Geo, GeoPerm = window.GeoPerm;
-  if (!T || !L || !Clock || !Geo || !GeoPerm) return;
+  const T = window.TRIP, LINES = window.LINES || (window.LINE ? { sanyo: window.LINE } : null), Clock = window.Clock, Geo = window.Geo, GeoPerm = window.GeoPerm;
+  if (!T || !LINES || !LINES.sanyo || !Clock || !Geo || !GeoPerm) return;
+  const TT_LIVE = T.liveLine || T.nozomiLine;   // いまどのへん？がある列車の駅一覧（[駅, 府県, 着/通過, 発, 停車]）
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const MIN = 6e4;
   const MAPLIBRE = 'assets/vendor/maplibre-gl/maplibre-gl.mjs';
-  const LINE_URL = 'assets/line-sanyo.json?v=28';
+  const LINE_URLS = { sanyo: 'assets/line-sanyo.json?v=29', relay: 'assets/line-relay.json?v=29' };
   const GPS_MAX_OFF = 0.5, GPS_MAX_ACC = 1000, GPS_MAX_AGE = 30e3, V_MAX = 330;
 
   /* ========== 線路の形（km ⇔ 緯度経度） ========== */
   const R = 6371.0088, rad = d => d * Math.PI / 180;
   const hav = (a, b) => { const la1 = rad(a[1]), la2 = rad(b[1]); const h = Math.sin((la2 - la1) / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(rad(b[0] - a[0]) / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
-  let geom = null;
-  const setGeom = coords => { const cum = [0]; for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + hav(coords[i - 1], coords[i])); geom = { coords, cum }; };
-  /* 線路の形が読めるまでは、駅と駅を直線で結んだ線で代用する */
-  setGeom(L.stations.map(s => [s[2], s[1]]));
-  geom.fallback = true;
-  { const cum = L.stations.map(s => s[3]); geom.cum = cum; }
-  let lineGeo = null;
-  const lineReady = fetch(LINE_URL).then(r => r.json()).then(g => { lineGeo = g; setGeom(g.features[0].geometry.coordinates); return g; }).catch(() => null);
-
-  function pointAt(km) {
-    const { coords: c, cum } = geom;
-    if (km <= cum[0]) return c[0];
-    if (km >= cum[cum.length - 1]) return c[c.length - 1];
-    let lo = 0, hi = cum.length - 1;
-    while (hi - lo > 1) { const m = (lo + hi) >> 1; cum[m] <= km ? (lo = m) : (hi = m); }
-    const t = (km - cum[lo]) / ((cum[hi] - cum[lo]) || 1);
-    return [c[lo][0] + (c[hi][0] - c[lo][0]) * t, c[lo][1] + (c[hi][1] - c[lo][1]) * t];
-  }
-  function snap(lat, lon) {
-    const { coords: c, cum } = geom, kx = Math.cos(rad(lat)) * 111.32, ky = 110.57;
-    let best = { off: Infinity, km: 0 };
-    for (let i = 0; i < c.length - 1; i++) {
-      const ax = (c[i][0] - lon) * kx, ay = (c[i][1] - lat) * ky, bx = (c[i + 1][0] - lon) * kx, by = (c[i + 1][1] - lat) * ky;
-      const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
-      const t = l2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2)) : 0;
-      const d = Math.hypot(ax + t * dx, ay + t * dy);
-      if (d < best.off) best = { off: d, km: cum[i] + t * (cum[i + 1] - cum[i]) };
-    }
-    return best;
-  }
   function bearing(a, b) {
     const y = Math.sin(rad(b[0] - a[0])) * Math.cos(rad(b[1])), x = Math.cos(rad(a[1])) * Math.sin(rad(b[1])) - Math.sin(rad(a[1])) * Math.cos(rad(b[1])) * Math.cos(rad(b[0] - a[0]));
     return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
   }
-  const bearingAt = (km, dir) => bearing(pointAt(km - 0.6 * dir), pointAt(km + 0.6 * dir));
-  const muniAt = km => { let n = L.munis[0][1]; for (const m of L.munis) { if (m[0] <= km) n = m[1]; else break; } return n; };
-  const tunnelAt = km => L.tunnels.find(t => t[0] <= km && km <= t[1]) || null;
   /* 「岡山県 浅口市付近」：府県名を添え、郡部の町村は郡名を省く（浅口郡里庄町 → 里庄町）。長いときは府県名を小さく上に添える2段にする */
   const splitMuni = m => { const x = /^(.+?[都道府県])(.*)$/.exec(m) || [, '', m]; return { pref: x[1], city: x[2].replace(/^.+?郡(?=.+?[町村]$)/, '') }; };
-  const prefAt = km => splitMuni(muniAt(km)).pref || null;   // 関門海峡の海底は null
   const whereHTML = m => {
     if (m === '関門海峡の海底') return '関門海峡の海底を走行中';
     const { pref, city } = splitMuni(m);
     return `<span class="lm-wh${city.length >= 7 ? ' stack' : ''}"><small class="lm-wh-p">${pref}</small><span class="lm-wh-c">${city}付近</span></span>`;
   };
-  const PREF_ORDER = ['大阪府', '兵庫県', '岡山県', '広島県', '山口県', '福岡県'];   // 新大阪から博多へ、通る順
-  const stationKm = name => (L.stations.find(s => s[0] === name) || [])[3];
+  /* 路線ひとつ分の道具（線路の形・駅・市町村・トンネル）。路線を問わない作り。
+     線路の形（GeoJSON）が読めるまでは、駅と駅を直線で結んだ線で代用する */
+  function Line(id) {
+    const L = LINES[id];
+    const ln = { id, L, geom: null, lineGeo: null };
+    const setGeom = coords => { const cum = [0]; for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + hav(coords[i - 1], coords[i])); ln.geom = { coords, cum }; };
+    setGeom(L.stations.map(s => [s[2], s[1]]));
+    ln.geom.fallback = true;
+    ln.geom.cum = L.stations.map(s => s[3]);
+    ln.ready = fetch(LINE_URLS[id]).then(r => r.json()).then(g => { ln.lineGeo = g; setGeom(g.features[0].geometry.coordinates); return g; }).catch(() => null);
+    ln.pointAt = km => {
+      const { coords: c, cum } = ln.geom;
+      if (km <= cum[0]) return c[0];
+      if (km >= cum[cum.length - 1]) return c[c.length - 1];
+      let lo = 0, hi = cum.length - 1;
+      while (hi - lo > 1) { const m = (lo + hi) >> 1; cum[m] <= km ? (lo = m) : (hi = m); }
+      const t = (km - cum[lo]) / ((cum[hi] - cum[lo]) || 1);
+      return [c[lo][0] + (c[hi][0] - c[lo][0]) * t, c[lo][1] + (c[hi][1] - c[lo][1]) * t];
+    };
+    ln.snap = (lat, lon) => {
+      const { coords: c, cum } = ln.geom, kx = Math.cos(rad(lat)) * 111.32, ky = 110.57;
+      let best = { off: Infinity, km: 0 };
+      for (let i = 0; i < c.length - 1; i++) {
+        const ax = (c[i][0] - lon) * kx, ay = (c[i][1] - lat) * ky, bx = (c[i + 1][0] - lon) * kx, by = (c[i + 1][1] - lat) * ky;
+        const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+        const t = l2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2)) : 0;
+        const d = Math.hypot(ax + t * dx, ay + t * dy);
+        if (d < best.off) best = { off: d, km: cum[i] + t * (cum[i + 1] - cum[i]) };
+      }
+      return best;
+    };
+    ln.bearingAt = (km, dir) => bearing(ln.pointAt(km - 0.6 * dir), ln.pointAt(km + 0.6 * dir));
+    ln.muniAt = km => { let n = L.munis[0][1]; for (const m of L.munis) { if (m[0] <= km) n = m[1]; else break; } return n; };
+    ln.tunnelAt = km => L.tunnels.find(t => t[0] <= km && km <= t[1]) || null;
+    ln.prefAt = km => splitMuni(ln.muniAt(km)).pref || null;   // 関門海峡の海底は null
+    ln.stationKm = name => (L.stations.find(s => s[0] === name) || [])[3];
+    /* 府県の並び：km の小さい方から通る順（山陽新幹線は新大阪から博多へ。リレーかもめは博多から武雄温泉へ） */
+    ln.prefOrder = L.prefs || ['大阪府', '兵庫県', '岡山県', '広島県', '山口県', '福岡県'];
+    /* km の範囲 [a, b] の線の座標 */
+    ln.sliceLine = (a, b) => {
+      if (a > b) [a, b] = [b, a];
+      const { coords, cum } = ln.geom, out = [ln.pointAt(a)];
+      for (let i = 0; i < cum.length; i++) if (cum[i] > a && cum[i] < b) out.push(coords[i]);
+      out.push(ln.pointAt(b));
+      return out;
+    };
+    return ln;
+  }
+  const LN = {};
+  Object.keys(LINES).forEach(id => { if (LINE_URLS[id]) LN[id] = Line(id); });
+  /* 列車 → 路線 */
+  const lineOf = key => LN[(T.trains[key] || {}).line] || LN.sanyo;
+  /* ここから下の画面の道具（地図・パネル・お知らせ・一覧）は、いま表示している路線（mount で切り替える）を使う。
+     時刻表・GPS・おためしの位置・府県の知らせは、列車ごとの路線（sched(key).ln）を使う */
+  let ln = LN.sanyo, L = ln.L;
+  const useLine = x => { ln = x; L = x.L; };
+  const pointAt = km => ln.pointAt(km);
+  const muniAt = km => ln.muniAt(km);
+  const tunnelAt = km => ln.tunnelAt(km);
+  const stationKm = name => ln.stationKm(name);
+  const sliceLine = (a, b) => ln.sliceLine(a, b);
 
   /* ========== 時刻表 ========== */
   const jst = (date, hm) => +new Date(`${date}T${hm.length === 4 ? '0' + hm : hm}:00+09:00`);
   const schedCache = {};
   function sched(key) {
     if (schedCache[key]) return schedCache[key];
-    const tr = T.trains[key];
-    const st = T.nozomiLine[key].map(([name, , a, d, stop]) => ({ name, km: stationKm(name), arr: jst(tr.date, a || d), dep: jst(tr.date, d || a), stop: !!stop }));
+    const tr = T.trains[key], sl = lineOf(key);
+    const st = TT_LIVE[key].map(([name, , a, d, stop]) => ({ name, km: sl.stationKm(name), arr: jst(tr.date, a || d), dep: jst(tr.date, d || a), stop: !!stop }));
     const dir = Math.sign(st[st.length - 1].km - st[0].km);
-    const S = { key, tr, st, dir, first: st[0], last: st[st.length - 1] };
+    const S = { key, tr, st, dir, first: st[0], last: st[st.length - 1], ln: sl };
     /* 時刻 → km と、そのときの状態 */
     S.at = t => {
       if (t < st[0].dep) return { km: st[0].km, mode: 'before', i: 0 };
@@ -108,20 +136,24 @@
     return (schedCache[key] = S);
   }
   const RIDE_PRE = 30 * MIN, RIDE_POST = 120 * MIN;
-  /* いま乗車の時間帯にある列車（いまどのへん？がある列車の中から。なければ null） */
-  const rideKey = (t = +Clock.now()) => Object.keys(T.nozomiLine).find(k => sched(k).ride(t)) || null;
+  /* いま乗車の時間帯にある列車（いまどのへん？がある列車の中から。なければ null）。
+     乗り継ぐ日は、前の列車の「到着の2時間後まで」と次の列車の時間帯が重なるので、走っている列車（発車30分前〜到着）を先に選ぶ */
+  const rideKey = (t = +Clock.now()) => {
+    const ks = Object.keys(TT_LIVE);
+    return ks.find(k => { const S = sched(k); return t >= S.first.dep - RIDE_PRE && t <= S.last.arr; }) || ks.find(k => sched(k).ride(t)) || null;
+  };
   const ECO_GPS = 60e3;   // 省電力中は、位置を60秒に1回だけ取る（遅れを測るのに足りる最低限）
 
   /* ========== おためし：線路を走る作り物のGPS ========== */
   const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
-  Object.keys(T.nozomiLine).forEach(key => {
+  Object.keys(TT_LIVE).forEach(key => {
     Geo.tracks[key] = (now, delayMin) => {
-      const S = sched(key), t = +now - delayMin * MIN, s = S.at(t);
-      if (tunnelAt(s.km) && s.mode === 'running') return null;   // トンネル内は電波が届かない
-      const p = pointAt(s.km), jm = 30;                              // 数十mの揺れ
+      const S = sched(key), sl = S.ln, t = +now - delayMin * MIN, s = S.at(t);
+      if (sl.tunnelAt(s.km) && s.mode === 'running') return null;   // トンネル内は電波が届かない
+      const p = sl.pointAt(s.km), jm = 30;                              // 数十mの揺れ
       const lat = p[1] + gauss() * jm / 110570, lon = p[0] + gauss() * jm / (111320 * Math.cos(rad(p[1])));
       const v = s.mode === 'running' ? Math.max(0, s.v / 3.6 + gauss() * 1.5) : 0;
-      return { lat, lon, acc: Math.round(15 + Math.random() * 30), speed: v, heading: s.mode === 'running' ? bearingAt(s.km, S.dir) : null, src: 'sim', at: new Date(+now) };
+      return { lat, lon, acc: Math.round(15 + Math.random() * 30), speed: v, heading: s.mode === 'running' ? sl.bearingAt(s.km, S.dir) : null, src: 'sim', at: new Date(+now) };
     };
   });
 
@@ -139,10 +171,15 @@
   function Tracker(key) {
     const S = sched(key);
     const tk = { S, fix: null, fixes: [], delay: 0, delayAt: null, v: null, reject: '', hold: null, base: null };
-    /* 開き直したときは、同じ乗車のあいだに測った遅れから始める */
-    const mem = PrefWatch.getDelay(key);
-    if (mem && S.ride(+Clock.now())) { tk.delay = tk.base = mem.d; tk.delayAt = mem.at || +Clock.now(); }
     const lastI = S.st.length - 1;
+    /* 開き直したときは、同じ乗車のあいだに測った遅れから始める。
+       終点に着いたあと（遅れを足した到着の時刻を過ぎてから）開き直したときは、着いたものとして、その遅れのままにする
+       （乗り継ぐ日は、次の列車の乗車の時間帯に入ると画面が組み直される。着いたことを忘れると、組み直した時刻に着いたとみなして遅れが増える） */
+    const mem = PrefWatch.getDelay(key), now0 = +Clock.now();
+    if (mem && S.ride(now0)) {
+      tk.delay = tk.base = mem.d; tk.delayAt = mem.at || now0;
+      if (now0 >= S.last.arr + mem.d) tk.hold = { i: lastI, arrAt: S.last.arr + mem.d, at: now0, done: true };
+    }
     /* 停車駅 i に止まっていて、時刻 t のときの遅れ（いつ発車するとみなすか） */
     const holdDelay = (h, t) => {
       const st = S.st[h.i];
@@ -158,7 +195,7 @@
       if (pos.acc > GPS_MAX_ACC) { tk.reject = 'acc'; return; }
       if (now - at > GPS_MAX_AGE) { tk.reject = 'old'; return; }
       if (!S.ride(now)) { tk.reject = 'time'; return; }
-      const sn = snap(pos.lat, pos.lon);
+      const sn = S.ln.snap(pos.lat, pos.lon);
       if (sn.off > GPS_MAX_OFF) { tk.reject = 'far'; return; }
       tk.reject = '';
       let km = sn.km;
@@ -234,7 +271,7 @@
     const getDelay = key => (mem && mem.key === key && isFinite(mem.d) ? mem : null);
     const active = () => {
       const t = +Clock.now();
-      for (const key of Object.keys(T.nozomiLine)) {
+      for (const key of Object.keys(TT_LIVE)) {
         const S = sched(key), d = mem && mem.key === key ? mem.d : 0;
         if (t >= S.first.dep + d && t < S.last.arr + d) return { S, d, t };
       }
@@ -263,12 +300,12 @@
       if (document.visibilityState === 'hidden') { base = null; return; }
       const a = active();
       if (!a) { base = null; pend = null; return; }
-      const km = a.S.at(a.t - a.d).km, pf = prefAt(km);
+      const km = a.S.at(a.t - a.d).km, pf = a.S.ln.prefAt(km), PO = a.S.ln.prefOrder;
       /* 早送り・時刻の移動などで大きく飛んだときは、起点を置き直すだけ */
       if (!base || base.key !== a.S.key || Math.abs(km - base.km) > 40) { base = { key: a.S.key, km, pf: pf || (base && base.key === a.S.key ? base.pf : null) }; return; }
       base.km = km;
       /* 進む向きに新しい府県へ入ったときだけ、1つの境に1回。GPSで遅れを測り直して少し戻ったときなどは出さない */
-      const fwd = (PREF_ORDER.indexOf(pf) - PREF_ORDER.indexOf(base.pf)) * a.S.dir > 0;
+      const fwd = (PO.indexOf(pf) - PO.indexOf(base.pf)) * a.S.dir > 0;
       if (pf && base.pf && pf !== base.pf && fwd && !fired.has(a.S.key + pf)) {
         fired.add(a.S.key + pf);
         const k = [base.pf, pf].sort().join();
@@ -294,15 +331,26 @@
     shrine: { name: '寺社・史跡', color: '#6e5c9a', sym: '<path d="M1.3 3.4c3.1.9 6.3.9 9.4 0M2.4 5.6h7.2M3.9 3.9v6.8M8.1 3.9v6.8"/>' },
     nature: { name: '山・自然・温泉', color: '#4f7a3a', sym: '<path d="M1 10.2 4.4 4.2l2.1 3.1 1.5-2 3 4.9z"/>' },
     water: { name: '川・海', color: '#2f6f93', sym: '<path d="M1.2 4.8c1.6-1.3 3.2-1.3 4.8 0s3.2 1.3 4.8 0M1.2 8.4c1.6-1.3 3.2-1.3 4.8 0s3.2 1.3 4.8 0"/>' },
-    town: { name: '街・名所・味', color: '#a8770f', sym: '<path d="M2 10.6V4.8l3-1.8v7.6M5 10.6V6h5v4.6M1 10.6h10"/>' }
+    town: { name: '街・名所・味', color: '#a8770f', sym: '<path d="M2 10.6V4.8l3-1.8v7.6M5 10.6V6h5v4.6M1 10.6h10"/>' },
+    stn: { name: '通過駅', color: '#56687c', sym: '<path d="M1.5 2.4h9v4.4h-9zM3.5 6.8v3.9M8.5 6.8v3.9M3.4 4.6h5.2"/>' }   // 駅名の札の形
   };
-  const CAT_OF = { 城: 'castle', 寺社: 'shrine', 自然: 'nature', 温泉: 'nature', 川: 'water', 町並み: 'town', 名所: 'town', 食: 'town' };
+  const CAT_OF = { 城: 'castle', 寺社: 'shrine', 自然: 'nature', 温泉: 'nature', 川: 'water', 町並み: 'town', 名所: 'town', 食: 'town', 駅: 'stn' };
   const catOf = s => CATS[CAT_OF[s.genre] || 'town'];
   const symSvg = s => `<svg class="lm-sym" viewBox="0 0 12 12" aria-hidden="true">${catOf(s).sym}</svg>`;
   const prefOf = s => (s.pref.match(/^(.+?[都道府県])/) || [, s.pref])[1];
   const kmTxt = k => k >= 10 ? Math.round(k) : k >= 1 ? k.toFixed(1).replace(/\.0$/, '') : k.toFixed(1);
   const offTxt = s => s.off < 0.3 || !s.dir ? '線路のすぐそば' : `線路から${s.dir}へ約${kmTxt(s.off)}km`;
-  const sideTxt = (s, go) => s.vis === 'N' ? `${go ? '左' : '右'}の窓（北側）＝ D・E席側` : s.vis === 'S' ? `${go ? '右' : '左'}の窓（南側）＝ 通路の反対側の窓` : '両側の窓から';
+  /* 窓の左右。山陽新幹線はほぼ東西に走るので、北側（N）・南側（S）で書く（往路＝東へは北側が左。北側が D・E席）。
+     リレーかもめは向きが変わる（博多〜鳥栖は南北）ので、北・南では書かず、線路の向きと見どころの位置から、進行方向の左右を求める（vis: 'Y'） */
+  function winSide(s, dir) {
+    const a = pointAt(s.km - 0.3 * dir), b = pointAt(s.km + 0.3 * dir), k = Math.cos(rad(a[1]));
+    const cx = (b[0] - a[0]) * k, cy = b[1] - a[1], px = (s.lon - a[0]) * k, py = s.lat - a[1];
+    return cx * py - cy * px > 0 ? 'L' : 'R';
+  }
+  const sideTxt = (s, go) => {
+    if (s.vis === 'Y') { const d = cur ? cur.S.dir : 1; return `進行方向の${winSide(s, d) === 'L' ? '左' : '右'}の窓`; }
+    return s.vis === 'N' ? `${go ? '左' : '右'}の窓（北側）＝ D・E席側` : s.vis === 'S' ? `${go ? '右' : '左'}の窓（南側）＝ 通路の反対側の窓` : '両側の窓から';
+  };
   const minsTo = (t, now) => Math.round((t - now) / MIN);
   const gmapAt = (lat, lon) => `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(5)},${lon.toFixed(5)}`;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -518,6 +566,32 @@
     if (Math.abs(dx - (c.tdx || 0)) > 0.3 || Math.abs(dy - (c.tdy || 0)) > 0.3) { c.tdx = dx; c.tdy = dy; c.train.setOffset([-TRAIN.w / 2 + dx, -TRAIN.oy + dy]); }
   }
 
+  /* ---------- 通過駅の紹介（のぞみ・リレーかもめ） ----------
+     この列車が止まらずに通る駅を、見どころと同じ形にして、ピン・お知らせ・一覧・紹介に出す。
+     中身は路線のデータ stationInfo（読み・ひとこと・出典）。ひとことが確かめられなかった駅は、駅名・読み・府県だけ */
+  const prefName = p => /[都道府県]$/.test(p) ? p : p + (p === '大阪' || p === '京都' ? '府' : p === '東京' ? '都' : '県');
+  function passStations(key) {
+    const S = sched(key), rows = TT_LIVE[key], info = L.stationInfo || {};
+    return S.st.map((x, i) => ({ x, row: rows[i], i })).filter(({ x, i }) => !x.stop && i > 0 && i < S.st.length - 1).map(({ x, row }) => {
+      const inf = info[x.name] || [];
+      return { id: 'st:' + x.name, name: x.name + '駅', st: x.name, kana: inf[0] || '', pref: prefName(row[1]), genre: '駅', sum: inf[1] || '', text: inf[1] || '', src: inf[2] || null, km: x.km, off: 0, dir: '', tt: row[2], pass: true };
+    });
+  }
+  /* 見どころ＋通過駅 */
+  const spotsOf = c => (c && c.passSt ? L.spots.concat(c.passSt) : L.spots);
+  /* 通過駅のお知らせ：新幹線は通過が数秒なので、2分前から出し、通ったあとも少し残す。1駅ずつ（通ったばかりの駅は15秒、次の駅が2分以内に来なければ40秒） */
+  const PASS_PRE = 120e3, PASS_KEEP = 15e3, PASS_POST = 40e3;
+  function passNow(r) {
+    const c = cur; if (!c || r.mode !== 'running' || !c.passSt || !c.passSt.length) return null;
+    const list = c.passSt.map(s => ({ s, t1: c.S.when(s.km)[0] + r.delay })).filter(x => isFinite(x.t1)).sort((a, b) => a.t1 - b.t1);
+    const past = list.filter(x => x.t1 <= r.now).pop(), next = list.find(x => x.t1 > r.now);
+    if (past && r.now - past.t1 <= PASS_KEEP) return past;
+    if (next && next.t1 - r.now <= PASS_PRE) return next;
+    if (past && r.now - past.t1 <= PASS_POST) return past;
+    return null;
+  }
+  const srcHTML = src => (src || []).filter(x => x[1]).map(([l, u]) => `<a class="ext" href="${u}" target="_blank" rel="noopener">${ui.esc(l)}</a>`).join('／');
+
   function spotCard(s) {
     const { esc, sheet, ext } = ui, S = cur && cur.S, go = S ? S.tr.dir === 'go' : true;
     let when = '';
@@ -526,11 +600,21 @@
       if (isFinite(t) && cur.last.mode !== 'after') when = m > 0 ? `${ui.fmtHM(new Date(Math.round(t / MIN) * MIN))}ごろ通過（あと約${m}分）` : m > -3 ? 'いま通過中' : '通過しました';
     }
     const cat = catOf(s);
+    if (s.pass) {
+      sheet(esc(s.name), `<div class="lm-card"><p class="lm-card-kana">${esc(s.kana)}</p>
+        <div class="tags"><span class="tag lm-gtag" style="--g:${cat.color}">${symSvg(s)}${esc(cat.name)}</span><span class="tag">${S ? esc(S.tr.name) : 'この列車'}は止まりません</span></div>
+        ${s.text ? `<p class="lm-card-text">${esc(s.text)}</p>` : ''}
+        <dl class="info"><div><dt>ところ</dt><dd>${esc(s.pref)}</dd></div>${when ? `<div><dt>通過</dt><dd>${when}</dd></div>` : ''}</dl>
+        ${s.src ? `<p class="lm-card-src">出典：${srcHTML(s.src)}</p>` : ''}
+        <div class="btns">${ext(ui.gmap(s.name + ' ' + s.pref), 'Googleマップで開く')}</div>
+        <p class="note">通過の時刻は、前後の停車駅の時刻から割り出した目安です。</p></div>`);
+      return;
+    }
     sheet(esc(s.name), `<div class="lm-card"><p class="lm-card-kana">${esc(s.kana)}</p>
       <div class="tags"><span class="tag lm-gtag" style="--g:${cat.color}">${symSvg(s)}${esc(cat.name)}</span>${s.vis ? '<span class="tag red">窓から見える</span>' : '<span class="tag">この近くにある</span>'}</div>
       <p class="lm-card-sum">${esc(s.sum)}</p><p class="lm-card-text">${esc(s.text)}</p>
       <dl class="info"><div><dt>ところ</dt><dd>${esc(s.pref)}</dd></div><div><dt>方角と距離</dt><dd>${offTxt(s)}</dd></div>
-      ${s.vis ? `<div><dt>見える窓</dt><dd>${sideTxt(s, go)}${s.vis !== 'B' ? `<br><span class="small muted">${go ? '往路（東へ）' : '復路（西へ）'}の場合</span>` : ''}</dd></div>` : ''}
+      ${s.vis ? `<div><dt>見える窓</dt><dd>${sideTxt(s, go)}${s.vis !== 'B' ? `<br><span class="small muted">${s.vis === 'Y' ? `${S ? esc(S.tr.name) : ''}（${S ? esc(S.tr.to) : ''}へ）` : go ? '往路（東へ）' : '復路（西へ）'}の場合</span>` : ''}</dd></div>` : ''}
       ${when ? `<div><dt>通過</dt><dd>${when}</dd></div>` : ''}</dl>
       <div class="btns">${s.url ? ext(s.url, '公式サイト') : ''}${ext(ui.gmap(s.name + ' ' + s.pref.split('・')[0]), 'Googleマップで開く')}</div>
       ${s.tmp ? '<p class="note">位置は目安です。</p>' : ''}</div>`);
@@ -624,6 +708,7 @@
     unmount();
     const root = $('#lm'); if (!root) return;
     ui = helpers;
+    useLine(lineOf(key));   // この列車の路線に入れ替える（線路の形・駅・見どころ・トリビア）
     const S = sched(key), tk = Tracker(key);
     const legacyPitch = ls.get('lm-view') === 'flat' ? 0 : PITCH_3D;
     const c = cur = {
@@ -638,6 +723,7 @@
       zAuto: ls.get('lm-autozoom') !== '0', zOff: (z => (z && isFinite(+z) ? +z : null))(ls.get('lm-zoff')), zHold: null, zd: null, zone: null, arr: false
     };
     if (c.eco) { c.pitch = 0; c.wakeWant = false; if (c.base === 'photo') c.base = 'pale'; }
+    c.passSt = passStations(key);   // この列車の通過駅（紹介・ピン・お知らせ・一覧）
     setTools(ls.get('lm-tools') === '1', false);
 
     /* --- GPS（本物はボタンを押したときだけ。画面を離れた・地図が画面外のあいだは止める） --- */
@@ -669,7 +755,7 @@
     /* --- 操作 --- */
     const onClick = e => {
       const sp = e.target.closest('[data-spot]');
-      if (sp) { const s = L.spots.find(x => x.id === sp.dataset.spot); s && spotCard(s); return; }
+      if (sp) { const s = spotsOf(c).find(x => x.id === sp.dataset.spot); s && spotCard(s); return; }
       const tv = e.target.closest('[data-tvid]');
       if (tv) { const open = cur && cur.tvCard && cur.tvCard.isConnected; open ? tvClose() : tvCard(tv.dataset.tvid); return; }
       const bb = e.target.closest('[data-base]');
@@ -805,7 +891,7 @@
       const r = $('.lm-panel', root) || root, b = r.getBoundingClientRect().bottom, navH = ($('#nav') || {}).offsetHeight || 0;
       if (b > innerHeight - navH) root.scrollIntoView({ block: 'start' });
     }, 250);
-    lineReady.then(() => { if (cur === c) tick(); });
+    ln.ready.then(() => { if (cur === c) tick(); });
     loadMap(c);
     /* このページ専用の初回ガイド */
     /* ホーム画面の案内・全体の案内が済んでから出す（同時には出さない） */
@@ -903,16 +989,15 @@
   }
 
   /* ---------- 時速（大きな数字と、画面の幅いっぱいの速度バー） ----------
-     数字はなめらかに数え上がる・数え下がる。バーは時速300kmで満杯（左が緑、右へ行くほど赤）。
+     数字はなめらかに数え上がる・数え下がる。バーは路線の最高速度（新幹線300km・在来線130km）で満杯（左が緑、右へ行くほど赤）。
      「視差効果を減らす」がオンのときは、動かさずに値だけ変える。点滅はしない */
   const RMQ = matchMedia('(prefers-reduced-motion: reduce)');
-  const V_FULL = 300;
   function drawSpeed(r) {
     const el = $('#lm-spd'); if (!el) return;
-    const c = cur, show = r.mode === 'running' || r.mode === 'stopped';
+    const c = cur, show = r.mode === 'running' || r.mode === 'stopped', V_FULL = L.vmax || 300;
     if (el.hidden === show) { el.hidden = !show; if (c.full) syncPad(); }
     if (!show) return;
-    /* 山陽新幹線の最高速度は300km/h。時刻表からの推定（通過駅の時刻が推定のため）やGPSの揺れで超えて見えるので、表示は300までに抑える */
+    /* 最高速度（山陽新幹線は300km/h、リレーかもめの787系は130km/h。路線のデータ vmax）。時刻表からの推定（通過駅の時刻が推定のため）やGPSの揺れで超えて見えるので、表示はそこまでに抑える */
     const approx = r.approx && r.speed > 0;
     const v = Math.max(0, Math.min(V_FULL, approx ? Math.round(r.speed / 10) * 10 : Math.round(r.speed || 0)));
     if (!el.firstChild) {
@@ -975,8 +1060,8 @@
      「まもなく」のお知らせとトンネルの2つで欄がふさがっているとき、府県境の知らせが出ているとき、降車の約7分前からは出さずに待つ。
      待てるのは約5分、範囲から12kmまで（その場所を離れすぎたら出さない）。
      1件は約90秒（早送りでも2.5秒）出し、次の札までは約4分（早送りでも2秒）空ける。同じトリビアは1回の乗車で1回だけ */
-  let TVL = null;
-  const tvList = () => TVL || (TVL = (L.trivia || []).map(([cat, k, a, b]) => {
+  const TVL = {};
+  const tvList = () => TVL[ln.id] || (TVL[ln.id] = (L.trivia || []).map(([cat, k, a, b]) => {
     const list = (T.triviaMore || {})[cat] || [], j = list.findIndex(x => x[0] === k);
     if (j < 0) return null;
     const [kk, q, ans, src] = list[j];
@@ -1040,12 +1125,20 @@
       const tun = r.mode === 'running' && tunnelAt(r.km);
       if (vis) {
         const { s, t1 } = vis, m = minsTo(t1, r.now), now = t1 <= r.now;
-        const head = s.vis === 'B' ? `${now ? 'いま' : 'まもなく'}${esc(s.name)}を渡ります` : `${now ? 'いま' : 'まもなく'}${esc(s.name)}`;
+        const head = s.vis === 'B' ? `${now ? 'いま' : 'まもなく'}${esc(s.name)}を${s.genre === '川' ? '渡ります' : '通ります'}` : `${now ? 'いま' : 'まもなく'}${esc(s.name)}`;   // 両側：川は「渡ります」、土塁などは「通ります」
         out.push(`<button class="lm-alert" data-spot="${s.id}"><span class="lm-alert-h">${head}${!now && m >= 1 ? `<small class="num">（約${m}分後）</small>` : ''}</span><span class="lm-alert-s">${sideTxt(s, go)}</span><span class="lm-alert-d">${esc(s.sum)}<i>くわしく →</i></span></button>`);
       }
       if (tun) {
         const exitKm = S.dir > 0 ? tun[1] : tun[0], [te] = tAt(exitKm), m = minsTo(te, r.now);
         out.push(`<div class="lm-tunnel"><b>${esc(tun[2] || 'トンネル')}内</b>（${m >= 1 ? `出口まで約${m}分` : 'まもなく出口'}）${c.unGeo ? '・GPSは一時的に届きません' : ''}</div>`);
+      }
+      /* 通過駅：「まもなく○○駅を通過」（2分前から。通ったあと少し残す） */
+      const pas = passNow(r);
+      if (pas) {
+        const { s, t1 } = pas, sec = (t1 - r.now) / 1000, m = minsTo(t1, r.now);
+        const k = sec > 20 ? 'soon' : sec > -10 ? 'now' : 'done';
+        const sm = k === 'soon' ? `まもなく${m >= 1 ? `<span class="num">（約${m}分後）</span>` : ''}` : k === 'now' ? 'いま' : '';
+        out.push(`<button class="lm-near lm-pass" data-spot="${s.id}" style="--g:${CATS.stn.color}"><span class="lm-dot" aria-hidden="true">${symSvg(s)}</span><span>${sm ? `<small>${sm}</small>` : ''}<b>${esc(s.name)}を${k === 'done' ? '通過しました' : '通過'}</b><span class="lm-near-s">${s.kana ? `${esc(s.kana)}・` : ''}${esc(s.pref)}</span>${s.text ? `<span class="lm-pass-d">${esc(s.text)}</span>` : ''}</span></button>`);
       }
       /* この近くにあるもの：最寄りの地点を通るころ、1件ずつ控えめに。
          見どころが近くに固まっている所（神戸・岡山・広島・下関など）で次々に入れ替わらないよう、1件は少なくとも約75秒（早送りでも6秒）出してから次へ。
@@ -1179,7 +1272,8 @@
      地図の下には1行の要約だけを置き、スイッチは下から出るシートにまとめる（全画面では ⚙ から開く） */
   const hasWake = () => 'wakeLock' in navigator;
   /* JR公式の運行情報（遅れの情報は自動で読み込まない。公式のページを開くだけ） */
-  const JR_INFO = `<p class="lm-jrinfo"><span>JR公式の運行情報</span><a class="ext" href="https://trafficinfo.westjr.co.jp/sanyo.html" target="_blank" rel="noopener">山陽新幹線（JR西日本）</a><a class="ext" href="https://www.jrkyushu.co.jp/trains/info/" target="_blank" rel="noopener">九州の列車（JR九州）</a></p>`;
+  const JR_INFO_DEF = [['山陽新幹線（JR西日本）', 'https://trafficinfo.westjr.co.jp/sanyo.html'], ['九州の列車（JR九州）', 'https://www.jrkyushu.co.jp/trains/info/']];
+  const jrInfo = () => `<p class="lm-jrinfo"><span>JR公式の運行情報</span>${(L.info || JR_INFO_DEF).map(([t, u]) => `<a class="ext" href="${u}" target="_blank" rel="noopener">${t}</a>`).join('')}</p>`;
   function drawCtrl() {
     const c = cur; if (!c) return;
     const el = $('#lm-ctrl');
@@ -1195,7 +1289,7 @@
           <span class="lm-sum-i">省電力 <b>${c.eco ? 'ON' : 'OFF'}</b></span>
           <span class="lm-sum-go">設定</span></button>
         ${auto}<div class="lm-ctrl-row">${gps}<a class="btn quiet ext" data-lm-gm href="https://www.google.com/maps" target="_blank" rel="noopener">Googleマップで開く（現在地）</a></div>
-        ${JR_INFO}
+        ${jrInfo()}
         ${c.gpsErr === 'denied' ? '<p class="lm-msg">位置情報が許可されませんでした。時刻表からの推定で表示します。<button type="button" class="lm-msgbtn" data-lm="geohelp">許可し直す方法</button></p>'
           : c.gpsErr === 'off' ? '<p class="lm-msg">位置が取れません。端末の位置情報がオフかもしれません。取れるまでは、最後に測った遅れと時刻表から推定します。<button type="button" class="lm-msgbtn" data-lm="geooff">位置情報をオンにする方法</button></p>'
           : c.gpsErr ? '<p class="lm-msg">位置がまだ取れません。取れるまでは、最後に測った遅れと時刻表から推定します。</p>' : ''}`;
@@ -1217,7 +1311,7 @@
         <p class="lm-desc lm-desc-sep">立体の地形：地図の種類が航空写真で、立体にしたときだけ、山を盛り上げて描きます（トンネルは山の中に点線）。標準・淡色・OpenStreetMap は文字が読みやすいよう、立体でも平らです（トンネルは地図の上の点線）。</p>
         <label class="lm-sw"><input type="checkbox" role="switch" data-lm="eco"${c.eco ? ' checked' : ''}><span>省電力</span></label>
         <p class="lm-desc">地図の更新を10秒に1回にし、平面・淡色の地図にします。航空写真と「画面を自動で消さない」は使いません。GPSは、遅れを測るのに足りる1分に1回だけ使います。${c.hasBattery ? '電池が20%以下になると、自動でオンになります。' : ''}</p>
-        ${c.full ? JR_INFO : ''}`;
+        ${c.full ? jrInfo() : ''}`;
       if (c.setEl.dataset.v !== html) { c.setEl.innerHTML = html; c.setEl.dataset.v = html; }
     }
     drawTools();
@@ -1259,12 +1353,13 @@
   function listHTML(key) {
     const S = sched(key), esc = ui.esc;
     const groups = {};
-    L.spots.forEach(s => { const p = prefOf(s); (groups[p] = groups[p] || []).push(s); });
-    const prefs = Object.keys(groups).sort((a, b) => ((PREF_ORDER.indexOf(a) + 1 || 99) - (PREF_ORDER.indexOf(b) + 1 || 99)) * S.dir);
+    L.spots.concat(cur && cur.key === key && cur.passSt ? cur.passSt : passStations(key)).forEach(s => { const p = prefOf(s); (groups[p] = groups[p] || []).push(s); });
+    const PO = S.ln.prefOrder, prefs = Object.keys(groups).sort((a, b) => ((PO.indexOf(a) + 1 || 99) - (PO.indexOf(b) + 1 || 99)) * S.dir);
     return prefs.map(p => {
       const sp = groups[p].sort((a, b) => (a.km - b.km) * S.dir);
       return `<details class="lm-pg" open data-pref="${esc(p)}"><summary class="lm-pref"><span>${esc(p)}</span><small class="num">${sp.length}件</small><em class="lm-pg-done">通過</em></summary><ol class="lm-spots">${sp.map(s =>
-        `<li data-km="${s.km}"><button data-spot="${s.id}" style="--g:${catOf(s).color}"><span class="lm-dot" aria-hidden="true">${symSvg(s)}</span><span class="lm-sp"><b>${esc(s.name)}</b>${s.vis ? '<em>窓から</em>' : ''}<small>${esc(s.sum)}</small></span><span class="lm-sd">${s.vis ? (s.vis === 'N' ? '北側' : s.vis === 'S' ? '南側' : '両側') : s.off < 0.3 ? 'すぐそば' : `${s.dir}${kmTxt(s.off)}km`}</span></button></li>`).join('')}</ol></details>`;
+        s.pass ? `<li data-km="${s.km}" class="st"><button data-spot="${s.id}" style="--g:${catOf(s).color}"><span class="lm-dot" aria-hidden="true">${symSvg(s)}</span><span class="lm-sp"><b>${esc(s.name)}</b><em class="st">通過駅</em><small>${esc(s.text || [s.kana, s.pref].filter(Boolean).join('・'))}</small></span><span class="lm-sd num">${s.tt ? esc(s.tt) + 'ごろ' : ''}</span></button></li>` :
+        `<li data-km="${s.km}"><button data-spot="${s.id}" style="--g:${catOf(s).color}"><span class="lm-dot" aria-hidden="true">${symSvg(s)}</span><span class="lm-sp"><b>${esc(s.name)}</b>${s.vis ? '<em>窓から</em>' : ''}<small>${esc(s.sum)}</small></span><span class="lm-sd">${s.vis ? (s.vis === 'N' ? '北側' : s.vis === 'S' ? '南側' : s.vis === 'Y' ? (winSide(s, S.dir) === 'L' ? '左の窓' : '右の窓') : '両側') : s.off < 0.3 ? 'すぐそば' : `${s.dir}${kmTxt(s.off)}km`}</span></button></li>`).join('')}</ol></details>`;
     }).join('');
   }
   function drawList(r) {
@@ -1300,7 +1395,7 @@
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = MAPLIBRE.replace('.mjs', '.css'); lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml;
     try { ml = await import(new URL(MAPLIBRE, document.baseURI).href); } catch (e) { return fail('ライブラリを読み込めません'); }
-    await lineReady;
+    await ln.ready;
     if (cur !== c) return;
     c.ml = ml;
     if (!demOn) { try { ml.addProtocol('gsidem', demLoad); demOn = true; } catch { /* 地形なしで続ける */ } }
@@ -1309,9 +1404,9 @@
     const col = n => cs.getPropertyValue(n).trim() || '#888';
     const r = c.last || c.tk.compute();
     const p = pointAt(r.km);
-    const split = tunnelSplit(L.tunnels, sliceLine, 0, geom.cum[geom.cum.length - 1]);   // 地表の線はトンネルの外だけ。トンネルの中は点線（平面）か立体の線
+    const split = tunnelSplit(L.tunnels, sliceLine, 0, ln.geom.cum[ln.geom.cum.length - 1]);   // 地表の線はトンネルの外だけ。トンネルの中は点線（平面）か立体の線
     /* 駅の点と名前は、線路の上の列車が止まる位置（pointAt(駅のkm)）に置く。駅の座標は線路から数十mずれることがあり、駅の近くで寄ると、止まった列車の横に離れて見えるため */
-    const stnLL = s => (geom.fallback && !lineGeo ? [s[2], s[1]] : pointAt(s[3]));
+    const stnLL = s => (ln.geom.fallback && !ln.lineGeo ? [s[2], s[1]] : pointAt(s[3]));
     const stations = { type: 'FeatureCollection', features: L.stations.map(s => ({ type: 'Feature', properties: { stop: c.S.st.some(x => x.name === s[0] && x.stop) ? 1 : 0 }, geometry: { type: 'Point', coordinates: stnLL(s) } })) };
     /* 電波が弱い・通信を節約する設定なら、航空写真は使わない */
     const conn = navigator.connection;
@@ -1407,10 +1502,12 @@
       return { s, el, mk, stop, lp: 'b', ll: stnLL(s) };
     });
     /* 見どころ：ピンを立てて横に名前。地図を傾けても、画面に向かって立てる */
-    c.pins = L.spots.map(s => {
+    /* 通過駅のピンは、線路の上の駅の位置（列車が通る所）に立てる */
+    (c.passSt || []).forEach(s => { const q = pointAt(s.km); s.lon = q[0]; s.lat = q[1]; });
+    c.pins = spotsOf(c).map(s => {
       const cat = catOf(s);
       const el = document.createElement('button'); el.type = 'button';
-      el.className = 'lm-pin lv-far' + (s.vis ? ' vis' : ''); el.style.setProperty('--g', cat.color); el.dataset.spot = s.id;
+      el.className = 'lm-pin lv-far' + (s.vis ? ' vis' : '') + (s.pass ? ' st' : ''); el.style.setProperty('--g', cat.color); el.dataset.spot = s.id;
       el.setAttribute('aria-label', `${s.name}（${cat.name}${s.vis ? '・窓から見える' : ''}）`);
       el.innerHTML = `<span class="lm-pin-in"><span class="lm-pin-h">${symSvg(s)}</span><span class="lm-pin-n">${ui.esc(s.name)}</span></span>`;
       const pin = { s, el, lv: 'far', label: el.querySelector('.lm-pin-n'), w: textW(s.name), tmp: 0 };
@@ -1424,7 +1521,7 @@
       return pin;
     });
     /* 自分の列車（絵の選び方は trainFace） */
-    const tel = document.createElement('div'); tel.className = 'lm-train';
+    const tel = document.createElement('div'); tel.className = 'lm-train'; tel.dataset.car = ln.id;   // 列車の絵は路線ごと（style.css）
     tel.setAttribute('role', 'img'); tel.setAttribute('aria-label', '自分の列車');
     c.train = new ml.Marker({ element: tel, anchor: 'top-left', offset: [-TRAIN.w / 2, -TRAIN.oy], rotationAlignment: 'viewport', pitchAlignment: 'viewport', opacityWhenCovered: 1 }).setLngLat(p).addTo(map);   // 山の陰でも薄くしない
     c.trainEl = tel; c.frame = -1;
@@ -1443,13 +1540,6 @@
     drawCtrl(); drawPins(r); layoutLabels();
   }
   const emptyLine = () => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } });
-  function sliceLine(a, b) {
-    if (a > b) [a, b] = [b, a];
-    const { coords, cum } = geom, out = [pointAt(a)];
-    for (let i = 0; i < cum.length; i++) if (cum[i] > a && cum[i] < b) out.push(coords[i]);
-    out.push(pointAt(b));
-    return out;
-  }
   /* 自分の列車の印：斜め上から見た立体の先頭車両（N700S風）。tools/train-sprite.html で36方向（10°ごと）を書き出した絵
      （assets/train-sprite.webp）から、画面の上での進行方向に一番近い1枚を選ぶ。印は地図に寝かせず、画面に向かって立てる。
      絵は仰角38°で描いてあるので、地図の回転・傾きから求めた画面上の向き σ を、絵の中の地面の向き a に直して選ぶ */
@@ -1475,13 +1565,15 @@
     const { S } = c;
     const vis = visNow(r), visId = vis && vis.s.id;
     let nextId = null, best = Infinity;
-    if (r.mode !== 'after') c.pins.forEach(p => { const a = S.ahead(r.km, p.s.km); if (a > -0.3 && a < best) { best = a; nextId = p.s.id; } });
+    if (r.mode !== 'after') c.pins.forEach(p => { const a = S.ahead(r.km, p.s.km); if (!p.s.pass && a > -0.3 && a < best) { best = a; nextId = p.s.id; } });
+    const pas = passNow(r), pasId = pas && pas.s.id;
     let changed = false;
     c.pins.forEach(p => {
       const a = S.ahead(r.km, p.s.km);
       let lv = r.mode === 'after' ? 'past' : a < -1 ? 'past' : a <= 8 ? 'near' : a <= 30 ? 'mid' : 'far';
       if (r.mode === 'before') lv = a <= 30 ? 'mid' : 'far';
       if (p.s.id === visId || (p.s.id === nextId && r.mode !== 'before')) lv = 'hot';
+      if (p.s.pass) lv = p.s.id === pasId ? 'hot' : lv === 'hot' ? 'near' : lv;   // 通過駅は、お知らせを出している駅だけはっきり
       p.ahead = a;
       if (p.lv !== lv) { p.el.classList.replace('lv-' + p.lv, 'lv-' + lv); p.lv = lv; p.el.style.zIndex = { hot: 5, near: 4, mid: 3, far: 2, past: 1 }[lv]; changed = true; }
     });
@@ -1538,6 +1630,7 @@
       p.head = { l: q.x - 10 * sc, t: q.y - 30 * sc, r: q.x + 10 * sc, b: q.y - 10 * sc };
       p.tier = p.lv === 'hot' ? 0 : p.lv === 'past' ? 9 : p.s.vis && a > -1 && a <= 40 ? 1 : Math.abs(a) <= 8 ? 2 : a > 0 ? 3 : 9;
       if (before) p.tier = p.lv === 'past' ? 9 : p.s.vis ? 1 : 3;
+      if (p.s.pass) p.tier = 9;
       p.forced = p.tmp > now;
       return p;
     }).filter(p => { if (!p.on) p.el.classList.add('nolabel'); return p.on; });
@@ -1796,7 +1889,8 @@
      立体（斜め）は遠くまで写るぶん、少し控える */
   const STN_Z = { flat: { std: 15, pale: 15, photo: 15, osm: 15 }, d3: { std: 14.8, pale: 14.8, photo: 14.8, osm: 14.8 } };
   /* 航空写真の細かさが足りない駅（寄るとぼやける所）は、ここで控える。駅名 → 縮尺の上限。
-     のぞみの停車駅（新大阪〜博多）は、どこも18段の写真に細かさがあり（引き伸ばしでない）、控える駅はない。リレーかもめの駅は16で確かめる */
+     のぞみの停車駅（新大阪〜博多）は、どこも18段の写真に細かさがあり（引き伸ばしでない）、控える駅はない。
+     リレーかもめの停車駅（武雄温泉・江北・佐賀・新鳥栖・鳥栖・二日市・博多）も、16〜18段の写真を取り寄せて見比べ、どれも車や駐車場の白線まで写っていて（引き伸ばしでない）、控える駅はない */
   const PHOTO_CAP = {};
   const ECO_Z = 14.5;   // 省電力（地図の更新が10秒に1回）では、列車が画面から外れないよう控えめに
   function stationZoom(c, pitch, name) {
@@ -1998,7 +2092,7 @@
     };
     const toMap = async () => { if (!c.full) { c.root.scrollIntoView({ block: 'start' }); await sleep(120); } };
     Guide.run('livemap', [
-      { el: () => pinTarget() || $('#lm-map', root), title: '見どころのピン', text: '名前を押すと、紹介が下から開きます。ピンの色と記号は種類（城・寺社・自然・川・街）を表します。', before: toMap },
+      { el: () => pinTarget() || $('#lm-map', root), title: '見どころのピン', text: '名前を押すと、紹介が下から開きます。ピンの色と記号は種類（城・寺社・自然・川・街・通過駅）を表します。通過駅に近づくと「まもなく○○駅を通過」と紹介が出ます。', before: toMap },
       { el: '#spots', title: '見どころの紹介と一覧', text: '紹介には、ところ・ひとこと・くわしい説明が載っています。地図の下へスクロールすると「沿線の見どころ一覧」を通る順に見られます。', before: async () => { const h = $('#spots'); if (h) { h.scrollIntoView({ block: 'start' }); await sleep(150); } }, after: toMap },
       { el: '#lm-map', title: c.full ? '地図の操作' : '押して地図を操作', text: c.full ? '1本指で地図を動かし、2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。動かすと列車を追いかけるのを止めます。「列車へ」を押すと、列車の位置と元の向きに戻ります。' : 'ふだんは1本指でページをスクロールします。地図を1回押すと枠が朱色になり、1本指で動かす・2本指で拡大・縮小や回転ができます。2本指をそろえて上下にずらすと傾きます。「操作を終える」を押すか、地図の外を押すと戻ります。' },
       { el: () => $('.lm-zbtn', root), title: '自動ズームのボタン', text: '「自動ズーム：オン」のあいだは、停車駅に近づくと着く前から少しずつ拡大し、駅を出ると少しずつ戻ります。押すとオフ（縮尺を自動では変えない）になります。指で拡大・縮小しても自動は止まらず、その縮尺を走行中の縮尺として覚えます。「元の縮尺に戻す」で最初の縮尺に戻ります。' },
@@ -2016,9 +2110,9 @@
     schedT: key => (cur && cur.key === key && cur.last && cur.last.gpsDelay ? cur.last.t : null),
     /* いま乗車の時間帯（発車の30分前〜到着の2時間後）にある列車。なければ null */
     rideKey,
-    _internals: { sched, Tracker, snap, pointAt, PrefWatch, prefAt, splitMuni },
+    _internals: { sched, Tracker, snap: (lat, lon) => ln.snap(lat, lon), pointAt, PrefWatch, prefAt: km => ln.prefAt(km), splitMuni, lines: LN, lineOf },
     _debug: () => cur && {
-      last: cur.last, fix: cur.tk.fix, reject: cur.tk.reject, follow: cur.follow, map: !!cur.map, loaded: !!cur.loaded, gpsOn: !!cur.unGeo, gpsWant: cur.gpsWant, gpsAuto: !!cur.gpsAuto, perm: GeoPerm.state(), geomFallback: !!geom.fallback && !lineGeo,
+      last: cur.last, fix: cur.tk.fix, reject: cur.tk.reject, follow: cur.follow, map: !!cur.map, loaded: !!cur.loaded, gpsOn: !!cur.unGeo, gpsWant: cur.gpsWant, gpsAuto: !!cur.gpsAuto, perm: GeoPerm.state(), geomFallback: !!ln.geom.fallback && !ln.lineGeo, line: ln.id,
       pitch: cur.map ? cur.map.getPitch() : cur.pitch, bearing: cur.map ? cur.map.getBearing() : null, orient: cur.orient, free: cur.free, base: cur.tmpBase || cur.base, eco: cur.eco,
       zoom: cur.map ? cur.map.getZoom() : null, zAuto: cur.zAuto, zOff: cur.zOff, zHold: cur.zHold, zone: cur.zone && { ...cur.zone }, zd: cur.zd && { dn: cur.zd.dn, dp: cur.zd.dp, next: cur.zd.next && cur.zd.next.name, prev: cur.zd.prev && cur.zd.prev.name }, fast: cur.fast, target: cur.map ? zoomTarget(cur, cur.map.getPitch()) : null, arr: cur.arr,
       camInterval: camInterval(), mapVisible: cur.mapVisible, active: cur.active(), alarms: { ...cur.alarms }, pins: cur.pins.map(p => [p.s.id, p.lv, !p.el.classList.contains('nolabel')])

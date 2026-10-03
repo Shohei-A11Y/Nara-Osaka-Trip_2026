@@ -528,7 +528,7 @@
   const TOC = [
     ['きょう', [['きょう（いま・つぎ）', '#/', ''], ['チェックインQR', '#qr', '']]],
     ['日程', [['1日目　10/17（土）', '#/trip/1', ''], ['2日目　10/18（日）', '#/trip/2', ''], ['3日目　10/19（月）', '#/trip/3', ''], ['4日目　10/20（火）', '#/trip/4', '']]],
-    ['のりもの', [['いまどのへん？（のぞみ）', '#/ride/live/nozomi28', ''], ['指定席券と座席表', '#/ride', ''], ['駅の乗り換え（3D）', '#/ride/transfer', '博多・新大阪'], ['駅の時刻表（大阪市内）', '#/ride/tt', '7駅'], ['車窓から見える城', '#/ride/castles', ''], ['博多駅の駅弁', '#/ride/ekiben', ''], ['鉄道トリビア', '#/ride/trivia', ''], ['レンタカー', '#/stay/car', '10/18']]],
+    ['のりもの', [['いまどのへん？（のぞみ）', '#/ride/live/nozomi28', ''], ['いまどのへん？（リレーかもめ）', '#/ride/live/relay92', '武雄温泉〜博多'], ['指定席券と座席表', '#/ride', ''], ['駅の乗り換え（3D）', '#/ride/transfer', '博多・新大阪'], ['駅の時刻表（大阪市内）', '#/ride/tt', '7駅'], ['車窓から見える城', '#/ride/castles', ''], ['博多駅の駅弁', '#/ride/ekiben', ''], ['鉄道トリビア', '#/ride/trivia', ''], ['レンタカー', '#/stay/car', '10/18']]],
     ['まっぷ', [['おでかけマップ', '#/map/outing', '1枚の地図で'], ['行く場所の地図', '#/map', ''], ['ドライブの道順', '#/map/drive', '10/18'], ['公式の案内図', '#/map/official', ''], ['おでかけ', '#/spot', '7か所'], ['ごはん', '#/food', ''], ['奈良公園近くの駐車場', '#/sos/parking', '10/18']]],
     ['その他', [['旅のワンポイント', '#/tips', '気温・服装・コツ'], ['トリビア', '#/trivia', '5つの分類'], ['持ち物チェック', '#/bag', ''], ['予算と割り勘メモ', '#/money', ''], ['ホテルとお部屋', '#/stay', ''], ['緊急連絡先・病院', '#/sos', ''], ['思い出メモ', '#/memo', ''], ['スタンプ帳', '#/spot/stamps', ''], ['おためしモード', '#sim', '旅行中の画面を先に体験'], ['使い方', '#/help', '機能ごとの説明書']]]
   ];
@@ -629,7 +629,7 @@
       { m: 1, t: '4つの場面（往路・復路の博多と新大阪）を切り替えます。' },
       { m: 1, t: '階段・エスカレーターか、エレベーター（ベビーカー）かを選びます。' },
       { m: 1, t: '「出発進行」で、歩く道順を順にたどります。図は1本指で回り、2本指で拡大できます。' }] },
-    { id: 'live', tab: 'のりもの', where: '〈のりもの〉の「いまどのへん？」を開いたときの、地図の画面の説明です。', ic: 'map', title: 'いまどのへん？', sub: '新幹線の車内で', pts: [
+    { id: 'live', tab: 'のりもの', where: '〈のりもの〉の「いまどのへん？」を開いたときの、地図の画面の説明です。', ic: 'map', title: 'いまどのへん？', sub: 'のぞみ・リレーかもめの車内で', pts: [
       { m: 1, t: '自分の列車です。鼻先が進む向きを向いています。' },
       { m: 1, t: '方位磁針。押すたびに「北が上」と「進行方向が上」が切り替わります。' },
       { m: 1, t: '立体（斜めから見下ろす地図）と、平面を切り替えます。山の盛り上がり（立体の地形）は、地図の種類が航空写真のときだけです。ほかの地図は文字が描き込まれていて、盛り上げると読みにくいため、立体でも平らです。' },
@@ -641,7 +641,9 @@
       { t: '地図の右下の「自動ズーム：オン」のあいだは、停車駅に近づくと着く前から少しずつ拡大し、駅前の建物や道が分かるくらいまで寄ります。駅を出ると少しずつ戻ります。押すとオフになり、縮尺を自動では変えません。指で拡大・縮小しても自動は止まらず、その縮尺を「走行中の縮尺」として覚えます。「元の縮尺に戻す」で最初の縮尺に戻ります。' },
       { t: '乗車の時間帯（発車の30分前〜到着の2時間後）は、位置の情報を許可していれば、ボタンを押さなくてもGPSで遅れを測り、「約○分遅れ」と出して、次の駅まで・到着・降車のお知らせ・駅一覧の時刻をずらします。時間帯が終わると、自動で止まります。' },
       { t: '位置の情報の許可は、端末ごとに一度だけ必要です。旅行の前に、いまどのへん？を開くと出る案内の「許可する」を押しておいてください（当日まではGPSを使いません）。許可していない端末には、乗車の時間帯に画面の上に「使う」が出ます。' },
-      { t: '「GPSを止める」を押すと、そのタブのあいだは自動で使いません。それ以外の時間は、「現在地を使う」を押したときだけ使います。運行の状況は、地図の下の「JR公式の運行情報」で確かめられます。' }] },
+      { t: '「GPSを止める」を押すと、そのタブのあいだは自動で使いません。それ以外の時間は、「現在地を使う」を押したときだけ使います。運行の状況は、地図の下の「JR公式の運行情報」で確かめられます。' },
+      { t: '止まらずに通る駅（通過駅）に近づくと、2分ほど前から「まもなく○○駅を通過」と、駅の読み・府県・ひとことが出ます。地図の駅のピンと、下の見どころ一覧からも紹介を開けます。' },
+      { t: '写真はのぞみの画面です。リレーかもめ（武雄温泉〜博多）も同じ画面で、列車の印は黒い787系、時速の線は130kmでいっぱいになります。見出しの右上の「のぞみ（…）へ」「リレーかもめ（…）へ」で、もう一方の列車に移れます。' }] },
     { id: 'search', tab: 'すべての画面', where: '右上の「目次」か、〈その他〉のいちばん下の「しおりの目次」から開く、目次と検索の説明です。', ic: 'search', title: '目次と検索', sub: 'あの情報はどこ？', pts: [
       { m: 1, t: 'ことばを入れると、しおりの中から探します。ひらがなでも探せます。電波がなくても使えます。' },
       { m: 1, t: '見つかった所を押すと、その場所へ移って、短く光ります。' },
@@ -716,7 +718,7 @@
   /* 画面の上の案内（コーチマーク）の見直し */
   function replayGuide(which) {
     if (which === 'app') { if (location.hash !== '#/') location.hash = '#/'; setTimeout(() => appGuide(true), 500); return; }
-    const k = liveNowKey() || (ymd(now()) >= '2026-10-20' ? 'nozomi17' : 'nozomi28');
+    const k = liveDefault();
     if (!location.hash.startsWith('#/ride/live/' + k) || location.hash.endsWith('/full')) location.hash = '#/ride/live/' + k;
     setTimeout(() => window.LiveMap && LiveMap.guide ? LiveMap.guide() : null, 900);
   }
@@ -809,6 +811,13 @@
       { id: 'lm28-arr', title: '10/17 14:36　のぞみ28号・新大阪の7分前', text: '降車アラーム（5分前・1分前）の確認に。', t: '2026-10-17T14:36', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28' } },
       { id: 'lm17', title: '10/20 11:01　のぞみ17号・新大阪を発車（復路）', t: '2026-10-20T11:01', go: '#/ride/live/nozomi17', pos: { track: 'nozomi17' } },
       { id: 'lm17-arr', title: '10/20 13:20　のぞみ17号・博多の手前', text: '降車アラームと、リレーかもめへの乗り換えカウントダウン。', t: '2026-10-20T13:20', go: '#/ride/live/nozomi17', pos: { track: 'nozomi17' } }
+    ]],
+    ['いまどのへん？（リレーかもめの車内）', [
+      { id: 'lmr92', title: '10/17 10:38　リレーかもめ92号・武雄温泉を発車（往路）', text: '作り物のGPSが線路を進みます。上の帯の「×1」を押すと×10・×60に早送りできます。', t: '2026-10-17T10:38', go: '#/ride/live/relay92', pos: { track: 'relay92' } },
+      { id: 'lmr92-late10', title: '10/17 10:38　リレーかもめ92号・10分遅れ（武雄温泉で発車待ち）', text: '武雄温泉に止まったまま遅れの分数が増え、10分遅れて発車します。次の駅まで・到着・のぞみ28号への乗り換え・駅一覧の時刻が、遅れを足した時刻になります。', t: '2026-10-17T10:38', go: '#/ride/live/relay92', pos: { track: 'relay92', delay: 10 } },
+      { id: 'lmr92-arr', title: '10/17 11:34　リレーかもめ92号・博多の8分前', text: '降車アラームと、のぞみ28号への乗り換えカウントダウン。', t: '2026-10-17T11:34', go: '#/ride/live/relay92', pos: { track: 'relay92' } },
+      { id: 'lmr33', title: '10/20 13:52　リレーかもめ33号・博多を発車（復路）', t: '2026-10-20T13:52', go: '#/ride/live/relay33', pos: { track: 'relay33' } },
+      { id: 'lmr33-arr', title: '10/20 14:46　リレーかもめ33号・武雄温泉の8分前', text: '降車アラームと、かもめ33号への乗り換えカウントダウン。', t: '2026-10-20T14:46', go: '#/ride/live/relay33', pos: { track: 'relay33' } }
     ]]
   ];
   const sceneById = id => SCENES.flatMap(([, l]) => l).find(s => s.id === id);
@@ -949,7 +958,7 @@
      のぞみ → いまどのへん？／ホテル・スポット・ごはんなど、ページのある地点 → そのページ／ほか（かもめ・リレーかもめ・地下鉄・駅など） → 行程表のその区間 */
   function evGo(day, i) {
     const it = day.items[i];
-    if (it.t === 'move' && it.train && T.nozomiLine[it.train]) return ['#/ride/live/' + it.train, ''];
+    if (it.t === 'move' && it.train && T.liveLine[it.train]) return ['#/ride/live/' + it.train, ''];
     if (it.t === 'stop' && it.to) return [it.to, ''];
     return ['#/trip/' + day.n, '#it-' + i];
   }
@@ -966,7 +975,7 @@
         <div class="dc-count"><b class="num" id="cd-d">${d}</b><span class="u">日</span><span class="hm num" id="cd-hm">${h}時間${String(m).padStart(2, '0')}分</span></div>
         <ol class="dc-legs">${legs.map((tr, i) => { const d1 = T.days[0], k = Object.keys(T.trains).find(x => T.trains[x] === tr), j = d1.items.findIndex(x => x.t === 'move' && x.train === k);
           const inner = `<b class="num">${tr.dep}</b><span>${tr.from}発　${tr.name}${i === legs.length - 1 ? `<small class="num">${tr.to} ${tr.arr}着</small>` : ''}</span>`;
-          return `<li>${j >= 0 ? goRow(d1, j, inner, `${tr.name}（${T.nozomiLine[k] ? 'いまどのへん？' : '行程表'}へ）`) : inner}</li>`; }).join('')}</ol></section>`;
+          return `<li>${j >= 0 ? goRow(d1, j, inner, `${tr.name}（${T.liveLine[k] ? 'いまどのへん？' : '行程表'}へ）`) : inner}</li>`; }).join('')}</ol></section>`;
     }
     if (ph === 'after') {
       const tr = T.trains.kamome33;
@@ -1192,14 +1201,35 @@
     }
   }
 
-  /* ========== いまどのへん？（のぞみ）の小さな路線図 ==========
-     駅の位置（LINE.stations）を線で結んだだけの略図。列車の印は時刻表から */
-  const liveNowKey = (t = now()) => Object.keys(T.nozomiLine).find(k => { const tr = T.trains[k]; return t >= jst(tr.date, tr.dep) - 30 * 6e4 && t < jst(tr.date, tr.arr); }) || null;
+  /* ========== いまどのへん？（のぞみ・リレーかもめ）の小さな路線図 ==========
+     駅の位置（LINES の stations）を線で結んだだけの略図。列車の印は時刻表から */
+  const liveNowKey = (t = now()) => Object.keys(T.liveLine).find(k => { const tr = T.trains[k]; return t >= jst(tr.date, tr.dep) - 30 * 6e4 && t < jst(tr.date, tr.arr); }) || null;
+  /* いまどのへん？を開くときの列車：乗車の時間帯の列車 → その日のまだ着いていない列車（乗る順）→ その日の最後の列車 → 日付で（10/20 からは のぞみ17号） */
+  function liveDefault(t = now()) {
+    const k = liveNowKey(t); if (k) return k;
+    const d = ymd(t), ks = Object.keys(T.liveLine).filter(x => T.trains[x].date === d).sort((a, b) => jst(T.trains[a].date, T.trains[a].dep) - jst(T.trains[b].date, T.trains[b].dep));
+    return ks.find(x => t < jst(T.trains[x].date, T.trains[x].arr)) || ks[ks.length - 1] || (d >= '2026-10-20' ? 'nozomi17' : 'nozomi28');
+  }
+  const lineOfKey = key => ((window.LINES || {})[(T.trains[key] || {}).line] || window.LINE);
+  /* 略図の描き方（路線ごと）。山陽新幹線は今までどおり（瀬戸内海を下に）。ほかの路線は、駅の位置が枠に収まるように縮尺を決める */
+  const MINI = {
+    sanyo: { lab: { 博多: 'b', 小倉: 't', 広島: 'b', 岡山: 'b', 新神戸: 't', 新大阪: 'b' }, sea: ['瀬戸内海', 150, 52], aria: '山陽新幹線の略図' },
+    relay: { lab: { 武雄温泉: 'b', 江北: 't', 佐賀: 'b', 鳥栖: 'b', 二日市: 't', 博多: 't' }, ends: ['武雄温泉', '博多'], demo: '佐賀', aria: 'リレーかもめ（武雄温泉〜博多）の略図' }
+  };
   function routeMini(key, opt = {}) {
-    const L = window.LINE; if (!L || !T.nozomiLine[key]) return '';
+    const L = lineOfKey(key); if (!L || !T.liveLine[key]) return '';
+    const lid = (T.trains[key] || {}).line || 'sanyo', M = MINI[lid] || {};
     const pos = {}; L.stations.forEach(([n, la, lo]) => (pos[n] = [la, lo]));
-    const k = Math.cos(34.2 * Math.PI / 180), sc = 52;
-    const xy = ([la, lo]) => [+((lo - 130.05) * k * sc).toFixed(1), +((34.98 - la) * sc).toFixed(1)];
+    let xy;
+    if (lid === 'sanyo') {
+      const k = Math.cos(34.2 * Math.PI / 180), sc = 52;
+      xy = ([la, lo]) => [+((lo - 130.05) * k * sc).toFixed(1), +((34.98 - la) * sc).toFixed(1)];
+    } else {
+      const las = L.stations.map(x => x[1]), los = L.stations.map(x => x[2]);
+      const la0 = Math.min(...las), la1 = Math.max(...las), lo0 = Math.min(...los), lo1 = Math.max(...los), k = Math.cos((la0 + la1) / 2 * Math.PI / 180);
+      const sc = Math.min((244 - 70) / ((lo1 - lo0) * k), (92 - 34) / (la1 - la0)), ox = (244 - (lo1 - lo0) * k * sc) / 2, oy = 14;
+      xy = ([la, lo]) => [+(ox + (lo - lo0) * k * sc).toFixed(1), +(oy + (la1 - la) * sc).toFixed(1)];
+    }
     const s = liveState(key), names = s.st.map(x => x.name);
     const pts = names.map(n => xy(pos[n]));
     const path = p => p.map((q, i) => (i ? 'L' : 'M') + q.join(' ')).join('');
@@ -1208,11 +1238,11 @@
       const i0 = Math.min(Math.floor(s.pos), pts.length - 1), f = s.pos - i0, a = pts[i0], b = pts[Math.min(i0 + 1, pts.length - 1)];
       here = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
       done = pts.slice(0, i0 + 1).concat([here]);
-    } else here = opt.demo ? pts[names.indexOf('福山')] : pts[0];
-    const LB = { 博多: 'b', 小倉: 't', 広島: 'b', 岡山: 'b', 新神戸: 't', 新大阪: 'b' };
-    const lab = n => { const [x, y] = xy(pos[n]); const w = LB[n]; const anc = n === '博多' ? 'start' : n === '新大阪' ? 'end' : 'middle'; return `<text x="${n === '博多' ? x - 4 : n === '新大阪' ? x + 4 : x}" y="${w === 't' ? y - 7 : y + 15}" text-anchor="${anc}">${n}</text>`; };
-    return `<svg class="rmini" viewBox="0 -2 244 92"${opt.demo ? '' : ` data-rmini="${key}" data-p="${s.pos.toFixed(3)}"`} role="img" aria-label="山陽新幹線の略図${opt.demo ? '' : `（${esc(names[Math.round(s.pos)])}のあたり）`}">
-      <text class="rm-sea" x="150" y="52" text-anchor="middle">瀬戸内海</text>
+    } else here = opt.demo ? pts[Math.max(0, names.indexOf(M.demo || '福山'))] : pts[0];
+    const LB = M.lab || {}, west = (M.ends || ['博多', '新大阪'])[0], east = (M.ends || ['博多', '新大阪'])[1];
+    const lab = n => { const [x, y] = xy(pos[n]); const w = LB[n]; const anc = n === west ? 'start' : n === east ? 'end' : 'middle'; return `<text x="${n === west ? x - 4 : n === east ? x + 4 : x}" y="${w === 't' ? y - 7 : y + 15}" text-anchor="${anc}">${n}</text>`; };
+    return `<svg class="rmini" viewBox="0 -2 244 92"${opt.demo ? '' : ` data-rmini="${key}" data-p="${s.pos.toFixed(3)}"`} role="img" aria-label="${M.aria || '路線の略図'}${opt.demo ? '' : `（${esc(names[Math.round(s.pos)])}のあたり）`}">
+      ${M.sea ? `<text class="rm-sea" x="${M.sea[1]}" y="${M.sea[2]}" text-anchor="middle">${M.sea[0]}</text>` : ''}
       <path class="rm-line" d="${path(pts)}"/>${done.length ? `<path class="rm-done" d="${path(done)}"/>` : ''}
       ${s.st.map((x, i) => x.stop ? `<circle class="rm-st" cx="${pts[i][0]}" cy="${pts[i][1]}" r="2.6"/>` : '').join('')}
       <g class="rm-lab">${Object.keys(LB).map(lab).join('')}</g>
@@ -1254,7 +1284,7 @@
     return `<section class="nt-card" aria-label="つぎの列車"><div class="nt-k">つぎの列車<span class="num">あと${m >= 60 ? Math.floor(m / 60) + '時間' : ''}${m % 60}分</span></div>
       <div class="nt-main"><b class="num">${e.est ? fmtHM(e.start) : esc(from.dep)}</b><span>${e.est ? '<small class="est">ごろ</small>' : ''}${esc(from.name)}発 → ${esc(to.name)} <span class="num">${e.est ? fmtHM(e.end) + 'ごろ' : esc(to.arr || '')}</span>着${e.est ? `<small class="nt-was num">（予定 ${esc(from.dep)}発）</small>` : ''}</span></div>
       <div class="nt-line">${ic(MODE[it.mode] || 'train')}<span>${esc(it.line)}</span></div>${it.train ? seatInline(it.train) : ''}
-      ${leg || it.train ? `<div class="acts">${leg ? actB(`data-tt="${leg.id}"`, 'clock', '時刻表', 'pri') : ''}${it.train && T.nozomiLine[it.train] ? actA(`#/ride/live/${it.train}`, 'train', 'いまどのへん？', 'pri') : ''}${it.train ? actA(`#/ride/${it.train}`, 'seat', '指定席券') : ''}${it.mode === 'metro' || it.mode === 'jr' ? moveExt(d, e.i) : ''}</div>` : ''}</section>`;
+      ${leg || it.train ? `<div class="acts">${leg ? actB(`data-tt="${leg.id}"`, 'clock', '時刻表', 'pri') : ''}${it.train && T.liveLine[it.train] ? actA(`#/ride/live/${it.train}`, 'train', 'いまどのへん？', 'pri') : ''}${it.train ? actA(`#/ride/${it.train}`, 'seat', '指定席券') : ''}${it.mode === 'metro' || it.mode === 'jr' ? moveExt(d, e.i) : ''}</div>` : ''}</section>`;
   }
   /* 旅行前だけ：いまどのへん？とおためしモードの紹介（1枚にまとめる） */
   const TRY = [['nara', '奈良公園の午後', '10/18 14:40'], ['tt-d3', '道頓堀から地下鉄へ', '10/19 10:00']];
@@ -1263,7 +1293,7 @@
       <div class="intro-h"><span class="intro-k">新幹線の車内で</span><h2>いまどのへん？</h2></div>
       ${routeMini('nozomi28', { demo: true })}
       <p class="intro-t">新幹線の車内で、いまどこを走っているか、窓から何が見えるかが分かります。</p>
-      <p class="intro-s num">10/17 のぞみ28号・10/20 のぞみ17号で使えます。</p>
+      <p class="intro-s num">10/17 リレーかもめ92号・のぞみ28号、10/20 のぞみ17号・リレーかもめ33号で使えます。</p>
       <div class="btns"><button class="btn fill" data-try="lm28">先にのぞいてみる</button></div>
       <div class="intro-sim"><p class="intro-sk">旅行中の画面を、先に試せます</p>
         <div class="intro-scenes">${TRY.map(([id, l, w]) => `<button data-try="${id}"><b>${l}</b><small class="num">${w}</small></button>`).join('')}</div>
@@ -1336,11 +1366,11 @@
       });
       T.spots.filter(sp => sp.day === d.n && !seen.has('#/spot/' + sp.id)).forEach(sp => rows.push({ ic: 'road', name: sp.name, when: '', kind: 'おでかけ', to: '#/spot/' + sp.id, q: sp.map }));
       /* 新幹線に乗る日は、いまどのへん？（車内の地図）も並べる */
-      d.items.filter(it => it.t === 'move' && T.nozomiLine[it.train]).forEach(it => { const tr = T.trains[it.train]; rows.unshift({ ic: 'train', name: `${tr.name}は いまどのへん？`, when: tr.dep, kind: '新幹線の車内', to: '#/ride/live/' + it.train, q: '' }); });
+      d.items.filter(it => it.t === 'move' && T.liveLine[it.train]).reverse().forEach(it => { const tr = T.trains[it.train]; rows.unshift({ ic: 'train', name: `${tr.name}は いまどのへん？`, when: tr.dep, kind: lineKey(it.train) === 'sanyo' ? '新幹線の車内' : '特急の車内', to: '#/ride/live/' + it.train, q: '' }); });
       return { d, rows };
     });
     return `<div class="wrap">${topbar()}${phead('Map', 'まっぷ', '行く場所を日ごとにまとめました。「地図」を押すと、地図のアプリで開きます。')}
-      <a class="map-live" href="#/ride/live/${ymd(now()) >= '2026-10-20' ? 'nozomi17' : 'nozomi28'}">${routeMini(ymd(now()) >= '2026-10-20' ? 'nozomi17' : 'nozomi28', { demo: !liveNowKey() })}<span><b>新幹線の中は「いまどのへん？」</b><small>走っている場所と、窓から見えるものを地図で</small></span></a>
+      <a class="map-live" href="#/ride/live/${liveDefault()}">${routeMini(liveDefault(), { demo: !liveNowKey() })}<span><b>列車の中は「いまどのへん？」</b><small>走っている場所と、窓から見えるものを地図で</small></span></a>
       <a class="map-om" href="#/map/outing">${ic('map')}<span><b>おでかけマップ</b><small>4日間で訪れる場所を1枚の地図に。日にち・種類で切り替え</small></span><span aria-hidden="true">→</span></a>
       ${days.map(({ d, rows }) => `<section class="sec map-day" style="--c:${DAYC(d.n)}">${secH(`${d.n}日目　${d.label}（${d.dow}）`, d.theme)}
         <ul class="map-list">${rows.map(r => `<li><span class="map-ic">${ic(r.ic)}</span><span class="map-n">${r.kind ? `<small>${r.kind}${r.when ? '・' + r.when : ''}</small>` : ''}${r.to ? `<a href="${r.to}">${esc(r.name)}</a>` : esc(r.name)}</span>${r.q ? ext(gmap(r.q), '地図', 'btn quiet map-go') : ''}</li>`).join('')}</ul>
@@ -1374,7 +1404,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=28').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=29').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -1780,7 +1810,7 @@
         it.note ? `<div>${esc(it.note)}</div>` : ''
       ].join('');
       const acts = [
-        tr && T.nozomiLine[it.train] ? actA(`#/ride/live/${it.train}`, 'train', 'いまどのへん？', 'pri') : '',
+        tr && T.liveLine[it.train] ? actA(`#/ride/live/${it.train}`, 'train', 'いまどのへん？', 'pri') : '',
         tr ? actA(`#/ride/${it.train}`, 'seat', '指定席券') : '',
         it.link ? actA(it.link[1], LINK_IC[it.link[1]] || 'spot', esc(it.link[0])) : ''
       ].filter(Boolean).join('');
@@ -1996,7 +2026,7 @@
       <div class="t-time num"><span>${m}月${d}日（${tr.dep}発）</span><span>（${tr.arr}着）</span></div>
       <div class="t-seat"><span class="tn">${tr.name}</span><span class="car num">${tr.car}号車</span><span class="seats num">${mine.join('・')}</span></div>
       <div class="t-foot">${tr.kind}・${tr.vehicle}・${dur(tr.min)}</div></div>
-      ${T.nozomiLine[key] ? `<div class="btns ticket-live"><a class="btn live-btn" href="#/ride/live/${key}">${ic('train')} いまどのへん？</a><a class="more" href="#/ride/live/${key}/full">全画面の地図</a>${key === 'nozomi28' ? xferLink(2, '新大阪での出方（3D）') : key === 'nozomi17' ? xferLink(3, '新大阪での乗り方（3D）') : ''}</div>` : ''}
+      ${T.liveLine[key] ? `<div class="btns ticket-live"><a class="btn live-btn" href="#/ride/live/${key}">${ic('train')} いまどのへん？</a><a class="more" href="#/ride/live/${key}/full">全画面の地図</a>${key === 'nozomi28' ? xferLink(2, '新大阪での出方（3D）') : key === 'nozomi17' ? xferLink(3, '新大阪での乗り方（3D）') : ''}</div>` : ''}
       <details class="ticket-more"><summary>座席表とメモ</summary>${seatMap(key)}<p class="note">${esc(tr.carNote)}</p>
       <div class="btns">${ext(tr.timetable, '最新の時刻表')}</div></details></article>`;
   }
@@ -2007,10 +2037,11 @@
     const dir = session.get('dir') || (ymd(now()) >= '2026-10-20' ? 'back' : 'go');
     const keys = Object.keys(T.trains).filter(k => T.trains[k].dir === dir);
     const tf = T.transfers[dir];
-    const lk = dir === 'go' ? 'nozomi28' : 'nozomi17', ltr = T.trains[lk];
+    /* いまどのへん？の札：この向きで乗る列車（いまどのへん？があるもの）を、乗る順に */
+    const lks = keys.filter(k => T.liveLine[k]);
     return `<div class="wrap">${topbar()}${phead('Trains', 'のりもの', '指定席券・乗り換え・車窓の楽しみを、この一枚に。')}
-      <a class="ride-live" href="#/ride/live/${lk}"><span class="rl-h"><span class="tl-tag">いまどのへん？</span><b>${ltr.name}</b><small class="num">${MD(ltr.date)} ${ltr.from} ${ltr.dep} → ${ltr.to} ${ltr.arr}</small></span>
-        ${routeMini(lk, { demo: liveNowKey() !== lk })}<span class="rl-t">新幹線の車内で、いまどこを走っているか、窓から何が見えるかが分かります。</span></a>
+      ${lks.map(lk => { const ltr = T.trains[lk]; return `<a class="ride-live" href="#/ride/live/${lk}"><span class="rl-h"><span class="tl-tag">いまどのへん？</span><b>${ltr.name}</b><small class="num">${MD(ltr.date)} ${ltr.from} ${ltr.dep} → ${ltr.to} ${ltr.arr}</small></span>
+        ${routeMini(lk, { demo: liveNowKey() !== lk })}<span class="rl-t">${lineKey(lk) === 'sanyo' ? '新幹線' : '特急'}の車内で、いまどこを走っているか、窓から何が見えるかが分かります。</span></a>`; }).join('')}
       <nav class="ride-idx" aria-label="のりものの一覧">${[['指定席券と座席表', '#/ride/' + keys[0]], ['駅の乗り換え（3D）', '#/ride/transfer'], ['駅の時刻表', '#/ride/tt'], ['車窓の城', '#/ride/castles'], ['駅弁', '#/ride/ekiben'], ['鉄道トリビア', '#/ride/trivia'], ['レンタカー', '#/stay/car']].map(([l, h]) => `<a href="${h}">${l}</a>`).join('')}</nav>
       <div class="segs" role="tablist"><button data-dir="go" class="${dir === 'go' ? 'on' : ''}">往路　10/17（土）</button><button data-dir="back" class="${dir === 'back' ? 'on' : ''}">復路　10/20（火）</button></div>
       ${!fam() ? `<p class="small">家族を選ぶと、自分の席だけが光ります。<button class="more" data-act="fam">家族を選ぶ</button></p>` : ''}
@@ -2045,7 +2076,7 @@
 
   function liveState(key, t = now()) {
     const tr = T.trains[key];
-    const st = T.nozomiLine[key].map(([name, pref, a, d, stop]) => ({ name, pref, arr: jst(tr.date, a || d), dep: jst(tr.date, d || a), stop: !!stop }));
+    const st = T.liveLine[key].map(([name, pref, a, d, stop]) => ({ name, pref, arr: jst(tr.date, a || d), dep: jst(tr.date, d || a), stop: !!stop }));
     if (t < st[0].dep) return { st, pos: 0, mode: 'before' };
     const last = st.length - 1;
     if (t >= st[last].arr) return { st, pos: last, mode: 'after' };
@@ -2055,21 +2086,27 @@
     }
     return { st, pos: 0, mode: 'before' };
   }
+  /* 路線ごとの列車（往路→復路の順）。いまどのへん？の「往路／復路」の切り替えに使う */
+  const lineKey = k => (T.trains[k] || {}).line || 'sanyo';
+  const livePair = k => Object.keys(T.liveLine).filter(x => lineKey(x) === lineKey(k)).sort((a, b) => (T.trains[a].dir === 'go' ? 0 : 1) - (T.trains[b].dir === 'go' ? 0 : 1));
   function viewLive(key, full) {
-    if (!T.nozomiLine[key]) key = 'nozomi28';
+    if (!T.liveLine[key]) key = 'nozomi28';
     const tr = T.trains[key], hasMap = window.LINE && window.LiveMap;
     /* 全画面：地図だけの専用画面（#/ride/live/のぞみ/full で直接開ける） */
     if (full && hasMap) return liveMapBlock(key, true);
-    return `<div class="wrap">${topbar()}<div class="lm-phead"><div><span class="eyebrow">Live</span><h1>${tr.name}は いまどのへん？</h1><p class="small muted num">${tr.from} ${tr.dep}発 → ${tr.to} ${tr.arr}着・${tr.vehicle}</p></div></div>
-      <div class="segs lm-segs"><button data-live="nozomi28" class="${key === 'nozomi28' ? 'on' : ''}">往路 のぞみ28号</button><button data-live="nozomi17" class="${key === 'nozomi17' ? 'on' : ''}">復路 のぞみ17号</button></div>
+    /* もう一方の路線（のぞみ ⇔ リレーかもめ）の、同じ向きの列車へ移るリンク */
+    const other = Object.keys(T.liveLine).find(x => lineKey(x) !== lineKey(key) && T.trains[x].dir === tr.dir);
+    const ot = other && T.trains[other];
+    return `<div class="wrap">${topbar()}<div class="lm-phead"><div><div class="lm-ph-top">${ot ? `<a class="lm-other" href="#/ride/live/${other}">${esc(ot.short)}（${esc(ot.from)}〜${esc(ot.to)}）へ ›</a>` : ''}<span class="eyebrow">Live</span></div><h1>${tr.name}は いまどのへん？</h1><p class="small muted num">${tr.from} ${tr.dep}発 → ${tr.to} ${tr.arr}着・${tr.vehicle}</p></div></div>
+      <div class="segs lm-segs">${livePair(key).map(k => `<button data-live="${k}" class="${key === k ? 'on' : ''}">${T.trains[k].dir === 'go' ? '往路' : '復路'} ${esc(T.trains[k].name)}</button>`).join('')}</div>
       ${hasMap ? liveMapBlock(key, false) : ''}
       <div id="live-board"></div>${hasMap ? '' : '<div id="live-alert"></div>'}<div id="live-tip"></div>
-      <ol class="line" id="line">${T.nozomiLine[key].map(([n, p, a, d, s]) => `<li class="${s ? 'stp' : ''} ${T.castles.some(c => c.station === n) ? 'castle' : ''}"><span class="lt num">${s ? (a && d && a !== d ? `${a}<br>${d}` : a || d) : a + '頃'}</span><span class="ld"></span><span class="ln">${n}</span><span class="lp">${p}</span></li>`).join('')}
+      <ol class="line" id="line">${T.liveLine[key].map(([n, p, a, d, s]) => `<li class="${s ? 'stp' : ''} ${T.castles.some(c => c.station === n) ? 'castle' : ''}"><span class="lt num">${s ? (a && d && a !== d ? `${a}<br>${d}` : a || d) : a + '頃'}</span><span class="ld"></span><span class="ln">${n}</span><span class="lp">${p}</span></li>`).join('')}
       <div class="fill" id="fill"></div>${PIN}</ol>
       <p class="note">大きい丸の停車駅は公式時刻表の時刻、小さい丸の通過駅は推定時刻（目安）です。実際の運行とはずれることがあります。</p>
       <div class="btns">${ext(tr.timetable, '公式の時刻表')}<a class="btn quiet" href="#/ride/${key}">指定席券へ</a></div>
       ${hasMap ? `<section class="sec">${secH('沿線の見どころ一覧', 'Along the line', 'spots')}
-        <p class="sec-lead">通る順に並べています。通り過ぎたものは薄く、次に来るものには印がつきます。「窓から」は車窓から見えるもの、ほかは線路の近くにある名所・名物です。押すと紹介が開きます。</p>
+        <p class="sec-lead">通る順に並べています。通り過ぎたものは薄く、次に来るものには印がつきます。「窓から」は車窓から見えるもの、「通過駅」はこの列車が止まらずに通る駅（時刻は目安）、ほかは線路の近くにある名所・名物です。押すと紹介が開きます。</p>
         <div id="lm-list" class="lm-list"></div></section>` : ''}</div>`;
   }
   /* ライブ地図（地図・現在地・お知らせ）。中身は livemap.js が描く */
@@ -2111,7 +2148,7 @@
     </section>`;
   function updateLive() {
     const line = $('#line'); if (!line) return;
-    const k = T.nozomiLine[location.hash.split('/')[3]] ? location.hash.split('/')[3] : 'nozomi28';
+    const k = T.liveLine[location.hash.split('/')[3]] ? location.hash.split('/')[3] : 'nozomi28';
     /* GPSで遅れを測っているときは、地図（livemap.js）と同じく遅れに合わせる：列車の印・次の駅・発車の時刻・まだ着いていない駅の時刻 */
     const t = now(), st0 = window.LiveMap && LiveMap.schedT ? LiveMap.schedT(k) : null;
     const dl = st0 != null && window.LiveMap ? LiveMap.delayMs() : 0, late = dl >= 2 * 6e4, gr = late ? 'ごろ' : '';
@@ -2147,8 +2184,8 @@
       <div class="ticker" aria-live="polite"><span style="animation:none;padding-left:0">${esc(b)}</span></div></section>`;
     const alert = T.castles.map(c => { const st = s.st.find(x => x.name === c.station); if (!st) return ''; const d = (+st.arr + dl - t) / 6e4; return d <= 6 && d >= -2 && s.mode !== 'before' && s.mode !== 'after' ? `<div class="alert">まもなく${c.name}。${tr.dir === 'go' ? '左' : '右'}の窓（${c.side}）をチェック</div>` : ''; }).join('');
     const al = $('#live-alert'); if (al && al.dataset.v !== alert) { al.innerHTML = alert; al.dataset.v = alert; }
-    const tips = T.nozomiTips[k].filter(tp => s.st.findIndex(x => x.name === tp.after) <= Math.floor(s.pos));
-    const tp = s.mode === 'before' ? T.nozomiTips[k][0] : tips[tips.length - 1];
+    const tl = T.liveTips[k] || [], tips = tl.filter(tp => s.st.findIndex(x => x.name === tp.after) <= Math.floor(s.pos));
+    const tp = s.mode === 'before' ? tl[0] : tips[tips.length - 1];
     $('#live-tip').innerHTML = tp && s.mode !== 'after' ? `<div class="tip"><span class="tg">${tp.tag}</span><b>${tp.title}</b><p>${tp.text}</p></div>` : '';
   }
 
@@ -2597,7 +2634,7 @@
     if (route === 'ride' && parts[1] === 'live') {
       requestAnimationFrame(updateLive);
       if (!fresh) scrollTo(0, y0);
-      if (window.LiveMap && $('#lm')) window.LiveMap.mount(T.nozomiLine[parts[2]] ? parts[2] : 'nozomi28', { esc, fmtHM, sheet, toast, gmap, ext, geoHelp, full: parts[3] === 'full', fresh });
+      if (window.LiveMap && $('#lm')) window.LiveMap.mount(T.liveLine[parts[2]] ? parts[2] : 'nozomi28', { esc, fmtHM, sheet, toast, gmap, ext, geoHelp, full: parts[3] === 'full', fresh });
     }
     liveKey = liveState0();
     // スクロール位置
@@ -2721,8 +2758,12 @@
       add(`${st.name}駅の時刻表`, `時刻表・${st.lines.map(l => TT.lines[l.line].name).join('・')}`, J([st.roma, '行き先：' + dests.filter(Boolean).join('・')]), null, null, { tt: st.id });
     });
     const n28 = T.nozomiLine.nozomi28, n17 = T.nozomiLine.nozomi17;
-    n28.forEach(([nm, pref, a, d, stop], k) => { const b = n17.find(x => x[0] === nm) || []; add(`${nm}駅（${pref}県）`, `いまどのへん？・のぞみが${stop ? '止まる' : '通る'}駅`, `往路 ${a || d}${stop ? '' : 'ごろ通過'}　復路 ${b[2] || b[3] || ''}${b[4] ? '' : 'ごろ通過'}`, '#/ride/live/nozomi28', `#line > li:nth-child(${k + 1})`); });
+    n28.forEach(([nm, pref, a, d, stop], k) => { const b = n17.find(x => x[0] === nm) || []; add(`${nm}駅（${pref}${pref === '大阪' ? '府' : '県'}）`, `いまどのへん？・のぞみが${stop ? '止まる' : '通る'}駅`, J([`往路 ${a || d}${stop ? '' : 'ごろ通過'}　復路 ${b[2] || b[3] || ''}${b[4] ? '' : 'ごろ通過'}`, ...((LINE.stationInfo || {})[nm] || []).slice(0, 2)]), '#/ride/live/nozomi28', `#line > li:nth-child(${k + 1})`); });
     ((window.LINE && LINE.spots) || []).forEach(sp => add(sp.name, `沿線の見どころ・${sp.pref}`, J([sp.kana, sp.sum, sp.genre]), '#/ride/live/nozomi28', '#spots'));
+    /* リレーかもめの駅と見どころ */
+    const r92 = T.liveLine.relay92 || [], r33 = T.liveLine.relay33 || [], RL = (window.LINES || {}).relay;
+    r92.forEach(([nm, pref, a, d, stop], k) => { const b = r33.find(x => x[0] === nm) || []; add(`${nm}駅（${pref}県）`, `いまどのへん？・リレーかもめが${stop && b[4] ? '止まる' : stop || b[4] ? '止まる（片道だけ）' : '通る'}駅`, J([`往路 ${a || d}${stop ? '' : 'ごろ通過'}　復路 ${b[2] || b[3] || ''}${b[4] ? '' : 'ごろ通過'}`, ...(((RL && RL.stationInfo) || {})[nm] || []).slice(0, 2)]), '#/ride/live/relay92', `#line > li:nth-child(${k + 1})`); });
+    ((RL && RL.spots) || []).forEach(sp => add(sp.name, `沿線の見どころ・${sp.pref}`, J([sp.kana, sp.sum, sp.genre]), '#/ride/live/relay92', '#spots'));
     Object.entries(T.trains).forEach(([k, tr]) => add(tr.name, `のりもの・${MD(tr.date)} ${tr.from} ${tr.dep} → ${tr.to} ${tr.arr}`, J([tr.kind, tr.vehicle]), `#/ride/${k}`, `#${k}`, { k: tr.ticket + ' 指定席 座席表 座席 きっぷ' }));
     T.castles.forEach((c, j) => add(c.name, `車窓の城・${c.station}駅`, J([c.side, c.text]), '#/ride/castles', `[data-sid="castle-${j}"]`));
     T.ekiben.forEach(([n, p, d], j) => add(n, '博多駅の駅弁', d, '#/ride/ekiben', `.bento > li:nth-child(${j + 1})`, { k: '駅弁 弁当' }));
@@ -2829,7 +2870,7 @@
   /* 並びは「まず入口（トップ）→ そこから使う機能」 */
   const INTRO = [
     { img: 'today', name: '今日の予定機能', text: '旅行中は、いまの予定と次に乗る列車を、開いてすぐに確かめることができます。' },
-    { v: 'live', name: 'いまどのへん？機能', text: '新幹線の車内で、いまどこを走っているか、窓から何が見えるかを地図で確かめることができます。' },
+    { v: 'live', name: 'いまどのへん？機能', text: '新幹線と特急リレーかもめの車内で、いまどこを走っているか、窓から何が見えるかを地図で確かめることができます。' },
     { v: 'xfer', name: '3D乗換機能', text: '博多と新大阪での乗り換えの道順を、立体の図を回しながらたどることができます。' },
     { img: 'shift', name: 'いまここ機能', text: '予定からずれたら、行程表で「いまここ」を押すと、この先の時刻を合わせて表示することができます。' },
     { img: 'qr', name: '予約・QR機能', text: 'ホテルの予約番号とチェックインQRを、合言葉を入れて表示することができます。' },

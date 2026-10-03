@@ -4,9 +4,10 @@
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
 <title>列車の印の書き出し</title>
-<!-- いまどのへん？の列車の印（assets/train-sprite.webp）を作るための道具。しおりの画面では使わない。
+<!-- いまどのへん？の列車の印（assets/train-sprite.webp・assets/train-787.webp）を作るための道具。しおりの画面では使わない。
      tools/make-train-sprite.js が Playwright で開き、36方向の絵を1枚の webp にまとめて保存する。
-     ブラウザで直接開くと、書き出した絵の見本を表示する（http://localhost:8080/tools/train-sprite.html など）。 -->
+     ブラウザで直接開くと、書き出した絵の見本を表示する（http://localhost:8080/tools/train-sprite.html など）。
+     ?car=787 で、リレーかもめの787系（濃いグレー＝黒い車体。2004年のリニューアルからの「ゴシックグレー」）。ロゴ・文字・キャラクターは描かない -->
 <style>
   body { margin: 16px; background: #e9e5dc; font: 13px sans-serif; }
   canvas { background: repeating-conic-gradient(#f4f1ea 0 25%, #ebe7de 0 50%) 0 0 / 16px 16px; }
@@ -25,12 +26,23 @@ const ELEV = 38 * Math.PI / 180;                              // 斜め上から
 /* 正射影の見える範囲（模型の単位）。地面の中心（車両の真ん中の真下）が、コマの上から 58% の所に来る */
 const VW = 3.2, VTOP = 1.72, VBOT = -1.25;
 
-/* ---- 車両の形：N700S風の丸い先頭。+X が鼻先 ---- */
-const L = 2.8, W = 0.9, H = 1.0, NOSE = 1.3, X0 = -L / 2;
+/* ---- 車種：n700s（のぞみ。白に青い線）／787（リレーかもめ。濃いグレーの車体に黒い窓） ---- */
+const CAR = new URLSearchParams(location.search).get('car') === '787' ? '787' : 'n700s';
+const K787 = CAR === '787';
+/* ---- 車両の形：+X が鼻先。N700S風は長い丸い先頭、787系は短く角ばった先頭（傾いた大きな前面ガラスの下に、ほぼ垂直の前面） ---- */
+const L = 2.8, W = 0.9, H = 1.0, NOSE = K787 ? 0.62 : 1.3, X0 = -L / 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function profile(s) {
   /* s：最後尾 0 → 鼻先 L。断面の上端・下端・半幅・角の丸さ */
   const t = clamp((s - (L - NOSE)) / NOSE, 0, 1);
+  if (K787) {
+    /* 屋根から前面ガラスが斜めに下り（t 0〜0.72）、その下はほぼ垂直に落ちる。幅は先端の近くまで保つ（箱形の車体） */
+    const top = t < 0.72 ? H - (H - 0.52) * Math.pow(t / 0.72, 1.25) : 0.52 - 0.3 * Math.pow((t - 0.72) / 0.28, 0.55);
+    const bot = 0.12 + 0.06 * Math.pow(t, 4);
+    const half = (W / 2) * Math.pow(1 - Math.pow(t, 6), 0.5);
+    const n = 8 - 2 * t;
+    return { t, top: Math.max(top, bot + 0.02), bot, half: Math.max(half, 0.004), n };
+  }
   const top = 0.26 + (H - 0.26) * Math.pow(1 - Math.pow(t, 1.7), 0.75);
   const bot = 0.13 + 0.12 * Math.pow(t, 3);
   const half = (W / 2) * Math.pow(1 - Math.pow(t, 2.6), 0.5);
@@ -42,6 +54,8 @@ function buildBody() {
   const pos = [], col = [], idx = [];
   const c = new THREE.Color();
   const WHITE = new THREE.Color('#f6f7f8'), BLUE = new THREE.Color('#2b5ea7'), GLASS = new THREE.Color('#34465e'), WIN = new THREE.Color('#56657a'), SKIRT = new THREE.Color('#dfe3e8');
+  /* 787系：濃いグレーの車体（屋根は少し明るく、光を受けて形が分かるように）、黒い窓と前面ガラス、前照灯 */
+  const D_BODY = new THREE.Color('#3a3e45'), D_ROOF = new THREE.Color('#4a4f57'), D_SKIRT = new THREE.Color('#2a2d32'), D_WIN = new THREE.Color('#121418'), D_GLASS = new THREE.Color('#0e1013'), D_LAMP = new THREE.Color('#fbf3d6');
   const sgnPow = (v, e) => Math.sign(v) * Math.pow(Math.abs(v), e);
   for (let i = 0; i <= SEG; i++) {
     const s = (i / SEG) * L, p = profile(s), yc = (p.top + p.bot) / 2, hy = (p.top - p.bot) / 2;
@@ -54,16 +68,28 @@ function buildBody() {
       pos.push(X0 + s, y, z);
       /* 色：白い車体、窓の帯、青い線、前の窓 */
       const hRel = y / H;
-      c.copy(WHITE);
-      if (hRel < 0.2) c.copy(SKIRT);
-      if (hRel > 0.3 && hRel < 0.4 && Math.abs(sy) < 0.97) c.copy(BLUE);
-      if (hRel > 0.435 && hRel < 0.465 && Math.abs(sy) < 0.97) c.copy(BLUE);
       const side = Math.abs(sz) > 0.55;
-      if (p.t === 0 && side && hRel > 0.58 && hRel < 0.72 && s > 0.12) {
-        const k = ((s - 0.12) % 0.3) / 0.3;
-        if (k < 0.76) c.copy(WIN);
+      if (K787) {
+        c.copy(D_BODY);
+        if (sy > 0.9 && p.t < 0.05) c.copy(D_ROOF);
+        if (hRel < 0.2) c.copy(D_SKIRT);
+        /* 側面の窓：黒い帯の中に窓（787系は窓まわりが黒い） */
+        if (p.t === 0 && side && hRel > 0.5 && hRel < 0.76 && s > 0.1) c.copy(D_WIN);
+        /* 前面ガラス：斜めの面の上のほう、左右いっぱい */
+        if (sy > 0.2 && p.t > 0.12 && p.t < 0.7 && Math.abs(sz) < 0.93) c.copy(D_GLASS);
+        /* 前照灯：先端の下のほう、左右に1つずつ */
+        if (p.t > 0.86 && hRel > 0.2 && hRel < 0.33 && Math.abs(sz) > 0.42 && Math.abs(sz) < 0.86) c.copy(D_LAMP);
+      } else {
+        c.copy(WHITE);
+        if (hRel < 0.2) c.copy(SKIRT);
+        if (hRel > 0.3 && hRel < 0.4 && Math.abs(sy) < 0.97) c.copy(BLUE);
+        if (hRel > 0.435 && hRel < 0.465 && Math.abs(sy) < 0.97) c.copy(BLUE);
+        if (p.t === 0 && side && hRel > 0.58 && hRel < 0.72 && s > 0.12) {
+          const k = ((s - 0.12) % 0.3) / 0.3;
+          if (k < 0.76) c.copy(WIN);
+        }
+        if (sy > 0.42 && p.t > 0.07 && p.t < 0.37 && Math.abs(sz) < 0.84 - (p.t - 0.07) * 0.8) c.copy(GLASS);
       }
-      if (sy > 0.42 && p.t > 0.07 && p.t < 0.37 && Math.abs(sz) < 0.84 - (p.t - 0.07) * 0.8) c.copy(GLASS);
       col.push(c.r, c.g, c.b);
     }
   }
@@ -73,9 +99,10 @@ function buildBody() {
   }
   /* 最後尾のふた（となりの車両とつながる面。平らに見えるよう、側面とは別の点で作る） */
   const base = pos.length / 3, p0 = profile(0);
-  for (let j = 0; j < RING; j++) { pos.push(pos[j * 3] + 0.001, pos[j * 3 + 1], pos[j * 3 + 2] * 0.999); col.push(0.86, 0.88, 0.9); }
+  const capC = K787 ? [0.2, 0.21, 0.23] : [0.86, 0.88, 0.9];
+  for (let j = 0; j < RING; j++) { pos.push(pos[j * 3] + 0.001, pos[j * 3 + 1], pos[j * 3 + 2] * 0.999); col.push(...capC); }
   const cen = pos.length / 3;
-  pos.push(X0, (p0.top + p0.bot) / 2, 0); col.push(0.86, 0.88, 0.9);
+  pos.push(X0, (p0.top + p0.bot) / 2, 0); col.push(...capC);
   for (let j = 0; j < RING; j++) idx.push(cen, base + j, base + (j + 1) % RING);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -88,12 +115,13 @@ function buildBody() {
 function model() {
   const grp = new THREE.Group();
   const geo = buildBody();
-  const body = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0 }));
+  const body = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: K787 ? 0.38 : 0.5, metalness: K787 ? 0.25 : 0 }));   // 787系は金属らしい少しのつや
   grp.add(body);
-  /* やわらかい輪郭線：法線の向きに少しふくらませた裏面を、薄い藍鼠で塗る */
+  /* やわらかい輪郭線：法線の向きに少しふくらませた裏面を塗る（N700S風は薄い藍鼠。787系は濃い車体が航空写真の上でも分かるよう、明るい灰色） */
   const hull = geo.clone(); const P = hull.attributes.position, Nn = hull.attributes.normal;
-  for (let i = 0; i < P.count; i++) P.setXYZ(i, P.getX(i) + Nn.getX(i) * 0.028, P.getY(i) + Nn.getY(i) * 0.028, P.getZ(i) + Nn.getZ(i) * 0.028);
-  grp.add(new THREE.Mesh(hull, new THREE.MeshBasicMaterial({ color: '#5d6878', side: THREE.BackSide })));
+  const OL = K787 ? 0.034 : 0.028;
+  for (let i = 0; i < P.count; i++) P.setXYZ(i, P.getX(i) + Nn.getX(i) * OL, P.getY(i) + Nn.getY(i) * OL, P.getZ(i) + Nn.getZ(i) * OL);
+  grp.add(new THREE.Mesh(hull, new THREE.MeshBasicMaterial({ color: K787 ? '#d9dde2' : '#5d6878', side: THREE.BackSide })));
   /* 最後尾の面：青い線と、となりの車両へつながる幌（進行方向が上のとき、いちばんよく見える面） */
   const p0 = profile(0), yc0 = (p0.top + p0.bot) / 2, hy0 = (p0.top - p0.bot) / 2, shp = new THREE.Shape();
   for (let j = 0; j <= 128; j++) {
@@ -103,10 +131,16 @@ function model() {
   }
   const tc = document.createElement('canvas'); tc.width = tc.height = 256;
   const tx = tc.getContext('2d'), V = y => 256 * (1 - (y - p0.bot) / (p0.top - p0.bot)), U = z => 256 * (z / W + 0.5);
-  tx.fillStyle = '#e9ecef'; tx.fillRect(0, 0, 256, 256);
-  tx.fillStyle = '#2b5ea7'; tx.fillRect(0, V(0.4 * H), 256, V(0.3 * H) - V(0.4 * H)); tx.fillRect(0, V(0.465 * H), 256, V(0.435 * H) - V(0.465 * H));
-  tx.fillStyle = '#b4bbc4'; tx.beginPath(); tx.roundRect(U(-0.19), V(0.86 * H), U(0.19) - U(-0.19), V(0.2 * H) - V(0.86 * H), 14); tx.fill();
-  tx.fillStyle = '#8b939e'; tx.beginPath(); tx.roundRect(U(-0.12), V(0.8 * H), U(0.12) - U(-0.12), V(0.24 * H) - V(0.8 * H), 8); tx.fill();
+  if (K787) {
+    tx.fillStyle = '#34373d'; tx.fillRect(0, 0, 256, 256);
+    tx.fillStyle = '#1c1e22'; tx.beginPath(); tx.roundRect(U(-0.19), V(0.86 * H), U(0.19) - U(-0.19), V(0.2 * H) - V(0.86 * H), 14); tx.fill();
+    tx.fillStyle = '#0f1013'; tx.beginPath(); tx.roundRect(U(-0.12), V(0.8 * H), U(0.12) - U(-0.12), V(0.24 * H) - V(0.8 * H), 8); tx.fill();
+  } else {
+    tx.fillStyle = '#e9ecef'; tx.fillRect(0, 0, 256, 256);
+    tx.fillStyle = '#2b5ea7'; tx.fillRect(0, V(0.4 * H), 256, V(0.3 * H) - V(0.4 * H)); tx.fillRect(0, V(0.465 * H), 256, V(0.435 * H) - V(0.465 * H));
+    tx.fillStyle = '#b4bbc4'; tx.beginPath(); tx.roundRect(U(-0.19), V(0.86 * H), U(0.19) - U(-0.19), V(0.2 * H) - V(0.86 * H), 14); tx.fill();
+    tx.fillStyle = '#8b939e'; tx.beginPath(); tx.roundRect(U(-0.12), V(0.8 * H), U(0.12) - U(-0.12), V(0.24 * H) - V(0.8 * H), 8); tx.fill();
+  }
   const cg = new THREE.ShapeGeometry(shp, 64), uv = cg.attributes.uv, cp = cg.attributes.position;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, cp.getX(i) / W + 0.5, (cp.getY(i) - p0.bot) / (p0.top - p0.bot));
   const ctex = new THREE.CanvasTexture(tc); ctex.colorSpace = THREE.SRGBColorSpace;

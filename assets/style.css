@@ -770,6 +770,8 @@ body.sim-on .sheet { max-height: calc(90vh - 50px - env(safe-area-inset-top)); }
 :root { --lm-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom)); }
 .lm-phead { padding-block: 4px 8px; }
 .lm-phead .eyebrow { font-size: calc(15px * var(--fs)); }
+.lm-ph-top::after { content: ""; display: block; clear: both; height: 0; }
+.lm-other { float: right; margin-top: 3px; font-size: calc(12.5px * var(--fs)); color: var(--ai); text-decoration: none; border-bottom: 1px solid currentColor; line-height: 1.3; white-space: nowrap; }   /* もう一方の列車（のぞみ ⇔ リレーかもめ）へ */
 .lm-phead h1 { font-family: var(--f-min); font-size: calc(21px * var(--fs)); line-height: 1.4; letter-spacing: .04em; }
 .lm-phead p { line-height: 1.5; }
 .lm-segs { margin: 2px 0 10px; }
@@ -875,7 +877,14 @@ body.sim-on .lm { scroll-margin-top: calc(58px + env(safe-area-inset-top)); }
 .lm-pin.lv-near .lm-pin-in { opacity: 1; }
 .lm-pin.lv-hot .lm-pin-in { opacity: 1; transform: scale(1.12); }
 .lm-pin.lv-hot .lm-pin-n { font-size: calc(13.5px * var(--fs)); color: var(--g); }
+/* 通過駅のピン：見どころより小さく。駅名は駅の点の横に出ているので、ピンには名前を出さない（押したときだけ）。
+   近づいた駅（先8km以内）だけ出し、遠い駅・通り過ぎた駅は出さない（線路沿いにピンが並びすぎないように） */
+.lm-pin.st .lm-pin-h { width: 16px; height: 16px; left: 2px; top: 6px; }
+.lm-pin.st .lm-pin-h .lm-sym { width: 10px; height: 10px; }
+.lm-pin.st .lm-pin-in::after { top: 21px; height: 9px; }
+.lm-pin.st.lv-far, .lm-pin.st.lv-mid, .lm-pin.st.lv-past { visibility: hidden; pointer-events: none; }
 .lm-train { width: 56px; height: 52px; background: url("train-sprite.webp?v=15") 0 0 / 336px 312px no-repeat; z-index: 6; pointer-events: none; transition: opacity .6s; }   /* トンネルの中は半透明（livemap.js の trainTunnel）。出入りでなめらかに */
+.lm-train[data-car="relay"] { background-image: url("train-787.webp?v=29"); }   /* リレーかもめは黒い（濃いグレーの）787系（tools/make-train-sprite.js --car 787） */
 
 /* 地図のすぐ下：次の停車駅と残り時間・速さ */
 .lm-panel { padding: 10px 0 8px; border-bottom: 1px solid var(--rule); }
@@ -950,6 +959,9 @@ body.lm-full-on .lm-tvcard.top { top: calc(64px + env(safe-area-inset-top)); rig
 .lm-near small { display: block; font-family: var(--f-hand); font-weight: 600; font-size: calc(12px * var(--fs)); color: var(--sumi-2); }
 .lm-near b { display: block; font-family: var(--f-min); font-size: calc(16px * var(--fs)); line-height: 1.4; }
 .lm-near-s { display: block; font-size: calc(12px * var(--fs)); color: var(--sumi-2); }
+/* 通過駅のお知らせ：「まもなく○○駅を通過」＋読み・府県＋ひとこと（2行まで） */
+.lm-pass small .num { font-family: var(--f-got); font-size: calc(11px * var(--fs)); }
+.lm-pass-d { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: calc(12.5px * var(--fs)); line-height: 1.5; margin-top: 2px; }
 .lm-dot { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--g); flex: none; }
 .lm-dot .lm-sym { width: 15px; height: 15px; }
 .lm-transfer { border: 1px solid var(--ai); color: var(--ai); background: var(--ai-tint); border-radius: 8px; padding: 8px 14px; font-size: calc(14px * var(--fs)); }
@@ -1058,6 +1070,8 @@ body.sim-on .lm-full .lm-tools, body.sim-on .lm-full .lm-back, body.sim-on .lm-f
 .lm-spots button { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 9px 0; border-bottom: 1px solid var(--rule); }
 .lm-sp b { font-family: var(--f-min); font-size: calc(15.5px * var(--fs)); line-height: 1.35; }
 .lm-sp em { font-style: normal; font-size: calc(10.5px * var(--fs)); color: var(--shu-ink); border: 1px solid var(--shu); border-radius: 3px; padding: 0 5px; margin-left: 6px; vertical-align: 2px; }
+.lm-sp em.st { color: var(--g); border-color: var(--g); }   /* 通過駅 */
+.lm-card-src { font-size: calc(12px * var(--fs)); color: var(--sumi-2); line-height: 1.7; margin-top: 8px; }   /* 通過駅の紹介の出典 */
 .lm-sp small { display: block; font-size: calc(12px * var(--fs)); color: var(--sumi-2); line-height: 1.5; }
 .lm-sd { font-size: calc(11.5px * var(--fs)); color: var(--sumi-3); white-space: nowrap; }
 .lm-spots li.passed { opacity: .42; }
