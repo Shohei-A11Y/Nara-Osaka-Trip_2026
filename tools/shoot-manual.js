@@ -18,7 +18,7 @@ const VW = 390, VH = 844, DPR = 2, OUT_W = 600;           // 390×844 で撮り�
 const jst = s => new Date(s + '+09:00');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-/* 項目ごとの撮り方。at：時計（固定）、url：開くページ、prep：開いたあとの操作、marks：吹き出しを付ける要素、clip：切り抜き */
+/* 項目ごとの撮り方。at：時計（固定）、url：開くページ、prep：開いたあとの操作、marks：吹き出しを付ける要素、clip：切り抜き、vh：画面の高さ（縦に長いものだけ。なければ844） */
 const SHOTS = {
   top: { at: '2026-10-10T10:00:00', url: '#/', wait: 1500,
     prep: async p => { await p.evaluate(() => { const rw = document.querySelector('.cover-rail').clientWidth + 'px'; document.querySelectorAll('.cover-train').forEach(t => { t.style.setProperty('--rw', rw); t.classList.remove('run'); void t.offsetWidth; t.classList.add('run'); }); }); await sleep(100);
@@ -31,15 +31,20 @@ const SHOTS = {
     prep: async p => { await p.evaluate(() => { localStorage.removeItem('shift'); document.querySelector('#it-2 .here').click(); }); await sleep(900);
       await p.evaluate(() => { const b = document.querySelector('.trip-sync'); scrollTo(0, b.getBoundingClientRect().top + scrollY - 76); }); await sleep(500); },
     marks: ['#it-2 .here', '.shift-bar', '#it-4 .est'] },
+  /* 思い出モード：おためしの「10/21 思い出モード」（おためし中だけの仮のスタンプ3か所）で撮る。本当の記録は使わない */
+  memories: { at: '2026-10-10T10:00:00', url: '#/', wait: 1500, vh: 1600,
+    prep: async p => { await p.click('[data-act="sim"]'); await sleep(600); await p.click('[data-scene="memories"]'); await sleep(1800); await p.evaluate(() => scrollTo(0, 0)); await sleep(400); },
+    marks: ['.cover.mem .mem-title', '.mem-total', '.mem-visit', '.mem-trip'] },
   search: { at: '2026-10-10T10:00:00', url: '#/map', wait: 1500,
     prep: async p => { await p.click('.topbar [data-act="toc"]'); await sleep(600); await p.fill('#srch', '駐車場'); await sleep(500); await p.evaluate(() => document.activeElement && document.activeElement.blur()); await sleep(200); },
     marks: ['.srch-box', '.srch-res li:first-child'], clip: { from: '.sheet', pad: 16 } },
-  ride: { at: '2026-10-10T10:00:00', url: '#/ride', wait: 1200,
+  ride: { at: '2026-10-10T10:00:00', url: '#/ride', wait: 1200, vh: 1500,   // リレーかもめのカードが増えて縦に長くなったので（16〜）、指定席券の頭まで入る高さで
     marks: ['.ride-live', '.ride-idx', '.segs', '.ticket-wrap'] },
   xfer: { at: '2026-10-10T10:00:00', url: 'transfer.html#s1', wait: 4000, page: true,
     marks: ['#back', '#scenes', '.route', '#play'] },
   live: { at: '2026-10-17T13:51:00', url: '#/ride/live/nozomi28', wait: 25000,
-    prep: async p => { await p.evaluate(() => { const e = document.querySelector('#lm'); scrollTo(0, e.getBoundingClientRect().top + scrollY - 8); }); await sleep(1500); },
+    /* 右上の操作ボタンは「操作」にまとめてあるので、開いてから撮る（13前半〜） */
+    prep: async p => { await p.evaluate(() => { const e = document.querySelector('#lm'); scrollTo(0, e.getBoundingClientRect().top + scrollY - 8); const t = document.querySelector('[data-lm="tools"]'); t && t.getAttribute('aria-expanded') !== 'true' && t.click(); }); await sleep(1500); },
     marks: ['.lm-train', '[data-lm="compass"]', '[data-lm="view"]', '[data-lm="full"]', '[data-lm="help"]', '#lm-panel', '#lm-spd'] },
   sim: { at: '2026-10-10T10:00:00', url: '#/', wait: 1500,
     prep: async p => { await p.evaluate(() => { document.querySelector('[data-try="nara"]').click(); }); await sleep(2500); await p.evaluate(() => scrollTo(0, 0)); await sleep(300); },
@@ -55,7 +60,7 @@ const SHOTS = {
       await p.evaluate(() => { const r = document.querySelector('.sheet [data-fs]').closest('.more-row'); r.scrollIntoView({ block: 'center' }); }); await sleep(400); },
     marks: ['.sheet .more-seg[aria-label="文字の大きさ"]', '.sheet .more-seg[aria-label="画面の明るさ"]'], clip: { around: '.sheet .more-rows', pad: 70 } },
   offline: { at: '2026-10-17T13:36:00', url: '#/ride/live/nozomi28', wait: 25000, offline: true,
-    prep: async p => { await p.evaluate(() => { const e = document.querySelector('#lm-panel'); scrollTo(0, e.getBoundingClientRect().top + scrollY - 330); }); await sleep(1500); },
+    prep: async p => { await p.evaluate(() => { const e = document.querySelector('#lm'); scrollTo(0, e.getBoundingClientRect().top + scrollY - 8); }); await sleep(1500); },
     marks: ['.lm-badge', '#lm-map'] },
   news: { at: '2026-10-10T10:00:00', url: '#/', wait: 1500,
     prep: async p => { await p.click('.cover .bell'); await sleep(700); },
@@ -104,7 +109,8 @@ const rectOf = (p, sel) => p.evaluate(sel => {
   const conv = await b.newPage();
   for (const [id, S] of Object.entries(SHOTS)) {
     if (only.length && !only.includes(id)) continue;
-    const ctx = await b.newContext({ viewport: { width: VW, height: VH }, deviceScaleFactor: DPR, isMobile: true, hasTouch: true, locale: 'ja-JP', timezoneId: 'Asia/Tokyo', ignoreHTTPSErrors: true,
+    const vh = S.vh || VH;
+    const ctx = await b.newContext({ viewport: { width: VW, height: vh }, deviceScaleFactor: DPR, isMobile: true, hasTouch: true, locale: 'ja-JP', timezoneId: 'Asia/Tokyo', ignoreHTTPSErrors: true,
       userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Mobile Safari/537.36' });
     if (process.env.FONT_VIA_CURL) await fontRoute(ctx);
     if (process.env.TILE_VIA_CURL) await tileRoute(ctx);
@@ -112,6 +118,7 @@ const rectOf = (p, sel) => p.evaluate(sel => {
       const set = (k, v) => localStorage.getItem(k) === null && localStorage.setItem(k, v);
       set('a2hs', '"never"'); set('fam', '"yamaguchi"'); set('guide:app', '1'); set('guide:livemap', '1'); set('guide:intro', '1'); set('guide:xfer', '1');
       sessionStorage.setItem('askedFam', '1');
+      sessionStorage.setItem('geoAskX', '1');   // 位置の情報の案内（乗車の時間帯に出る）は、写真に入れない
     });
     const p = await ctx.newPage();
     p.on('pageerror', e => console.error(id, e.message));
@@ -129,11 +136,11 @@ const rectOf = (p, sel) => p.evaluate(sel => {
     await p.addStyleTag({ content: '*{caret-color:transparent!important} .toast{display:none!important}' });
     if (S.prep) await S.prep(p);
     /* 切り抜き */
-    let clip = { x: 0, y: 0, width: VW, height: VH };
+    let clip = { x: 0, y: 0, width: VW, height: vh };
     if (S.clip && S.clip.h) clip.height = S.clip.h;
-    if (S.clip && S.clip.from) { const r = await rectOf(p, S.clip.from); clip.y = Math.max(0, r[1] - S.clip.pad); clip.height = VH - clip.y; }
-    if (S.clip && S.clip.around) { const r = await rectOf(p, S.clip.around); clip.y = Math.max(0, r[1] - S.clip.pad); clip.height = Math.min(VH - clip.y, r[3] - r[1] + S.clip.pad * 2); }
-    const png = await p.screenshot({ clip });
+    if (S.clip && S.clip.from) { const r = await rectOf(p, S.clip.from); clip.y = Math.max(0, r[1] - S.clip.pad); clip.height = vh - clip.y; }
+    if (S.clip && S.clip.around) { const r = await rectOf(p, S.clip.around); clip.y = Math.max(0, r[1] - S.clip.pad); clip.height = Math.min(vh - clip.y, r[3] - r[1] + S.clip.pad * 2); }
+    const png = await p.screenshot({ clip, timeout: 180e3 });   // 地図（WebGL）はソフトウェア描画だと時間がかかるので長めに待つ
     const ms = [];
     for (const sel of S.marks) {
       const r = await rectOf(p, sel);

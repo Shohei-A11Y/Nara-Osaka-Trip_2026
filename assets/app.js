@@ -642,10 +642,17 @@
       { t: '乗車の時間帯（発車の30分前〜到着の2時間後）は、位置の情報を許可していれば、ボタンを押さなくてもGPSで遅れを測り、「約○分遅れ」と出して、次の駅まで・到着・降車のお知らせ・駅一覧の時刻をずらします。時間帯が終わると、自動で止まります。' },
       { t: '位置の情報の許可は、端末ごとに一度だけ必要です。旅行の前に、いまどのへん？を開くと出る案内の「許可する」を押しておいてください（当日まではGPSを使いません）。許可していない端末には、乗車の時間帯に画面の上に「使う」が出ます。' },
       { t: '「GPSを止める」を押すと、そのタブのあいだは自動で使いません。それ以外の時間は、「現在地を使う」を押したときだけ使います。運行の状況は、地図の下の「JR公式の運行情報」で確かめられます。' },
-      { t: '地図の左上の「いま ○○県 ○○市」は、列車の位置から決めた、いまいる市区町村です（電波がなくても出ます）。地図の種類を「住所（市区町村）」にすると、市区町村を薄く色分けして、境界線と名前（ふりがな付き）を出します。境界線は、設定か地図の種類のメニューで、どの地図にも重ねられます。' },
+      { t: '地図の左上の「いま ○○県 ○○市」は、列車の位置から決めた、いまいる市区町村です（電波がなくても出ます）。地図の種類を「住所（市区町村）」（下は淡色の地図）か「住所（航空写真）」にすると、市区町村を色分けして、境界線と名前（ふりがな付き）を出します。色分けの濃さは、地図の種類のメニューと設定の「住所の地図の塗りの濃さ」のつまみで変えられ、いちばん左で塗りなし（境界線と名前だけ）になります。境界線は、設定か地図の種類のメニューで、どの地図にも重ねられます。' },
       { t: '立体のとき・航空写真・住所の地図では、市区町村の名前と、山（▲と標高）・川（線路が渡る所）・海や湾などの名前を、画面に向けて立てて出します。縮尺に合わせて数を絞り、見どころ・駅名と重なるときは省きます。設定の「地名」「自然地名」で消せます。' },
       { t: '止まらずに通る駅（通過駅）に近づくと、2分ほど前から「まもなく○○駅を通過」と、駅の読み・府県・ひとことが出ます。地図の駅のピンと、下の見どころ一覧からも紹介を開けます。' },
       { t: '写真はのぞみの画面です。リレーかもめ（武雄温泉〜博多）も同じ画面で、列車の印は黒い787系、時速の線は130kmでいっぱいになります。見出しの右上の「のぞみ（…）へ」「リレーかもめ（…）へ」で、もう一方の列車に移れます。' }] },
+    { id: 'memories', tab: 'トップ', where: '旅行が終わったあと（10/20 の最後の到着のあと）に開いた〈トップ〉の説明です。写真は、おためしモードの「10/21 思い出モード」の画面です。', ic: 'stamp', title: '思い出モード', sub: '旅行のあとの表紙とまとめ', pts: [
+      { m: 1, t: '旅行が終わると、表紙が「おかえりなさい」に変わります。' },
+      { m: 1, t: '移動した距離です。予定の行程から計算した往復の合計と、乗り物ごとの内訳を出します。' },
+      { m: 1, t: '行った場所です。スタンプを押した場所と日時を並べます（その端末で押したぶんだけ）。' },
+      { m: 1, t: '「旅行中のしおりを見る」で、今までどおりの表紙に戻ります。日程・のりもの・まっぷなどは、思い出モードのあいだも今までどおり使えます。' },
+      { t: '旅の数字（日数・乗った列車の本数・立ち寄った所）は、しおりの行程のデータから出しています。思い出メモを書いていれば、その入口も出ます。予算の決算が入っていれば「予算／実績を見る」も出ます。' },
+      { t: '写真は扱いません。「旅行中のしおりを見る」はタブを閉じるまでで、開き直すと思い出モードに戻ります。' }] },
     { id: 'search', tab: 'すべての画面', where: '右上の「目次」か、〈その他〉のいちばん下の「しおりの目次」から開く、目次と検索の説明です。', ic: 'search', title: '目次と検索', sub: 'あの情報はどこ？', pts: [
       { m: 1, t: 'ことばを入れると、しおりの中から探します。ひらがなでも探せます。電波がなくても使えます。' },
       { m: 1, t: '見つかった所を押すと、その場所へ移って、短く光ります。' },
@@ -686,7 +693,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 12;
+  const MAN_V = 33;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -799,7 +806,10 @@
       { id: 'loop', title: '10/18 17:12　環状線ドライブ', t: '2026-10-18T17:12', go: '#/trip/2' },
       { id: 'dotonbori', title: '10/19 9:50　道頓堀', t: '2026-10-19T09:50', go: '#/trip/3' },
       { id: 'nozomi17', title: '10/20 11:24　のぞみ17号・姫路の手前', t: '2026-10-20T11:24', go: '#/ride/live/nozomi17', pos: { track: 'nozomi17' } },
-      { id: 'after', title: '10/20 18:00　旅行のあと', t: '2026-10-20T18:00', go: '#/' }
+      { id: 'after', title: '10/20 18:00　旅行のあと', t: '2026-10-20T18:00', go: '#/' },
+      /* 思い出モード：おためし中だけの仮のスタンプ（3か所）を置いて開く。本当の記録（localStorage の stamps）は使わない */
+      { id: 'memories', title: '10/21 思い出モード', text: '表紙が「おかえりなさい」に変わり、旅のまとめ（移動した距離・旅の数字・行った場所）が出ます。スタンプは、おためし用に3か所押した状態です。', t: '2026-10-21T10:00', go: '#/',
+        stamps: { deer: '2026-10-18T14:52:00+09:00', todaiji: '2026-10-18T15:20:00+09:00', dotonbori: '2026-10-19T09:58:00+09:00' } }
     ]],
     ['雨の日の表示（降水確率を仮に80%にする）', [
       { id: 'rain2', title: '10/18（日）8:00　雨の予報の日（奈良）', text: '日程の見出しの下に「雨の日はこちら」が出ます。押すと屋内の候補の一覧です。', t: '2026-10-18T08:00', go: '#/trip/2', rain: 80 },
@@ -825,6 +835,8 @@
   const sceneById = id => SCENES.flatMap(([, l]) => l).find(s => s.id === id);
   function startScene(sc) {
     session.set('simRain', sc.rain ? String(sc.rain) : null);
+    if (sc.stamps) session.set('stamps-sim', JSON.stringify(sc.stamps));   // おためし中だけの記録（Stamps は Clock.active() のあいだ sessionStorage を見る）
+    session.set('memTrip', null);
     Clock.start(sc.t, { scenario: { id: sc.id, title: sc.title }, pos: sc.pos || null });
     if (sc.go && location.hash !== sc.go) location.hash = sc.go; else render();
     if (sc.tt) setTimeout(() => openTT({ leg: sc.tt, preview: false }), 350);
@@ -918,7 +930,7 @@
     const rk = !sim && window.LiveMap && LiveMap.rideKey ? LiveMap.rideKey() : null;
     const isLive = /^#\/ride\/live\//.test(location.hash);
     let html = '', kind = '';
-    if (rk && !session.get('geoAskX')) {
+    if (rk && !session.get('geoAskX') && !$('.cover.mem', app)) {   // 思い出モードの表紙（旅行のあと）では出さない
       if (geoNeed(st)) { kind = 'ride'; html = `<p class="ga-t"><b>遅れに合わせて動かすため、位置の情報を使います</b><span>いまどのへん？の時刻（次の駅まで・到着・降車のお知らせ）を、列車の遅れに合わせます。位置はこの端末の中だけで使います。</span></p><button class="btn fill ga-go" data-ga="go">使う</button>`; }
       else if (st === 'denied') { kind = 'ride denied'; html = `<p class="ga-t"><b>位置の情報が「拒否」になっています</b><span>いまどのへん？は時刻表どおりに動き、遅れには合わせられません。設定で許可し直せます。</span></p><button class="btn quiet ga-go" data-ga="help">許可し直す方法</button>`; }
     } else if (isLive && !sim && ymd(now()) <= GEO_PRE_END && !store.get('geoPre')) {
@@ -1310,8 +1322,95 @@
     return lk ? liveCard(lk) + nd + board() + tv + toolsNow() : nd + board() + tv + toolsNow() + nextTrainCard();
   }
 
+  /* ========== 思い出モード（旅行のあと） ==========
+     旅行が終わったら（phase() が after。最後の到着 T.end のあと）、表紙を「おかえりなさい」にして、すぐ下に旅のまとめを1枚出す。
+     「旅行中のしおりを見る」で、今までどおりの表紙に戻せる（このタブを閉じるまで。開き直すと思い出モード）。
+     まとめに出すのは、しおりのデータから出せる数字だけ。写真・家族の名前・予約番号は扱わない */
+  const memOn = () => phase() === 'after' && session.get('memTrip') !== '1';
+  /* 移動した距離（予定の行程から計算）。
+     新幹線（のぞみ）・リレーかもめ：いまどのへん？の線路のデータ（line-data.js）で、乗った駅から降りた駅までの線路の長さ
+     かもめ（新大村〜武雄温泉）：線路の形のデータがないので、駅と駅の直線距離（新大村駅の位置は地理院地図の駅の注記。武雄温泉はリレーかもめの線路のデータ）
+     レンタカー：行程表の区間ごとの距離（一般道・高速）の合計
+     電車（地下鉄・JR）：乗った駅と降りた駅の直線距離（駅の位置は、おでかけマップの位置のデータ） */
+  const MEM_STN = { 新大村: [32.93299, 129.95721] };   // 地理院地図（ベクトルタイル）の注記「新大村駅」の位置（2026-10-04 に確かめた）
+  const kmOf = d => { const m = /([\d.]+)\s*(km|m)/.exec(d || ''); return m ? +m[1] / (m[2] === 'm' ? 1000 : 1) : 0; };
+  const geoKm = (a, b) => { const r = Math.PI / 180, x = (b[1] - a[1]) * r * Math.cos((a[0] + b[0]) / 2 * r), y = (b[0] - a[0]) * r; return Math.hypot(x, y) * 6371; };
+  function stnLL(name) {
+    if (MEM_STN[name]) return MEM_STN[name];
+    for (const L of Object.values(window.LINES || {})) { const s = (L.stations || []).find(x => x[0] === name); if (s) return [s[1], s[2]]; }
+    const g = (T.geo || {})[name]; return g ? [g[0], g[1]] : null;
+  }
+  function memStats() {
+    const kinds = { nozomi: { name: '新幹線（のぞみ）', km: 0, n: 0, how: '線路の長さ' }, kamome: { name: '新幹線（かもめ）', km: 0, n: 0, how: '駅と駅の直線' }, relay: { name: '特急リレーかもめ', km: 0, n: 0, how: '線路の長さ' },
+      car: { name: 'レンタカー', km: 0, n: 0, how: '行程表の道のり' }, rail: { name: '電車（地下鉄・JR）', km: 0, n: 0, how: '駅と駅の直線' } };
+    let walk = 0, spots = new Set(), miss = 0;
+    T.days.forEach(d => d.items.forEach((it, i) => {
+      if (it.t === 'stop' && (it.type === 'spot' || it.type === 'food' || it.type === 'visit') && !it.minor) spots.add(it.to || it.name);
+      if (it.t !== 'move') return;
+      const from = (d.items[i - 1] || {}).name, to = (d.items[i + 1] || {}).name;
+      const tr = it.train && T.trains[it.train];
+      if (tr) {
+        const L = tr.line && (window.LINES || {})[tr.line], k = tr.line === 'sanyo' ? 'nozomi' : tr.line === 'relay' ? 'relay' : 'kamome';
+        let km = 0;
+        if (L) { const a = L.stations.find(x => x[0] === tr.from), b = L.stations.find(x => x[0] === tr.to); km = a && b ? Math.abs(b[3] - a[3]) : 0; }
+        else { const a = stnLL(tr.from), b = stnLL(tr.to); km = a && b ? geoKm(a, b) : 0; }
+        km ? (kinds[k].km += km) : miss++; kinds[k].n++;
+      } else if (it.mode === 'car' || it.mode === 'highway') { kinds.car.km += kmOf(it.dist); if (it.mode === 'car' && /レンタカー/.test(it.line) && i > 0 && d.items[i - 1].type === 'car') kinds.car.n++; }
+      else if (it.mode === 'metro' || it.mode === 'jr') { const a = stnLL(from), b = stnLL(to); a && b ? (kinds.rail.km += geoKm(a, b)) : miss++; kinds.rail.n++; }
+      else if (it.mode === 'walk') walk += kmOf(it.dist);
+    }));
+    const list = Object.values(kinds).filter(k => k.km > 0);
+    return { list, total: list.reduce((a, k) => a + k.km, 0), walk, trains: kinds.nozomi.n + kinds.kamome.n + kinds.relay.n, local: kinds.rail.n, spots: spots.size, miss };
+  }
+  const kmTxt = v => (v >= 100 ? Math.round(v).toLocaleString('ja-JP') : v >= 10 ? v.toFixed(0) : v.toFixed(1));
+  function memCover() {
+    return `<header class="cover mem"><div class="cover-in"><div class="cover-frame"></div>
+      <div class="cover-top"><span class="lat">Nara &amp; Osaka</span><span class="cover-acts">${bellBtn()}<button class="chip" data-act="fam">${ic('user')} ${esc(famName() || '家族を選ぶ')}</button></span></div>
+      <h1 class="cover-title mem-title"><span>おかえりなさい</span></h1>
+      <div class="cover-sub"><div class="kind">旅のおもいで</div><div class="place">奈良・大阪</div></div>
+      <div class="cover-bottom"><div class="dates"><small>2026 ／ 3泊4日</small>10.17 — 10.20</div>${COVER_DEER}</div>
+    </div></header>`;
+  }
+  function memSummary() {
+    const M = memStats(), st = Stamps.get(), got = T.stamps.filter(s => st[s.id]).sort((a, b) => String(st[a.id]).localeCompare(String(st[b.id])));
+    const memo = store.get('memo', {}), hasMemo = Object.values(memo || {}).some(v => String(v || '').trim());
+    const V = Budget.view(), hasAct = !!(V && V.act && V.act.rows);
+    const max = Math.max(1, ...M.list.map(k => k.km));
+    const cols = ['var(--ai)', 'var(--day1)', 'var(--day2)', 'var(--day3)', 'var(--day4)'];
+    return `<section class="dc mem-card" aria-label="旅のまとめ">${TAPE}
+      <span class="dc-stamp" aria-hidden="true"><small>帰着</small>10.20</span>
+      <p class="mem-k">旅のまとめ</p>
+      <div class="mem-total"><span>移動した距離</span><span class="mem-v"><b class="num">約 ${kmTxt(M.total)}</b><span class="u">km</span></span></div>
+      <div class="bars mem-bars">${M.list.map((k, i) => `<div class="bar" style="--c:${cols[i % cols.length]}"><span>${esc(k.name)}</span><i style="width:${(k.km / max * 100).toFixed(1)}%"></i><span class="v num">${kmTxt(k.km)}km</span></div>`).join('')}</div>
+      <p class="mem-note small muted">予定の行程から計算した、往復の合計です。新幹線（のぞみ）とリレーかもめは線路の長さ、かもめと電車は駅と駅の直線、レンタカーは行程表の道のりです。${M.walk ? `歩いた道のり（行程表の徒歩の区間だけ）は、ほかに約${kmTxt(M.walk)}km。` : ''}</p>
+      <dl class="mem-nums">
+        <div><dt>日数</dt><dd><b class="num">${T.days.length}</b>日<small>${T.days.length - 1}泊</small></dd></div>
+        <div><dt>新幹線・特急</dt><dd><b class="num">${M.trains}</b>本</dd></div>
+        <div><dt>地下鉄・JR</dt><dd><b class="num">${M.local}</b>本</dd></div>
+        <div><dt>立ち寄った所</dt><dd><b class="num">${M.spots}</b>か所<small>行程表から</small></dd></div>
+      </dl>
+      <div class="mem-visit"><p class="mem-sh">行った場所<span class="num">スタンプ ${got.length} / ${T.stamps.length}</span></p>
+        ${got.length ? `<ol class="mem-stamps">${got.map(s => `<li>${stampSvg(s, st[s.id])}<span><b>${esc(s.name)}</b><small class="num">${Stamps.when(st[s.id])}</small></span></li>`).join('')}</ol>`
+          : '<p class="small muted">この端末では、スタンプはまだ押されていません。スタンプ帳で、あとからでも押せます。</p>'}
+        <p class="small muted">スタンプの記録は、この端末に押したぶんだけです。</p></div>
+      <div class="btns mem-links">${hasMemo ? `<a class="btn" href="#/memo">${ic('pen')} 思い出メモを見る</a>` : `<a class="more" href="#/memo">思い出メモを書く</a>`}<a class="more" href="#/spot/stamps">スタンプ帳</a>${hasAct ? `<a class="more" href="#/money" data-bdgo="actual">予算／実績を見る</a>` : ''}</div>
+      <button type="button" class="btn mem-trip" data-act="memtrip">旅行中のしおりを見る<small>日程・のりもの・まっぷは、今までどおり使えます</small></button>
+    </section>`;
+  }
+
   function viewHome() {
     const f = fam(), tn = todayDay(), ph = phase();
+    if (memOn()) return `${memCover()}
+    <div class="wrap">
+      <div class="today-top" id="today-top">${memSummary()}</div>
+      ${latestSection()}
+      <section class="sec">${secH('4日間の旅', 'Itinerary')}
+        <div>${T.days.map(d => `<a class="dayrow" href="#/trip/${d.n}" style="--c:${DAYC(d.n)}">
+          <span class="dstamp"><small>DAY ${d.n}</small><b>${d.label.split('/')[1]}</b><em>${d.dow}</em></span>
+          <span><span class="dt">${d.label}（${d.dow}）｜${d.theme}</span><br><span class="tt">${esc(d.title)}</span></span><span class="go">→</span></a>`).join('')}</div>
+      </section>
+      <p class="foot"><span class="lat">Thank you for the trip.</span>家族旅行のしおり・2026<br><button class="more" data-act="sim" style="margin-top:10px">おためしモードで、旅行中の画面を試す</button></p>
+    </div>`;
     const got = Stamps.count();
     /* 旅行中は表紙を小さくして、いま必要な情報をすぐ下に出す。旅行前・後の表紙は、ときどき新幹線が横切る（CoverTrain。押すとすぐ走る） */
     const cover = ph === 'during' ? `<header class="cover slim"><div class="cover-in"><div class="cover-frame"></div>
@@ -1326,6 +1425,7 @@
     return `${cover}
     <div class="wrap">
       <div class="today-top" id="today-top">${todayTop()}</div>
+      ${ph === 'after' ? '<p class="mem-back"><button type="button" class="btn" data-act="memback">‹ 思い出モード（旅のまとめ）にもどる</button></p>' : ''}
       ${latestSection()}
       <nav class="shortcuts" aria-label="よく使う">
         <button data-act="qr">${ic('qr')}チェックイン<br>QR</button>
@@ -1406,7 +1506,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=32').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=33').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -2830,7 +2930,7 @@
     if (k !== liveKey) { const y = scrollY; render(); if (r !== 'trip') scrollTo(0, y); return; }
     if (r === 'home') {
       if (phase() === 'before') tickCountdown();
-      else { const b = $('#today-top'); if (b) { const html = todayTop(); if (b.dataset.h !== html) { b.innerHTML = html; b.dataset.h = html; applyRuby(b); } } }
+      else if (!memOn()) { const b = $('#today-top'); if (b) { const html = todayTop(); if (b.dataset.h !== html) { b.innerHTML = html; b.dataset.h = html; applyRuby(b); } } }
     }
     geoAsk();   // 「いまの予定」の札を描き直したあとに（札の中に置くため）
     if ($('#line')) updateLive();
@@ -2925,7 +3025,7 @@
     geoAsk();
     document.title = { home: '旅のしおり｜奈良・大阪 2026', map: 'まっぷ｜旅のしおり', trip: '旅程｜旅のしおり', ride: 'のりもの｜旅のしおり', food: 'ごはん｜旅のしおり', spot: 'おでかけ｜旅のしおり', stay: 'やど・くるま｜旅のしおり', sos: 'もしも｜旅のしおり', money: '予算｜旅のしおり', kanri: '予算の管理｜旅のしおり', help: '使い方｜旅のしおり', tips: '旅のワンポイント｜旅のしおり', trivia: 'トリビア｜旅のしおり', bag: '持ち物｜旅のしおり', memo: '思い出メモ｜旅のしおり' }[route] || '旅のしおり｜奈良・大阪 2026';
     if (route === 'map' && parts[1] === 'outing') document.title = 'おでかけマップ｜旅のしおり';
-    CoverTrain.mount(route === 'home' || !views[route] ? $('.cover:not(.slim)') : null);
+    CoverTrain.mount(route === 'home' || !views[route] ? $('.cover:not(.slim):not(.mem)') : null);
     if (route === 'home') loadWeather($('#weather'));
     if (route === 'trip') loadRain(T.days.find(d => d.n === (+parts[1] || todayN())) || T.days[0]);
     if (route === 'map') parts[1] === 'outing' ? mountOutingMap() : mountDriveMap();
@@ -3286,6 +3386,7 @@
       if (act === 'guide-live') replayGuide('live');
       if (act === 'intro') introSlides(true);
       if (act === 'news') newsSheet();
+      if (act === 'memtrip' || act === 'memback') { session.set('memTrip', act === 'memtrip' ? '1' : null); render(); scrollTo(0, 0); }
       if (act === 'lockforget') {
         if (!Lock.saved()) toast('この端末には、合言葉が入っていません');
         else { Lock.forget(); updateQrThumbs(); toast('この端末の合言葉を消しました。次に表示するときに、もう一度入れてください'); }
@@ -3298,7 +3399,7 @@
     }
     const q = s => e.target.closest(s);
     let el;
-    if ((el = q('.cover:not(.slim)')) && !q('button, a')) { CoverTrain.run(); return; }
+    if ((el = q('.cover:not(.slim):not(.mem)')) && !q('button, a')) { CoverTrain.run(); return; }
     if ((el = q('[data-sim]'))) {
       const k = el.dataset.sim;
       if (k === 'toggle') Clock.toggle();
@@ -3343,6 +3444,7 @@
       return;
     }
     if ((el = q('[data-kn]'))) { knAct(el); return; }
+    if ((el = q('[data-bdgo]'))) session.set('bdMode', el.dataset.bdgo);   // 思い出モードの「予算／実績を見る」：実績を開いた状態で（移動はリンクのまま）
     if ((el = q('[data-bdmode]'))) { session.set('bdMode', el.dataset.bdmode); const y = scrollY; render(); scrollTo(0, y); return; }
     if ((el = q('[data-del]'))) { const l = store.get('expenses', []); l.splice(+el.dataset.del, 1); store.set('expenses', l); const y = scrollY; render(); scrollTo(0, y); return; }
     if ((el = q('[data-bagdel]'))) { store.set('bagExtra', store.get('bagExtra', []).filter(x => x !== el.dataset.bagdel)); const y = scrollY; render(); scrollTo(0, y); }
@@ -3375,7 +3477,7 @@
   /* 予算（budget.json）が届いた・変わったら、予算のページを開いているときだけ描き直す */
   Budget.on(() => {
     const r = location.hash.replace(/^#\/?/, '').split('/')[0];
-    if (r === 'money') { const y = scrollY; render(); scrollTo(0, y); }
+    if (r === 'money' || (r === '' && memOn())) { const y = scrollY; render(); scrollTo(0, y); }   // 思い出モードの表紙：決算が入っていれば「予算／実績」へのリンクを出す
     if (r === 'kanri') knRefresh();
   });
   Budget.load();

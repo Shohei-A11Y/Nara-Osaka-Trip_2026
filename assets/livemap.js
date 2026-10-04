@@ -15,7 +15,7 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const MIN = 6e4;
   const MAPLIBRE = 'assets/vendor/maplibre-gl/maplibre-gl.mjs';
-  const LINE_URLS = { sanyo: 'assets/line-sanyo.json?v=32', relay: 'assets/line-relay.json?v=32' };
+  const LINE_URLS = { sanyo: 'assets/line-sanyo.json?v=33', relay: 'assets/line-relay.json?v=33' };
   const GPS_MAX_OFF = 0.5, GPS_MAX_ACC = 1000, GPS_MAX_AGE = 30e3, V_MAX = 330;
 
   /* ========== 線路の形（km ⇔ 緯度経度） ========== */
@@ -365,9 +365,12 @@
     photo: { name: '地理院 航空写真', url: GSI + 'seamlessphoto/{z}/{x}/{y}.jpg', max: 18, attr: GSI_ATTR },
     osm: { name: 'OpenStreetMap', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', max: 19, attr: OSM_ATTR },
     /* 住所：淡色の地図（under）の上に、市区町村の色分け・境界線・名前を重ねる（assets/area.json） */
-    addr: { name: '住所（市区町村）', under: 'pale' }
+    addr: { name: '住所（市区町村）', under: 'pale' },
+    /* 住所（航空写真）：航空写真（under）の上に、同じ色分け・境界線・名前を重ねる。立体の地形・省電力・電波が弱いときの扱いは、航空写真と同じ */
+    addrp: { name: '住所（航空写真）', under: 'photo' }
   };
   const rasterOf = id => (BASES[id] && BASES[id].under) || id;
+  const rasterNow = c => rasterOf(c.tmpBase || c.base);   // いま描いている下の地図（住所の地図なら、その下の淡色・航空写真）
   const PITCH_3D = 55;
   /* ---------- 3D地形（立体表示のときだけ） ----------
      標高は地理院の標高タイル（dem_png）。地理院独自の形式（x = R×2^16 + G×2^8 + B、x < 2^23 なら x×0.01 m、x > 2^23 なら (x − 2^24)×0.01 m、
@@ -408,7 +411,7 @@
   /* 航空写真の立体表示（傾き5°以上）で、省電力でなければ地形を盛り上げる。それ以外は平ら（トンネルは tunnelMode で、地形の有無に合わせて描き分ける） */
   function syncTerrain(c, to3d) {
     const m = c && c.map; if (!m || !c.loaded || !m.getSource('dem')) return;
-    const want = !c.eco && (c.tmpBase || c.base) === 'photo' && (to3d ?? m.getPitch() >= 5), has = !!m.getTerrain();
+    const want = !c.eco && rasterNow(c) === 'photo' && (to3d ?? m.getPitch() >= 5), has = !!m.getTerrain();
     if (want === has) return;
     try { m.setTerrain(want ? { source: 'dem', exaggeration: TERRAIN_X } : null); } catch { /* 地形が使えなくても、平らなまま続ける */ }
     tunnelMode(c);
@@ -629,7 +632,7 @@
      - 境界線（設定）：どの地図にも重ねる。府県境は太線、市区町村境は細線。隣と共有する線だけ描く（海岸は描かない）。座標から線として描くので、立体の地形の上でもくっきり
      - 地名・自然地名（設定）：画面に向かって立てた文字。placeLabels で見どころ・駅名のあとに置き、重なるものは出さない（市区町村名 → 自然地名の順）
      - 「いま ○○県○○市」：列車の位置が、どの市区町村の形に入るかで決める（電波は使わない） */
-  const AREA_URL = 'assets/area.json?v=32';
+  const AREA_URL = 'assets/area.json?v=33';
   let AREA = null, areaReq = null;
   const perf = { decode: 0, place: [] };   // 重さの記録（_debug で見る）：形の組み立て（ms）・名前の配置（ms、最近20回）
   const loadArea = () => areaReq || (areaReq = fetch(AREA_URL).then(r => r.json()).then(d => { const t0 = performance.now(); AREA = decodeArea(d); perf.decode = performance.now() - t0; return AREA; }).catch(() => { areaReq = null; return null; }));
@@ -669,16 +672,24 @@
   const AREA_COL = ['#efbe74', '#97cb7c', '#8db8e4', '#e79cba', '#bea8de', '#e3d36e'];
   const AREA_ATTR = '<a href="https://nlftp.mlit.go.jp/ksj/" target="_blank" rel="noopener">国土数値情報</a>';   // 行政区域データ（市区町村の形）
   const NAME_ATTR = '<a href="https://maps.gsi.go.jp/development/vt.html" target="_blank" rel="noopener">地理院ベクトルタイル</a>';   // 地名・山の標高
+  /* 住所の地図の塗りの濃さ（0〜200。100＝初めの濃さ。0＝塗りなしで、境界線と名前だけ）。地図の種類のメニューと設定のスライダーで変え、端末に覚える */
+  const FILL_MAX = 200;
+  const fillK = () => { const v = +ls.get('lm-fill'); return ls.get('lm-fill') != null && isFinite(v) ? Math.max(0, Math.min(FILL_MAX, v)) : 100; };
+  /* 縮尺で薄くしていく今の濃さ（淡色の上・暗い画面）に、スライダーの倍率をかける。航空写真の上は、写真に負けないよう少し濃いめから */
+  const fillOp = (c, k) => {
+    const f = k / 100, ph = rasterNow(c) === 'photo' ? 1.25 : 1, o = (l, d) => Math.min(0.95, (c.areaDark ? d : l) * f * ph);
+    return ['interpolate', ['linear'], ['zoom'], 9, o(0.4, 0.2), 14, o(0.28, 0.14), 16, o(0.16, 0.08)];
+  };
   function addAreaLayers(c) {
     const m = c.map; if (!m || !AREA || m.getSource('area')) return;
-    const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+    const dark = c.areaDark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const W = (p, mm) => ['interpolate', ['linear'], ['zoom'], 6, ['match', ['get', 't'], 'p', p[0], mm[0]], 11, ['match', ['get', 't'], 'p', p[1], mm[1]], 16, ['match', ['get', 't'], 'p', p[2], mm[2]]];
     try {
       m.addSource('area', { type: 'geojson', data: AREA.fill, attribution: AREA_ATTR, tolerance: 0.25 });
       m.addSource('bnd', { type: 'geojson', data: AREA.lines, attribution: AREA_ATTR, tolerance: 0.25 });
       m.addSource('plsrc', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, attribution: NAME_ATTR });   // 地名を出しているときだけ、出典に地理院ベクトルタイルを出すための空の層
       m.addLayer({ id: 'area-fill', type: 'fill', source: 'area', layout: { visibility: 'none' },
-        paint: { 'fill-color': ['match', ['get', 'c'], ...AREA_COL.slice(1).flatMap((x, i) => [i + 1, x]), AREA_COL[0]], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 9, dark ? 0.2 : 0.4, 14, dark ? 0.14 : 0.28, 16, dark ? 0.08 : 0.16] } }, 'line-case');
+        paint: { 'fill-color': ['match', ['get', 'c'], ...AREA_COL.slice(1).flatMap((x, i) => [i + 1, x]), AREA_COL[0]], 'fill-opacity': fillOp(c, fillK()) } }, 'line-case');
       m.addLayer({ id: 'bnd-case', type: 'line', source: 'bnd', layout: { visibility: 'none', 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': dark ? '#1b1a18' : '#ffffff', 'line-opacity': dark ? 0.7 : 0.85, 'line-width': W([3.4, 5, 6.6], [2, 2.8, 4]) } }, 'line-case');
       m.addLayer({ id: 'bnd', type: 'line', source: 'bnd', layout: { visibility: 'none', 'line-join': 'round', 'line-cap': 'round' },
@@ -688,18 +699,35 @@
     syncArea(c);
   }
   /* 住所の地図・境界線・地名の出し方を、いまの地図の種類・角度・設定に合わせる */
-  const isAddr = c => (c.tmpBase || c.base) === 'addr';
+  const isAddr = c => !!(BASES[c.tmpBase || c.base] || {}).under;
   /* 地名・自然地名は、地図の文字が寝る立体のとき・文字のない航空写真・住所の地図のときに出す（平面の標準・淡色・OSM は、地図に描かれた文字のまま） */
-  const plOn = c => !!AREA && !!c.map && (isAddr(c) || (c.tmpBase || c.base) === 'photo' || c.map.getPitch() >= 5);
+  const plOn = c => !!AREA && !!c.map && (isAddr(c) || rasterNow(c) === 'photo' || c.map.getPitch() >= 5);
   const showU = c => plOn(c) && (isAddr(c) || c.plU);
   const showY = c => plOn(c) && c.plY;
   function syncArea(c) {
     const m = c && c.map; if (!m || !m.getLayer('area-fill')) return;
     const set = (id, on) => { const v = on ? 'visible' : 'none'; try { m.getLayoutProperty(id, 'visibility') !== v && m.setLayoutProperty(id, 'visibility', v); } catch { /* noop */ } };
-    set('area-fill', isAddr(c));
+    set('area-fill', isAddr(c) && fillK() > 0);
+    try { m.setPaintProperty('area-fill', 'fill-opacity', fillOp(c, fillK())); } catch { /* noop */ }
     set('bnd-case', isAddr(c) || c.bnd); set('bnd', isAddr(c) || c.bnd);
     set('pl-attr', showU(c) || showY(c));
     layoutLabels();
+  }
+  /* 塗りの濃さのスライダー（地図の種類のメニューと設定の2か所。値は描いたあとで入れる：設定は描き直しのたびに中身を比べるので、値を中に書くと動かしている途中で描き直されるため） */
+  const fillCtl = (h = '住所の地図の塗りの濃さ') => `<div class="lm-fill"><p class="lm-fill-h"><span>${h}</span><output aria-hidden="true"></output></p><div class="lm-fill-r"><span>薄い</span><input type="range" min="0" max="${FILL_MAX}" step="10" data-lm="fill" aria-label="住所の地図の塗りの濃さ"><span>濃い</span></div></div>`;
+  const fillTxt = k => (k === 0 ? '塗りなし' : k === 100 ? 'ふつう' : Math.round(k) + '%');
+  function syncFillCtl(root, skip) {
+    const k = fillK();
+    $$('[data-lm="fill"]', root).forEach(x => {
+      if (x !== skip && +x.value !== k) x.value = k;
+      x.style.setProperty('--v', (k / FILL_MAX * 100) + '%'); x.setAttribute('aria-valuetext', fillTxt(k));
+      const o = x.closest('.lm-fill') && $('output', x.closest('.lm-fill')); o && (o.textContent = fillTxt(k));
+    });
+  }
+  function setFill(c, k, from) {
+    ls.set('lm-fill', k === 100 ? null : String(k));
+    syncArea(c);
+    [c.root, c.setEl].forEach(r => r && syncFillCtl(r, from));
   }
   /* 地図の上の1行「いま ○○県 ○○市」：列車の位置（推定・GPS とも線路の上の km）から。形のどれにも入らないときは出さない */
   function drawWhere(r) {
@@ -913,7 +941,7 @@
       /* 境界線（初めはオフ）・地名（市区町村。初めはオン）・自然地名（山・川・海。初めはオン）。どれも端末に覚える */
       bnd: ls.get('lm-bnd') === '1', plU: ls.get('lm-plu') !== '0', plY: ls.get('lm-ply') !== '0', pl: null, whereEl: null, whereOn: false
     };
-    if (c.eco) { c.pitch = 0; c.wakeWant = false; if (c.base === 'photo') c.base = 'pale'; }
+    if (c.eco) { c.pitch = 0; c.wakeWant = false; if (rasterOf(c.base) === 'photo') c.base = c.base === 'addrp' ? 'addr' : 'pale'; }
     c.passSt = passStations(key);   // この列車の通過駅（紹介・ピン・お知らせ・一覧）
     /* 地図の左上の「いま ○○県 ○○市」 */
     if (c.wrap) { c.whereEl = $('.lm-addr', c.wrap) || c.wrap.appendChild(Object.assign(document.createElement('p'), { className: 'lm-addr', hidden: true })); c.whereEl.dataset.v = ''; }
@@ -1005,10 +1033,12 @@
         syncArea(c); drawCtrl();
       }
     };
-    root.addEventListener('click', onClick); root.addEventListener('change', onChange);
-    c.onClick = onClick; c.onChange = onChange;
+    /* 塗りの濃さ：動かしている間も、その場で地図に出す */
+    const onInput = e => { if (e.target.matches('[data-lm="fill"]')) setFill(c, Math.max(0, Math.min(FILL_MAX, +e.target.value || 0)), e.target); };
+    root.addEventListener('click', onClick); root.addEventListener('change', onChange); root.addEventListener('input', onInput);
+    c.onClick = onClick; c.onChange = onChange; c.onInput = onInput;
     const list = $('#lm-list'); list && list.addEventListener('click', onClick);
-    c.off = () => { root.removeEventListener('click', onClick); root.removeEventListener('change', onChange); list && list.removeEventListener('click', onClick); };
+    c.off = () => { root.removeEventListener('click', onClick); root.removeEventListener('change', onChange); root.removeEventListener('input', onInput); list && list.removeEventListener('click', onClick); };
 
     /* --- 画面を自動で消さない --- */
     const wake = async () => {
@@ -1143,14 +1173,17 @@
       lg.innerHTML = `<button type="button" data-lm="legend" aria-expanded="${open}">凡例</button><ul${open ? '' : ' hidden'}>${Object.values(CATS).map(k => `<li><i style="--g:${k.color}"><svg class="lm-sym" viewBox="0 0 12 12" aria-hidden="true">${k.sym}</svg></i>${esc(k.name)}</li>`).join('')}<li><i class="vis" style="--g:#67625b"></i>白い縁＝窓から見える</li><li><i class="tun" aria-hidden="true"></i>トンネル（点線）</li><li><i class="bnd" aria-hidden="true"></i>境界（太い線＝府県）</li><li><i class="mt" aria-hidden="true">▲</i>山・<span class="lm-lg-w">川・海</span>の名前</li></ul>`;
     }
     const mn = $('.lm-basemenu', c.root);
-    if (mn) mn.innerHTML = `<p class="lm-menu-h">地図の種類</p>${Object.entries(BASES).map(([id, b]) => `<button type="button" data-base="${id}">${esc(b.name)}</button>`).join('')}<label class="lm-sw lm-menu-sw"><input type="checkbox" role="switch" data-lm="bnd"${c.bnd ? ' checked' : ''}><span>境界線を重ねる</span></label><p class="lm-menu-n">「住所」は市区町村を色分けし、境界線と名前を出します。立体の地形（山の盛り上がり）は、航空写真のときだけです。航空写真は通信量が多めで、電波が弱いときは標準地図に戻します。</p>`;
+    if (mn) mn.innerHTML = `<p class="lm-menu-h">地図の種類</p>${Object.entries(BASES).map(([id, b]) => `<button type="button" data-base="${id}">${esc(b.name)}</button>`).join('')}<label class="lm-sw lm-menu-sw"><input type="checkbox" role="switch" data-lm="bnd"${c.bnd ? ' checked' : ''}><span>境界線を重ねる</span></label>${fillCtl('住所の塗りの濃さ')}<p class="lm-menu-n">「住所」は市区町村を色分けし、境界線と名前を出します（塗りは上のつまみで薄く・濃く。いちばん左で塗りなし）。立体の地形（山の盛り上がり）は、航空写真のときだけです。航空写真は通信量が多めで、電波が弱いときは標準地図に戻します。</p>`;
+    mn && syncFillCtl(mn);
   }
   function toggleMenu(open) {
     const c = cur; if (!c) return;
     const mn = $('.lm-basemenu', c.root), b = $('[data-lm="base"]', c.root); if (!mn) return;
     const v = open ?? mn.hidden;
     mn.hidden = !v; b && b.setAttribute('aria-expanded', v);
-    if (v) $$('[data-base]', mn).forEach(x => { x.setAttribute('aria-pressed', x.dataset.base === (c.tmpBase || c.base)); x.disabled = c.eco && x.dataset.base === 'photo'; });
+    if (v) $$('[data-base]', mn).forEach(x => { x.setAttribute('aria-pressed', x.dataset.base === (c.tmpBase || c.base)); x.disabled = c.eco && rasterOf(x.dataset.base) === 'photo'; });
+    /* 住所の地図を見ているときは、塗りの濃さのつまみが見えるところまで送る（縦長の画面では、地図が低くてメニューが収まらないため） */
+    if (v) { mn.scrollTop = 0; const f = $('.lm-fill', mn); if (f && isAddr(c)) mn.scrollTop = Math.max(0, f.offsetTop + f.offsetHeight + 6 - mn.clientHeight); }
   }
 
   /* ---------- パネル（次の停車駅と残り時間・速さを先に） ---------- */
@@ -1513,7 +1546,9 @@
         <p class="lm-desc">到着モード：終点（${ui.esc(c.S.tr.end || dest)}）が地図に10秒ほど続けて映ったら、終点を画面の上の方にして、そのときの縮尺のまま始め、近づくにつれて拡大します（途中で縮小はしません）。見下ろす角度は変えません（立体なら斜めのまま、平面なら真上から）。この設定にかかわらず働き、着いて止まると元の表示に戻ります。</p>
         <p class="lm-set-h">地図に重ねるもの</p>
         <label class="lm-sw"><input type="checkbox" role="switch" data-lm="bnd"${c.bnd ? ' checked' : ''}><span>境界線（府県・市区町村）</span></label>
-        <p class="lm-desc">どの地図の種類にも、府県の境を太い線、市区町村の境を細い線で重ねます（地図の種類のメニューでも切り替えられます）。地図の種類を「住所（市区町村）」にすると、この設定にかかわらず、市区町村を薄く色分けして、境界線と名前（ふりがな付き）を出します。</p>
+        <p class="lm-desc">どの地図の種類にも、府県の境を太い線、市区町村の境を細い線で重ねます（地図の種類のメニューでも切り替えられます）。地図の種類を「住所（市区町村）」「住所（航空写真）」にすると、この設定にかかわらず、市区町村を色分けして、境界線と名前（ふりがな付き）を出します。</p>
+        ${fillCtl()}
+        <p class="lm-desc">住所の地図の色分けの濃さです。いちばん左にすると塗りなし（境界線と名前だけ）になります。地図の種類のメニューのつまみと同じ値で、この端末に覚えます。</p>
         <label class="lm-sw"><input type="checkbox" role="switch" data-lm="plu"${c.plU ? ' checked' : ''}><span>地名（市区町村の名前）</span></label>
         <label class="lm-sw"><input type="checkbox" role="switch" data-lm="ply"${c.plY ? ' checked' : ''}><span>自然地名（山・川・海など）</span></label>
         <p class="lm-desc">立体のとき・航空写真・住所の地図で、名前を画面に向けて立てて出します（平面の標準・淡色・OpenStreetMap は、地図に描かれた文字のままです）。山は▲と標高、川は線路が渡る所、海・湾・灘は青い文字です。縮尺に合わせて数を絞り、見どころ・駅名と重なるときは、市区町村名、自然地名の順に省きます。名前・位置・標高は、国土地理院の地図のデータで確かめたものです。</p>
@@ -1521,7 +1556,7 @@
         <label class="lm-sw"><input type="checkbox" role="switch" data-lm="eco"${c.eco ? ' checked' : ''}><span>省電力</span></label>
         <p class="lm-desc">地図の更新を10秒に1回にし、平面・淡色の地図にします。航空写真と「画面を自動で消さない」は使いません。GPSは、遅れを測るのに足りる1分に1回だけ使います。${c.hasBattery ? '電池が20%以下になると、自動でオンになります。' : ''}</p>
         ${c.full ? jrInfo() : ''}`;
-      if (c.setEl.dataset.v !== html) { c.setEl.innerHTML = html; c.setEl.dataset.v = html; }
+      if (c.setEl.dataset.v !== html) { c.setEl.innerHTML = html; c.setEl.dataset.v = html; syncFillCtl(c.setEl); }
     }
     drawTools();
   }
@@ -1529,7 +1564,7 @@
     const c = cur; if (!c || c.setEl) return;
     ui.sheet('お知らせと画面の設定', '<div class="lm-set lm-ctrl"></div>', (bg, close) => {
       c.setEl = $('.lm-set', bg); c.setClose = close;
-      bg.addEventListener('click', c.onClick); bg.addEventListener('change', c.onChange);
+      bg.addEventListener('click', c.onClick); bg.addEventListener('change', c.onChange); bg.addEventListener('input', c.onInput);
       drawCtrl();
       return () => { c.setEl = null; c.setClose = null; };
     });
@@ -1630,7 +1665,7 @@
     const stations = { type: 'FeatureCollection', features: L.stations.map(s => ({ type: 'Feature', properties: { stop: c.S.st.some(x => x.name === s[0] && x.stop) ? 1 : 0 }, geometry: { type: 'Point', coordinates: stnLL(s) } })) };
     /* 電波が弱い・通信を節約する設定なら、航空写真は使わない */
     const conn = navigator.connection;
-    if (c.base === 'photo' && conn && (conn.saveData || /(^|-)2g$/.test(conn.effectiveType || ''))) { c.tmpBase = 'std'; ui.toast('電波が弱いため、標準地図で表示します'); }
+    if (rasterOf(c.base) === 'photo' && conn && (conn.saveData || /(^|-)2g$/.test(conn.effectiveType || ''))) { c.tmpBase = c.base === 'addrp' ? 'addr' : 'std'; ui.toast(c.base === 'addrp' ? '電波が弱いため、住所の地図を淡色で表示します' : '電波が弱いため、標準地図で表示します'); }
     const baseNow = c.tmpBase || c.base;
     const rasterPaint = id => dark ? { 'raster-brightness-max': 0.42, 'raster-saturation': -0.4, 'raster-contrast': 0.1 } : id === 'photo' ? {} : { 'raster-saturation': -0.25 };
     const sources = {}, layers = [{ id: 'bg', type: 'background', paint: { 'background-color': col('--paper-2') } }];
@@ -1694,9 +1729,9 @@
     const errs = [];
     map.on('error', e => {
       if (e && e.error && /webgl|context/i.test(String(e.error.message || ''))) return fail('WebGL');
-      if (e && e.sourceId === 'photo' && (c.tmpBase || c.base) === 'photo') {
+      if (e && e.sourceId === 'photo' && rasterNow(c) === 'photo') {
         const t = Date.now(); errs.push(t); while (errs.length && t - errs[0] > 20e3) errs.shift();
-        if (errs.length >= 6 && navigator.onLine !== false) { c.tmpBase = 'std'; applyBase(); ui.toast('電波が弱いため、標準地図に戻しました'); }
+        if (errs.length >= 6 && navigator.onLine !== false) { const ap = (c.tmpBase || c.base) === 'addrp'; c.tmpBase = ap ? 'addr' : 'std'; applyBase(); ui.toast(ap ? '電波が弱いため、住所の地図を淡色に戻しました' : '電波が弱いため、標準地図に戻しました'); }
       }
     });
     /* 指で地図を動かしたら追いかけるのをやめる（「現在地」で戻る）。回したらその向きで止める。傾き・拡大はそのまま追いかける */
@@ -1991,7 +2026,7 @@
 
   function setBase(id, save) {
     const c = cur; if (!c || !BASES[id]) return;
-    if (c.eco && id === 'photo') { ui.toast('省電力中は航空写真を使いません'); return; }
+    if (c.eco && rasterOf(id) === 'photo') { ui.toast('省電力中は航空写真を使いません'); return; }
     c.base = id; c.tmpBase = null; save && ls.set('lm-base', id);
     applyBase();
   }
@@ -2033,7 +2068,7 @@
     c.eco = on; ls.set('lm-eco', on ? '1' : null);
     if (on) {
       ls.set('lm-eco-prev', JSON.stringify({ pitch: c.map ? Math.round(c.map.getPitch()) : c.pitch, base: c.base }));
-      if (c.base === 'photo' || c.base === 'std' || c.base === 'osm') { c.base = 'pale'; applyBase(); }
+      if (c.base === 'addrp') { c.base = 'addr'; applyBase(); } else if (c.base === 'photo' || c.base === 'std' || c.base === 'osm') { c.base = 'pale'; applyBase(); }
       setPitch(0);
       c.wakeWant = false; ss.set('lm-wake', null); c.wakeFn && c.wakeFn();
     } else {
@@ -2145,13 +2180,13 @@
   const RUN_Z = { sanyo: { d3: 12.0, flat: 11.2 }, relay: { d3: 12.5, flat: 11.7 } };
   const baseZoom = pitch => (RUN_Z[ln.id] || RUN_Z.sanyo)[pitch >= 5 ? 'd3' : 'flat'];
   /* 地図の縮尺の上限。MapLibre の縮尺 z では、256pxのタイルは z+1 の段を読む（地理院のタイルは18段まで → 縮尺17、OSM は19段まで → 縮尺18）。これより寄るとぼやける */
-  const MAX_Z = { std: 17, pale: 17, photo: 17, osm: 18, addr: 17 };
+  const MAX_Z = { std: 17, pale: 17, photo: 17, osm: 18, addr: 17, addrp: 17 };
   const maxZ = c => MAX_Z[c.tmpBase || c.base] || 17;
   /* 駅の縮尺（駅前の建物の外観や道が見分けられるくらい）。新大阪・新神戸・岡山・広島・小倉・博多で、立体・平面・地図の種類ごとに撮り比べて決めた。
      15で、航空写真は屋根の形・色・影で建物が1棟ずつ分かり、地図は建物の輪郭とまわりの道・近くの見どころまで入る（車窓と見比べやすい）。
      16以上は画面が駅の建物だけになり、地理院の標準・淡色の18段（縮尺16.5以上）は線路の斜線と大きな文字でごちゃつく。14.5では建物が小さい。
      立体（斜め）は遠くまで写るぶん、少し控える */
-  const STN_Z = { flat: { std: 15, pale: 15, photo: 15, osm: 15, addr: 15 }, d3: { std: 14.8, pale: 14.8, photo: 14.8, osm: 14.8, addr: 14.8 } };
+  const STN_Z = { flat: { std: 15, pale: 15, photo: 15, osm: 15, addr: 15, addrp: 15 }, d3: { std: 14.8, pale: 14.8, photo: 14.8, osm: 14.8, addr: 14.8, addrp: 14.8 } };
   /* 航空写真の細かさが足りない駅（寄るとぼやける所）は、ここで控える。駅名 → 縮尺の上限。
      のぞみの停車駅（新大阪〜博多）は、どこも18段の写真に細かさがあり（引き伸ばしでない）、控える駅はない。
      リレーかもめの停車駅（武雄温泉・江北・佐賀・新鳥栖・鳥栖・二日市・博多）も、16〜18段の写真を取り寄せて見比べ、どれも車や駐車場の白線まで写っていて（引き伸ばしでない）、控える駅はない */
@@ -2160,7 +2195,7 @@
   function stationZoom(c, pitch, name) {
     const b = c.tmpBase || c.base;
     let z = STN_Z[pitch >= 5 ? 'd3' : 'flat'][b] || 16;
-    if (b === 'photo' && PHOTO_CAP[name] != null) z = Math.min(z, PHOTO_CAP[name]);
+    if (rasterOf(b) === 'photo' && PHOTO_CAP[name] != null) z = Math.min(z, PHOTO_CAP[name]);
     if (c.eco) z = Math.min(z, ECO_Z);
     return Math.min(z, maxZ(c));
   }

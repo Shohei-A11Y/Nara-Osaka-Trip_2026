@@ -866,6 +866,22 @@ body.sim-on .lm-full .lm-addr { margin-top: calc(0px - env(safe-area-inset-top))
 .lm-menu-sw input::after { width: 18px; height: 18px; }
 .lm-menu-sw input:checked::after { transform: translateX(18px); }
 .lm-menu-n { font-size: calc(11.5px * var(--fs)); line-height: 1.6; color: var(--sumi-2); padding: 6px 6px 2px; border-top: 1px solid var(--rule); margin-top: 4px; }
+/* 住所の地図の塗りの濃さ（つまみ。左＝薄い・右＝濃い。いちばん左で塗りなし）。地図の種類のメニューと設定の両方 */
+.lm-basemenu { max-height: calc(100% - 20px - var(--at-h, 16px)); overflow-y: auto; overscroll-behavior: contain; }
+.lm-fill { padding: 8px 6px 4px; border-top: 1px solid var(--rule); margin-top: 4px; }
+.lm-set .lm-fill { padding: 10px 0 2px; margin-top: 0; }
+.lm-fill-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: calc(13.5px * var(--fs)); font-weight: 700; }
+.lm-set .lm-fill-h { font-size: calc(14.5px * var(--fs)); }
+.lm-fill-h output { font-size: calc(12px * var(--fs)); font-weight: 400; color: var(--sumi-2); white-space: nowrap; }
+.lm-fill-r { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.lm-fill-r span { flex: none; font-size: calc(11.5px * var(--fs)); color: var(--sumi-2); }
+.lm-fill-r input { flex: 1 1 auto; min-width: 0; height: 28px; margin: 0; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; --v: 50%; }
+.lm-fill-r input::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: linear-gradient(90deg, var(--shu) 0 var(--v), var(--paper-3) var(--v) 100%); border: 1px solid var(--rule); }
+.lm-fill-r input::-moz-range-track { height: 6px; border-radius: 999px; background: var(--paper-3); border: 1px solid var(--rule); }
+.lm-fill-r input::-moz-range-progress { height: 6px; border-radius: 999px; background: var(--shu); }
+.lm-fill-r input::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -9px; border-radius: 50%; background: #fff; border: 1px solid var(--sumi-3); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+.lm-fill-r input::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 1px solid var(--sumi-3); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+.lm-fill-r input:focus-visible { outline: 2px solid var(--shu); outline-offset: 2px; border-radius: 6px; }
 /* 凡例（開閉できる） */
 /* 自動ズームのボタン（右下）：「自動ズーム：オン／オフ」。左に小さな札（知らせ・いま寄っている理由）か「元の縮尺に戻す」 */
 .lm-zoom { position: absolute; z-index: 4; right: 10px; left: calc(var(--ov-w, 0px) + 84px); bottom: calc(var(--at-h, 16px) + 12px); display: flex; align-items: center; justify-content: flex-end; gap: 6px; pointer-events: none; }   /* 左下の出典（地理院タイル…）より上。左は凡例の分をあける */
@@ -1780,3 +1796,59 @@ body.sim-on.lm-full-on .geoask { top: calc(54px + env(safe-area-inset-top)); }
 .bd-dl > div { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: baseline; padding: 8px 2px; border-bottom: 1px solid var(--rule); font-size: calc(13.5px * var(--fs)); }
 .bd-dl dt small { display: block; font-size: calc(11px * var(--fs)); color: var(--sumi-2); }
 .bd-dl dd { text-align: right; font-weight: 700; white-space: nowrap; }
+
+/* =========================================================
+   思い出モード（旅行のあと）：表紙は藍の落ち着いた色に、縦書きの「おかえりなさい」。動き・点滅・音はなし
+   ========================================================= */
+.cover.mem { background-color: #2d4f6e; background-image: radial-gradient(rgba(255, 255, 255, .07) 1px, transparent 1.2px), linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(0, 0, 0, .12)); background-size: 9px 9px, 100% 100%; }
+.cover.mem .chip { color: #2d4f6e; }
+.cover.mem .cover-in { min-height: 380px; }
+.cover-title.mem-title { font-size: calc(38px * var(--fs)); letter-spacing: .22em; padding-top: 18px; }
+.cover.mem .cover-sub .kind { font-family: var(--f-min); letter-spacing: .3em; }
+.cover.mem .cover-bottom { padding-top: 14px; }
+.mem-back { margin: 14px 0 0; }
+.mem-back .btn { width: 100%; }
+.mem-card { padding-bottom: 18px; }
+.mem-card::after { background: #2d4f6e; }
+.mem-card .dc-stamp { border-color: #2d4f6e; color: #2d4f6e; box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 4px color-mix(in srgb, #2d4f6e 70%, transparent); transform: rotate(-8deg); }
+.mem-k { font-size: calc(13px * var(--fs)); font-weight: 700; color: var(--sumi-2); letter-spacing: .14em; padding-right: 72px; }
+.mem-total { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin-top: 10px; padding-right: 72px; }
+.mem-total > span:first-child { font-family: var(--f-min); font-weight: 700; font-size: calc(15px * var(--fs)); margin-right: 4px; }
+.mem-total .mem-v { white-space: nowrap; }
+.mem-total b { font-family: var(--f-lat); font-size: calc(38px * var(--fs)); line-height: 1; font-weight: 600; }
+.mem-total .u { font-size: calc(14px * var(--fs)); color: var(--sumi-2); }
+.mem-bars { margin: 14px 0 6px; }
+.mem-bars { gap: 10px; }
+.mem-bars .bar { grid-template-columns: 1fr auto; row-gap: 3px; }   /* 名前と距離を1行目、棒を2行目に（名前を切らない） */
+.mem-bars .bar > span:first-child { white-space: normal; }
+.mem-bars .bar i { grid-column: 1 / -1; grid-row: 2; height: 8px; }
+.mem-note { line-height: 1.7; }
+.mem-nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 14px 0 0; padding: 12px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); text-align: center; }
+.mem-nums div { min-width: 0; }
+.mem-nums dt { font-size: calc(11px * var(--fs)); color: var(--sumi-2); letter-spacing: .04em; line-height: 1.4; }
+.mem-nums dd { margin: 4px 0 0; font-size: calc(12px * var(--fs)); line-height: 1.2; }
+.mem-nums dd b { font-family: var(--f-lat); font-size: calc(26px * var(--fs)); font-weight: 600; margin-right: 1px; }
+.mem-nums dd small { display: block; font-size: calc(10.5px * var(--fs)); color: var(--sumi-3); margin-top: 2px; }
+.mem-visit { margin-top: 14px; }
+.mem-sh { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-family: var(--f-min); font-weight: 700; font-size: calc(15px * var(--fs)); margin-bottom: 8px; }
+.mem-sh span { font-family: var(--f-got); font-weight: 400; font-size: calc(12px * var(--fs)); color: var(--sumi-2); }
+.mem-stamps { list-style: none; padding: 0; margin: 0 0 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px 10px; }
+.mem-stamps li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mem-stamps .seal { flex: none; width: 44px; height: 44px; }
+.mem-stamps span { display: grid; min-width: 0; line-height: 1.35; }
+.mem-stamps b { font-size: calc(13.5px * var(--fs)); overflow-wrap: anywhere; }
+.mem-stamps small { font-size: calc(11.5px * var(--fs)); color: var(--sumi-2); }
+.mem-links { margin-top: 12px; flex-wrap: wrap; }
+.btn.mem-trip { display: grid; gap: 2px; width: 100%; margin-top: 14px; padding: 12px 14px; text-align: center; }
+.btn.mem-trip small { font-size: calc(11.5px * var(--fs)); font-weight: 400; color: var(--sumi-2); }
+@media (max-width: 374px) {
+  .mem-nums { grid-template-columns: repeat(2, 1fr); row-gap: 12px; }
+}
+:root[data-theme="dark"] .cover.mem { background-color: #1f3850; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cover.mem { background-color: #1f3850; } }
+:root[data-theme="dark"] .mem-card .dc-stamp { border-color: #8fb3d4; color: #8fb3d4; }
+:root[data-theme="dark"] .mem-card::after { background: #8fb3d4; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mem-card .dc-stamp { border-color: #8fb3d4; color: #8fb3d4; }
+  :root:not([data-theme="light"]) .mem-card::after { background: #8fb3d4; }
+}
