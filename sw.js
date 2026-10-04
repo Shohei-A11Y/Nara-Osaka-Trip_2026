@@ -1,5 +1,5 @@
 /* 電波が弱い場所でも見られるように、しおり本体を端末に保存する */
-const CACHE = 'shiori-v34';
+const CACHE = 'shiori-v35';
 const TILES = 'shiori-tiles';     // 地図タイル：見た分だけ保存（地図の種類は分けず、全体でおよそ300枚まで。古いものから消す。航空写真は保存しない）
 const TILE_MAX = 300;
 const ML = 'assets/vendor/maplibre-gl/';
@@ -7,13 +7,13 @@ const TH = 'assets/vendor/three/';      // 駅の乗り換え（3D）だけで�
 const MAN = 'assets/manual/';          // 使い方ページの写真（電波がなくても見られるように保存）
 const INTRO = 'assets/intro/';         // 機能紹介の動画と、止まった1コマ（電波がなくても再生できるように保存）
 const BUDGET = 'assets/budget.json';     // 予算：管理ページから公開側を直接直すので、?v= を付けずにいつも最新を取りに行く
-const FILES = ['./', 'index.html', 'assets/style.css?v=34', 'assets/sim.js?v=34', 'assets/data.js?v=34', 'assets/timetable.js?v=34', 'assets/timetable-data.js?v=34', 'assets/line-data.js?v=34', 'assets/guide.js?v=34', 'assets/news.js?v=34', 'assets/latest.js?v=34', 'assets/budget.js?v=34', 'assets/livemap.js?v=34', 'assets/app.js?v=34', 'assets/line-sanyo.json?v=34', 'assets/line-relay.json?v=34', 'assets/area.json?v=34', 'assets/drive-route.json?v=34', BUDGET,
+const FILES = ['./', 'index.html', 'assets/style.css?v=35', 'assets/sim.js?v=35', 'assets/data.js?v=35', 'assets/timetable.js?v=35', 'assets/timetable-data.js?v=35', 'assets/line-data.js?v=35', 'assets/guide.js?v=35', 'assets/news.js?v=35', 'assets/latest.js?v=35', 'assets/budget.js?v=35', 'assets/livemap.js?v=35', 'assets/app.js?v=35', 'assets/line-sanyo.json?v=35', 'assets/line-relay.json?v=35', 'assets/area.json?v=35', 'assets/drive-route.json?v=35', BUDGET,
   ML + 'maplibre-gl.mjs', ML + 'maplibre-gl-shared.mjs', ML + 'maplibre-gl-worker.mjs', ML + 'maplibre-gl.css',
-  'transfer.html', TH + 'three.module.min.js?v=34', TH + 'addons/controls/OrbitControls.js', TH + 'addons/renderers/CSS2DRenderer.js', TH + 'addons/utils/BufferGeometryUtils.js',
+  'transfer.html', TH + 'three.module.min.js?v=35', TH + 'addons/controls/OrbitControls.js', TH + 'addons/renderers/CSS2DRenderer.js', TH + 'addons/utils/BufferGeometryUtils.js',
   TH + 'addons/lines/Line2.js', TH + 'addons/lines/LineMaterial.js', TH + 'addons/lines/LineGeometry.js', TH + 'addons/lines/LineSegments2.js', TH + 'addons/lines/LineSegmentsGeometry.js',
-  'assets/train-sprite.webp?v=34', 'assets/train-787.webp?v=34',   // いまどのへん？の列車の印（36方向。のぞみ・リレーかもめ）
-  MAN + 'marks.json?v=34', ...['top', 'today', 'shift', 'search', 'ride', 'xfer', 'live', 'sim', 'qr', 'a2hs', 'fs', 'offline', 'news', 'intro', 'xhelp', 'memories'].map(k => MAN + k + '.webp?v=34'),
-  ...['live', 'xfer'].flatMap(k => [INTRO + k + '.mp4?v=34', INTRO + k + '.webp?v=34']),
+  'assets/train-sprite.webp?v=35', 'assets/train-787.webp?v=35',   // いまどのへん？の列車の印（36方向。のぞみ・リレーかもめ）
+  MAN + 'marks.json?v=35', ...['top', 'today', 'shift', 'search', 'ride', 'xfer', 'live', 'sim', 'qr', 'a2hs', 'fs', 'offline', 'news', 'intro', 'xhelp', 'memories'].map(k => MAN + k + '.webp?v=35'),
+  ...['live', 'xfer'].flatMap(k => [INTRO + k + '.mp4?v=35', INTRO + k + '.webp?v=35']),
   'assets/icon.svg', 'assets/icon-192.png', 'assets/icon-512.png', 'manifest.webmanifest'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE && k !== TILES).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
