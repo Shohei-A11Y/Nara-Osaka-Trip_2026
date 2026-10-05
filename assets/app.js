@@ -1050,7 +1050,9 @@
   const WX = c => c <= 1 ? ['晴', 'sun'] : c <= 3 ? ['曇', 'cloud'] : c <= 48 ? ['霧', 'cloud'] : c <= 67 || (c >= 80 && c <= 82) ? ['雨', 'rain'] : c <= 77 || (c >= 85 && c <= 86) ? ['雪', 'rain'] : ['雷', 'rain'];
   /* 例年の気温（気象庁の平年値。data.js の tips.temps）。2日目は奈良、ほかの日は大阪 */
   const normalTemp = d => { const t = ((T.tips && T.tips.temps) || []).find(x => x.name === (d.n === 2 ? '奈良' : '大阪')); return t ? `<div class="wn num">例年 最高${Math.round(t.hi)}°／最低${Math.round(t.lo)}°</div>` : ''; };
-  const wxNormalGrid = () => `<div class="weather">${T.days.map(d => `<div><div class="wd">${d.label}（${d.dow}）</div><div class="wk wait">予報<br>まち</div>${normalTemp(d)}<div class="wp">${d.n === 2 ? '奈良' : '大阪'}</div></div>`).join('')}</div>`;
+  /* くわしい予報へのリンク（予報が取れないときも出す） */
+  const WX_LINKS = '<p class="note wx-links">くわしい予報：<a class="ext" href="https://tenki.jp/forecast/6/30/6200/27100/10days.html" target="_blank" rel="noopener">大阪市（tenki.jp）</a>・<a class="ext" href="https://tenki.jp/forecast/6/32/6410/29201/10days.html" target="_blank" rel="noopener">奈良市（tenki.jp）</a>・<a class="ext" href="https://www.jma.go.jp/bosai/forecast/#area_type=offices&amp;area_code=270000" target="_blank" rel="noopener">大阪府（気象庁）</a>・<a class="ext" href="https://www.jma.go.jp/bosai/forecast/#area_type=offices&amp;area_code=290000" target="_blank" rel="noopener">奈良県（気象庁）</a></p>';
+  const wxNormalGrid = () => `<div class="weather">${T.days.map(d => `<div><div class="wd">${d.label}（${d.dow}）</div><div class="wk wait">予報<br>まち</div>${normalTemp(d)}<div class="wp">${d.n === 2 ? '奈良' : '大阪'}</div></div>`).join('')}</div>${WX_LINKS}`;
   /* 日の出・日の入り（国立天文台 暦計算室の値を、data.js に固定で入れてある。電波がなくても出る） */
   function sunBlock() {
     const S = T.sun; if (!S) return '';
@@ -1098,7 +1100,7 @@
         if (!w) return `<div><div class="wd">${d.label}（${d.dow}）</div><div class="wk wait">予報<br>まち</div>${normalTemp(d)}<div class="wp">${place}${simRain() ? `<br>降水 ${simRain()}%（おためし）` : ''}</div></div>`;
         const [k, cls] = WX(w.code), pp = rainPP(w);
         return `<div><div class="wd">${d.label}（${d.dow}）</div><div class="wk ${cls}">${k}</div><div class="wt num"><span class="hi">${Math.round(w.hi)}°</span> / <span class="lo">${Math.round(w.lo)}°</span></div><div class="wp">降水 ${pp ?? '-'}%${simRain() ? '（おためし）' : ''}・${place}</div></div>`;
-      }).join('')}</div><p class="note">予報：Open-Meteo。2日目は奈良、ほかの日は大阪の予報です。「例年」は気象庁の平年値（10月中旬）で、予報が出るまでの目安です。降水確率が50%以上の日は、日程に「雨の日はこちら」が出ます（2日目・3日目）。</p>`;
+      }).join('')}</div><p class="note">予報：Open-Meteo。2日目は奈良、ほかの日は大阪の予報です。「例年」は気象庁の平年値（10月中旬）で、予報が出るまでの目安です。降水確率が50%以上の日は、日程に「雨の日はこちら」が出ます（2日目・3日目）。</p>${WX_LINKS}`;
       window.__restoreScrollAgain && window.__restoreScrollAgain();
     } catch {
       el.innerHTML = `${wxNormalGrid()}
@@ -1506,7 +1508,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=35').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=36').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
