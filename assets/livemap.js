@@ -15,7 +15,7 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const MIN = 6e4;
   const MAPLIBRE = 'assets/vendor/maplibre-gl/maplibre-gl.mjs';
-  const LINE_URLS = { sanyo: 'assets/line-sanyo.json?v=36', relay: 'assets/line-relay.json?v=36' };
+  const LINE_URLS = { sanyo: 'assets/line-sanyo.json?v=37', relay: 'assets/line-relay.json?v=37' };
   const GPS_MAX_OFF = 0.5, GPS_MAX_ACC = 1000, GPS_MAX_AGE = 30e3, V_MAX = 330;
 
   /* ========== 線路の形（km ⇔ 緯度経度） ========== */
@@ -632,7 +632,7 @@
      - 境界線（設定）：どの地図にも重ねる。府県境は太線、市区町村境は細線。隣と共有する線だけ描く（海岸は描かない）。座標から線として描くので、立体の地形の上でもくっきり
      - 地名・自然地名（設定）：画面に向かって立てた文字。placeLabels で見どころ・駅名のあとに置き、重なるものは出さない（市区町村名 → 自然地名の順）
      - 「いま ○○県○○市」：列車の位置が、どの市区町村の形に入るかで決める（電波は使わない） */
-  const AREA_URL = 'assets/area.json?v=36';
+  const AREA_URL = 'assets/area.json?v=37';
   let AREA = null, areaReq = null;
   const perf = { decode: 0, place: [] };   // 重さの記録（_debug で見る）：形の組み立て（ms）・名前の配置（ms、最近20回）
   const loadArea = () => areaReq || (areaReq = fetch(AREA_URL).then(r => r.json()).then(d => { const t0 = performance.now(); AREA = decodeArea(d); perf.decode = performance.now() - t0; return AREA; }).catch(() => { areaReq = null; return null; }));

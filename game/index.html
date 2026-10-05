@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#d6504c">
+<meta name="description" content="新幹線の車内で解ける、JR・新幹線のクイズ（5章×10問）">
+<title>新幹線クイズ｜旅のしおり</title>
+<link rel="icon" href="../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/icon-192.png">
+<link rel="stylesheet" href="style.css?v=37">
+<script>
+  /* しおりで選んだ「画面の明るさ」と「文字の大きさ」を、このページにも使う（同じ端末の保存を読むだけ） */
+  try {
+    const t = JSON.parse(localStorage.getItem('theme'));
+    if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
+    if (JSON.parse(localStorage.getItem('fs')) === 'l') document.documentElement.dataset.fs = 'l';
+  } catch (e) { /* 読めなくても続ける */ }
+</script>
+</head>
+<body>
+<header class="bar">
+  <a class="bar-back" href="../">‹ しおりへ戻る</a>
+  <span class="bar-title">新幹線クイズ</span>
+</header>
+<main id="app" aria-live="polite"><noscript><p class="pad">このクイズを遊ぶには、JavaScriptを有効にしてください。</p></noscript><p class="pad muted" id="loading">読み込み中…</p></main>
+<script src="quiz.js?v=37"></script>
+</body>
+</html>
