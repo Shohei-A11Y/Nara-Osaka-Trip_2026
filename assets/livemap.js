@@ -15,7 +15,7 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const MIN = 6e4;
   const MAPLIBRE = 'assets/vendor/maplibre-gl/maplibre-gl.mjs';
-  const LINE_URLS = { sanyo: 'assets/line-sanyo.json?v=37', relay: 'assets/line-relay.json?v=37' };
+  const LINE_URLS = { sanyo: 'assets/line-sanyo.json?v=38', relay: 'assets/line-relay.json?v=38' };
   const GPS_MAX_OFF = 0.5, GPS_MAX_ACC = 1000, GPS_MAX_AGE = 30e3, V_MAX = 330;
 
   /* ========== 線路の形（km ⇔ 緯度経度） ========== */
@@ -131,16 +131,19 @@
       return [st[st.length - 1].arr, Infinity];
     };
     S.ahead = (km, x) => (x - km) * dir;   // 進行方向に見て、x が km より先なら正
-    /* 乗車の時間帯：発車の30分前〜到着の2時間後（GPSを受け付ける・自動で使う時間帯） */
-    S.ride = t => t >= st[0].dep - RIDE_PRE && t <= st[st.length - 1].arr + RIDE_POST;
+    /* 乗車の時間帯：発車の30分前〜到着の2時間後（GPSを受け付ける・自動で使う時間帯）。別の便に乗ったときは、発車の差の分ずらす */
+    S.ride = t => { const o = altOff(key); return t >= st[0].dep + o - RIDE_PRE && t <= st[st.length - 1].arr + o + RIDE_POST; };
     return (schedCache[key] = S);
   }
   const RIDE_PRE = 30 * MIN, RIDE_POST = 120 * MIN;
+  /* 予定の便に乗れず、別の便に乗ったとき：予定の便の発車との差（ミリ秒）。予定の便が、その分遅れて発車したとみなす（sim.js の AltRide） */
+  const altOff = key => (window.AltRide ? AltRide.off(key) : 0);
+  const altView = key => (window.AltRide ? AltRide.view(key) : T.trains[key]);
   /* いま乗車の時間帯にある列車（いまどのへん？がある列車の中から。なければ null）。
      乗り継ぐ日は、前の列車の「到着の2時間後まで」と次の列車の時間帯が重なるので、走っている列車（発車30分前〜到着）を先に選ぶ */
   const rideKey = (t = +Clock.now()) => {
     const ks = Object.keys(TT_LIVE);
-    return ks.find(k => { const S = sched(k); return t >= S.first.dep - RIDE_PRE && t <= S.last.arr; }) || ks.find(k => sched(k).ride(t)) || null;
+    return ks.find(k => { const S = sched(k), o = altOff(k); return t >= S.first.dep + o - RIDE_PRE && t <= S.last.arr + o; }) || ks.find(k => sched(k).ride(t)) || null;
   };
   const ECO_GPS = 60e3;   // 省電力中は、位置を60秒に1回だけ取る（遅れを測るのに足りる最低限）
 
@@ -175,17 +178,22 @@
     /* 開き直したときは、同じ乗車のあいだに測った遅れから始める。
        終点に着いたあと（遅れを足した到着の時刻を過ぎてから）開き直したときは、着いたものとして、その遅れのままにする
        （乗り継ぐ日は、次の列車の乗車の時間帯に入ると画面が組み直される。着いたことを忘れると、組み直した時刻に着いたとみなして遅れが増える） */
-    const mem = PrefWatch.getDelay(key), now0 = +Clock.now();
+    const mem = PrefWatch.getDelay(key), now0 = +Clock.now(), off0 = altOff(key);
     if (mem && S.ride(now0)) {
       tk.delay = tk.base = mem.d; tk.delayAt = mem.at || now0;
       if (now0 >= S.last.arr + mem.d) tk.hold = { i: lastI, arrAt: S.last.arr + mem.d, at: now0, done: true };
+    } else if (off0 && S.ride(now0)) {
+      /* 別の便に乗ったとき：発車の差を遅れの初めの値にする（そのあとはGPSで補正） */
+      tk.delay = tk.base = off0; tk.delayAt = now0;
+      if (now0 >= S.last.arr + off0) tk.hold = { i: lastI, arrAt: S.last.arr + off0, at: now0, done: true };
     }
     /* 停車駅 i に止まっていて、時刻 t のときの遅れ（いつ発車するとみなすか） */
     const holdDelay = (h, t) => {
       const st = S.st[h.i];
       if (h.i === lastI) return h.arrAt != null ? h.arrAt - st.arr : tk.delay;
       const dwell = Math.min(st.dep - st.arr, MIN);
-      return Math.max(st.dep, h.arrAt != null ? h.arrAt + dwell : -Infinity, t) - st.dep;
+      /* 始発駅では、別の便の発車時刻より前には発車しないとみなす */
+      return Math.max(st.dep + (h.i === 0 ? Math.max(0, altOff(key)) : 0), h.arrAt != null ? h.arrAt + dwell : -Infinity, t) - st.dep;
     };
     tk.onFix = pos => {
       if (!pos) return;
@@ -272,7 +280,7 @@
     const active = () => {
       const t = +Clock.now();
       for (const key of Object.keys(TT_LIVE)) {
-        const S = sched(key), d = mem && mem.key === key ? mem.d : 0;
+        const S = sched(key), d = mem && mem.key === key ? mem.d : altOff(key);
         if (t >= S.first.dep + d && t < S.last.arr + d) return { S, d, t };
       }
       return null;
@@ -320,7 +328,9 @@
     setInterval(tick, 1000);
     Clock.on(kind => { if (kind === 'tick') tick(); else if (kind === 'start' || kind === 'seek' || kind === 'stop') { base = null; pend = null; fired.clear(); if (kind !== 'seek') { mem = null; try { sessionStorage.removeItem(KEY); } catch { /* noop */ } } } });
     document.addEventListener('visibilitychange', () => { base = null; pend = null; if (document.visibilityState === 'hidden') hide(true); });
-    return { setDelay, getDelay, _tick: tick, _state: () => ({ base, pend, mem }) };
+    /* 別の便に乗った・予定の便に戻したときは、その列車で測った遅れを忘れる（新しい発車時刻から測り直す） */
+    const clear = key => { if (mem && mem.key === key) { mem = null; try { sessionStorage.removeItem(KEY); } catch { /* noop */ } } };
+    return { setDelay, getDelay, clear, _tick: tick, _state: () => ({ base, pend, mem }) };
   })();
 
   /* ========== 表示のための小道具 ========== */
@@ -632,7 +642,7 @@
      - 境界線（設定）：どの地図にも重ねる。府県境は太線、市区町村境は細線。隣と共有する線だけ描く（海岸は描かない）。座標から線として描くので、立体の地形の上でもくっきり
      - 地名・自然地名（設定）：画面に向かって立てた文字。placeLabels で見どころ・駅名のあとに置き、重なるものは出さない（市区町村名 → 自然地名の順）
      - 「いま ○○県○○市」：列車の位置が、どの市区町村の形に入るかで決める（電波は使わない） */
-  const AREA_URL = 'assets/area.json?v=37';
+  const AREA_URL = 'assets/area.json?v=38';
   let AREA = null, areaReq = null;
   const perf = { decode: 0, place: [] };   // 重さの記録（_debug で見る）：形の組み立て（ms）・名前の配置（ms、最近20回）
   const loadArea = () => areaReq || (areaReq = fetch(AREA_URL).then(r => r.json()).then(d => { const t0 = performance.now(); AREA = decodeArea(d); perf.decode = performance.now() - t0; return AREA; }).catch(() => { areaReq = null; return null; }));
@@ -1192,6 +1202,7 @@
     const c = cur, { S } = c, { esc, fmtHM } = ui;
     const at = x => fmtHM(new Date(Math.round(x / MIN) * MIN));
     const late2 = r.gpsDelay && r.delay >= 2 * MIN;
+    const off = altOff(S.key), d0 = S.first.dep + off;   // 別の便に乗ったときは、その便の発車時刻を「定刻」として扱う
     const tun = r.mode === 'running' && tunnelAt(r.km);
     const gn = c.gpsWant && !simTrack() && r.src !== 'gps' ? { far: 'GPSの位置が線路から離れているため、時刻表から推定しています。', time: '列車の運行時間ではないため、GPSの位置は使っていません。', acc: 'GPSの精度が低いため、時刻表から推定しています。', old: 'GPSの位置が古いため、時刻表から推定しています。' }[c.tk.reject] || '' : '';
     let head, where = '';
@@ -1200,7 +1211,7 @@
       const m = minsTo(S.first.dep + r.delay, r.now);
       head = `<b>${S.first.name}</b>駅で発車を待っています`;
       /* 遅れて、定刻を過ぎても駅にいるとき：遅れの分数は横の札に出す */
-      where = late2 && m <= 0 ? `定刻${at(S.first.dep)}発・遅れて発車を待っています` : m < 24 * 60 ? `${at(S.first.dep)}発・あと${m >= 60 ? Math.floor(m / 60) + '時間' : ''}${m % 60}分` : `${S.tr.date.slice(5).replace('-', '/').replace(/^0/, '')} ${at(S.first.dep)}に発車します`;
+      where = r.delay - off >= 2 * MIN && r.gpsDelay && m <= 0 ? `定刻${at(d0)}発・遅れて発車を待っています` : m < 24 * 60 ? `${at(d0)}発・あと${m >= 60 ? Math.floor(m / 60) + '時間' : ''}${m % 60}分` : `${S.tr.date.slice(5).replace('-', '/').replace(/^0/, '')} ${at(d0)}に発車します`;
     } else if (r.mode === 'after') {
       head = `<b>${S.last.name}</b>に到着しました`;
     } else {
@@ -1211,10 +1222,12 @@
       if (r.mode === 'stopped') { const st = S.st[r.i]; where = `${st.name}駅に停車中・${at(st.dep + r.delay)}発${late2 ? 'ごろ' : ''}`; }
       else if (!c.whereOn || c.root.classList.contains('lm-nomap')) where = whereHTML(muniAt(r.km));   // ふだんは地図の左上の「いま ○○」に出すので、ここには出さない（地図がない・形の外のときだけ）
     }
-    const late = late2 ? `<span class="lm-late">約${Math.round(r.delay / MIN)}分遅れ</span>` : '';
+    /* 遅れの札：別の便に乗ったときは、その便の発車時刻からの遅れ */
+    const late = late2 && r.delay - off >= 2 * MIN ? `<span class="lm-late">約${Math.round((r.delay - off) / MIN)}分遅れ</span>` : '';
     const badge = `<span class="lm-badge ${r.src}">${r.src === 'gps' ? (simTrack() ? 'GPS（おためし）' : 'GPS') : '時刻表から推定'}</span>`;
     /* 遅れを反映していない（時刻表どおりの）ときは、そう分かる一言を小さく */
-    const tt = !r.gpsDelay && r.mode !== 'after' && !gn
+    const tt = off && r.src !== 'gps' && r.mode !== 'after' && !gn ? `<p class="lm-ttnote">乗った便（${esc(altView(S.key).name)}）の発車時刻に合わせた位置です（予定の便を${Math.round(off / MIN)}分遅らせた目安）。${c.gpsWant ? 'GPSの位置が届くと、さらに合わせます。' : ''}</p>`
+      : !r.gpsDelay && r.mode !== 'after' && !gn
       ? `<p class="lm-ttnote">${Clock.active() && !simTrack() ? 'おためし中は、時刻表どおりの位置です。' : c.full ? '時刻表どおりの位置です（遅れは反映していません）。' : c.gpsWant ? '時刻表どおりの位置です。GPSの位置が届くと、遅れに合わせます。' : '時刻表どおりの位置です。「現在地を使う」を押すと、GPSで遅れに合わせます。'}</p>` : '';
     /* 走行中・停車中は「いまどこか（現在）→ 次はどこか」の順。発車前と到着後は、今までどおり見出しが先 */
     const moving = r.mode === 'running' || r.mode === 'stopped';
@@ -1405,14 +1418,15 @@
     if (r.mode !== 'before' && toArr <= 20 * MIN) {
       const nextTr = nextTrain();
       if (nextTr) {
-        const dep = jst(nextTr.date, nextTr.dep), m = minsTo(dep, r.now), w = Math.round((dep - S.last.arr) / MIN), wr = Math.round((dep - eta) / MIN);
-        if (m >= 0) out.push(`<div class="lm-transfer num"><b>${esc(nextTr.name)} ${nextTr.dep}発</b>まで あと${m}分（乗り換え${w}分${r.gpsDelay && r.delay >= 2 * MIN ? `→遅れのため約${Math.max(0, wr)}分` : ''}）</div>`);
+        const dep = jst(nextTr.date, nextTr.dep), m = minsTo(dep, r.now), w = Math.round((dep - S.last.arr - altOff(S.key)) / MIN), wr = Math.round((dep - eta) / MIN);
+        if (m >= 0) out.push(`<div class="lm-transfer num"><b>${esc(nextTr.name)} ${nextTr.dep}発</b>まで あと${m}分（乗り換え${w}分${r.gpsDelay && r.delay - altOff(S.key) >= 2 * MIN ? `→遅れのため約${Math.max(0, wr)}分` : ''}）</div>`);
       } else if (go && S.last.name === '新大阪' && T.hotel && T.hotel.checkin) out.push(`<div class="lm-transfer">ホテルのチェックインは${esc(T.hotel.checkin.replace('〜', ''))}から</div>`);
     }
     const html = out.join('');
     if (el.dataset.v !== html) { el.innerHTML = html; el.dataset.v = html; }
   }
-  const nextTrain = () => { const S = cur.S; return Object.values(T.trains).find(x => x.dir === S.tr.dir && x.date === S.tr.date && x.from === S.last.name && x.dep > S.tr.arr); };
+  /* 乗り継ぐ列車（別の便に乗ったときは、その便の名前と発車時刻） */
+  const nextTrain = () => { const S = cur.S, k = Object.keys(T.trains).find(k => { const x = T.trains[k]; return x.dir === S.tr.dir && x.date === S.tr.date && x.from === S.last.name && x.dep > S.tr.arr; }); return k ? altView(k) : null; };
 
   /* ---------- 降車のお知らせ ----------
      5分前・1分前：画面の上半分に朱色の大きな札（縁がゆっくり光る）→ 約15秒で画面の端の小さな印に縮み、残り時間を数え続ける。
@@ -1491,7 +1505,7 @@
     const eta = dest.arr + r.delay, m = minsTo(eta, r.now);
     let tr = '';
     const nt = nextTrain();
-    if (nt) tr = `${esc(nt.name)} ${nt.dep}発（乗り換え約${Math.round((jst(nt.date, nt.dep) - dest.arr) / MIN)}分）`;
+    if (nt) tr = `${esc(nt.name)} ${nt.dep}発（乗り換え約${Math.round((jst(nt.date, nt.dep) - dest.arr - altOff(S.key)) / MIN)}分）`;
     else if (window.TT) {
       const leg = TT.legs.find(l => l.date === S.tr.date && l.from === dest.name);
       if (leg) { const st = TT.stations.find(x => x.id === leg.station), ln = st && TT.lines[st.lines[0].line]; tr = `${ln ? esc(ln.name) + ' ' : ''}${leg.dep}発・${esc(leg.to)}方面（${esc(leg.platform)}）`; }
@@ -2446,6 +2460,8 @@
     schedT: key => (cur && cur.key === key && cur.last && cur.last.gpsDelay ? cur.last.t : null),
     /* いま乗車の時間帯（発車の30分前〜到着の2時間後）にある列車。なければ null */
     rideKey,
+    /* 別の便に乗った・予定の便に戻したとき：その列車で測った遅れを忘れる */
+    resetDelay: key => PrefWatch.clear(key),
     _internals: { sched, Tracker, snap: (lat, lon) => ln.snap(lat, lon), pointAt, PrefWatch, prefAt: km => ln.prefAt(km), splitMuni, lines: LN, lineOf },
     _debug: () => cur && {
       last: cur.last, disp: cur.disp, dir: cur.S.dir, fix: cur.tk.fix, reject: cur.tk.reject, follow: cur.follow, map: !!cur.map, loaded: !!cur.loaded, gpsOn: !!cur.unGeo, gpsWant: cur.gpsWant, gpsAuto: !!cur.gpsAuto, perm: GeoPerm.state(), geomFallback: !!ln.geom.fallback && !ln.lineGeo, line: ln.id,

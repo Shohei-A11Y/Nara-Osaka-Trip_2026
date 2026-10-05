@@ -176,7 +176,44 @@
     return P;
   })();
 
+  /* ========== 予定の便に乗れなかったとき（別の便に乗った） ==========
+     乗った便の時刻表は持たず、予定の便が「○分遅れで発車した」とみなす（いまどのへん？は、その差を遅れの初めの値にして、GPSで補正する）。
+     列車ごとに { name：乗った便の名前, dep：発車した（する）時刻 'H:MM', car：号車（空なら自由席）, seat：席 } を覚える。
+     覚えるのはこの端末だけ（localStorage の alt）。おためし中は sessionStorage の alt-sim に分けて置き、おためしを始める・終えるときに消す */
+  const AltRide = (() => {
+    const KEY = 'alt', SIM = 'alt-sim';
+    let mem = null;   // 保存できない端末では、開いているあいだだけ
+    const area = () => (Clock.active() ? sessionStorage : localStorage);
+    const read = () => {
+      let v = null;
+      try { v = JSON.parse(area().getItem(Clock.active() ? SIM : KEY)); } catch { v = undefined; }
+      if (v === undefined) v = mem;
+      return v && typeof v === 'object' ? v : {};
+    };
+    const write = v => {
+      mem = v;
+      try { Object.keys(v).length ? area().setItem(Clock.active() ? SIM : KEY, JSON.stringify(v)) : area().removeItem(Clock.active() ? SIM : KEY); } catch { /* 保存できなくても続行 */ }
+    };
+    const jst = (date, hm) => +new Date(`${date}T${hm.length === 4 ? '0' + hm : hm}:00+09:00`);
+    const A = {
+      get: key => { const a = read()[key]; return a && a.dep ? a : null; },
+      set(key, v) { const all = read(); if (v) all[key] = v; else delete all[key]; write(all); },
+      /* 予定の便の発車との差（ミリ秒）。別の便に乗っていなければ 0 */
+      off(key) { const a = A.get(key), tr = window.TRIP && TRIP.trains[key]; return a && tr ? jst(tr.date, a.dep) - jst(tr.date, tr.dep) : 0; },
+      /* 画面に出すための列車の情報（別の便なら、名前・発車・到着の目安を入れ替える。号車と席は carTxt に） */
+      view(key) {
+        const tr = window.TRIP && TRIP.trains[key], a = A.get(key);
+        if (!tr || !a) return tr;
+        const arr = new Date(jst(tr.date, tr.arr) + A.off(key)).toLocaleTimeString('ja-JP', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Tokyo' });
+        return { ...tr, name: a.name || tr.name, dep: a.dep, arr, plan: tr, alt: a, carTxt: a.car ? `${a.car}号車${a.seat ? '・' + a.seat : ''}` : '自由席' };
+      }
+    };
+    Clock.on(kind => { if (kind === 'start' || kind === 'stop') { mem = null; try { sessionStorage.removeItem(SIM); } catch { /* noop */ } } });
+    return A;
+  })();
+
   window.Clock = Clock;
   window.Geo = Geo;
   window.GeoPerm = GeoPerm;
+  window.AltRide = AltRide;
 })();

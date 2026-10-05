@@ -1456,6 +1456,26 @@ a.more-row { color: inherit; text-decoration: none; }
 .shb-main { display: flex; gap: 6px; align-items: flex-start; font-weight: 700; font-size: calc(14px * var(--fs)); line-height: 1.55; color: var(--sumi); }
 .shb-warn { font-size: calc(13px * var(--fs)); color: var(--shu-ink); line-height: 1.6; }
 .shift-bar .act { min-height: 40px; background: var(--paper); }
+.shb-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+/* 「時刻を直す」の画面 */
+.sf-now { display: flex; gap: 6px; align-items: flex-start; margin: 2px 0 12px; padding: 8px 12px; border: 1px solid var(--shu); border-radius: 10px; background: var(--shu-tint); font-weight: 700; font-size: calc(14px * var(--fs)); line-height: 1.55; }
+.sf-now .ic { width: 16px; height: 16px; color: var(--shu); margin-top: 3px; flex: none; }
+.sf { display: grid; gap: 10px; }
+.sf-row { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); align-items: center; gap: 8px; }
+.sf-k { font-size: calc(13px * var(--fs)); font-weight: 700; color: var(--sumi-2); }
+.sf select, .sf input { font: inherit; font-size: calc(15px * var(--fs)); min-height: 40px; padding: 6px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); color: var(--sumi); min-width: 0; width: 100%; }
+.sf-pm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: calc(14px * var(--fs)); }
+.sf-pm input { width: 5em; flex: none; text-align: right; }
+.sf .btns { margin-top: 4px; }
+.sf-pm input.af-s { width: 6em; text-align: left; }
+/* 別の便に乗ったとき */
+.lm-altb { margin-top: 8px; min-height: 40px; }
+.lm-plan { font-size: .62em; font-weight: 500; color: var(--sumi-2); letter-spacing: 0; }
+.alt-note { margin: 8px 0 0; color: var(--sumi-2); }
+.alt-on { display: flex; gap: 6px; align-items: flex-start; margin: 0 0 8px; padding: 8px 12px; border: 1px solid var(--shu); border-radius: 10px; background: var(--shu-tint); font-weight: 700; font-size: calc(13.5px * var(--fs)); line-height: 1.55; }
+.alt-on .ic { width: 16px; height: 16px; color: var(--shu); margin-top: 3px; flex: none; }
+.alt-tr { color: var(--sumi-2); }
+.alt-tr b { color: var(--shu-ink); }
 .dc .shift-bar { margin-top: 12px; }
 /* 声かけ（節目で一度だけ。点滅や動きはつけない） */
 .nudge { position: relative; display: grid; grid-template-columns: 1fr auto; gap: 4px; align-items: start; border: 1px solid var(--rule); border-left: 3px solid var(--shu); border-radius: 8px; background: var(--card); padding: 8px 4px 8px 12px; font-size: calc(13px * var(--fs)); line-height: 1.65; color: var(--sumi-2); }

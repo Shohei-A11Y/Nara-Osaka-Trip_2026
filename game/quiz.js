@@ -8,7 +8,7 @@
    かかった時間は、問題の画面を開いているあいだだけ数える（画面を閉じている時間は数えない） */
 (() => {
   'use strict';
-  const V = 37;
+  const V = 38;
   const KEY = 'quiz';
   const TYPE = { choice: '4択', fill: '穴埋め', order: '並べ替え', match: '組み合わせ', map: '地図当て' };
   const app = document.getElementById('app');

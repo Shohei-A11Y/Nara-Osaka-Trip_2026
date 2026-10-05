@@ -276,8 +276,14 @@
     else if (v) store.set('shift', v);
     else try { localStorage.removeItem('shift'); } catch { /* noop */ }
   }
-  /* 新幹線・特急に乗る地点（その発車時刻は動かさない） */
-  const fixedTrain = (day, i) => { const n = day.items[i + 1]; return n && n.t === 'move' && n.train ? T.trains[n.train] : null; };
+  /* 新幹線・特急に乗る地点（その発車時刻は動かさない。別の便に乗ったときは、その便の名前と発車時刻） */
+  const fixedTrain = (day, i) => { const n = day.items[i + 1]; return n && n.t === 'move' && n.train ? trv(n.train) : null; };
+  /* 予定の便に乗れず、別の便に乗ったとき（sim.js の AltRide）：予定の便の発車との差（ミリ秒）と、画面に出す列車の情報 */
+  const altOff = key => (window.AltRide ? AltRide.off(key) : 0);
+  const altGet = key => (window.AltRide ? AltRide.get(key) : null);
+  const trv = key => (window.AltRide ? AltRide.view(key) : T.trains[key]);
+  /* i の区間（move）の列車が別の便なら、その差（ミリ秒） */
+  const altAt = (day, i) => { const m = day.items[i]; return m && m.t === 'move' && m.train && altGet(m.train) ? altOff(m.train) : null; };
   /* 1日分の見込みの時刻。stop ごとに a（着）・d（発）・pa・pd（予定）を持つ。warn：間に合わなさそうな所 */
   function schedule(day) {
     const S = getShift(), an = S && S.date === day.date ? S : null;
@@ -287,18 +293,23 @@
       if (it.t !== 'stop') return { i, it };
       const pa = it.arr ? jst(day.date, it.arr) : null, pd = it.dep ? jst(day.date, it.dep) : null;
       const r = { i, it, pa, pd, a: pa, d: pd, est: false };
+      /* 別の便に乗ったとき：乗った駅の発車はその便の時刻、降りた駅の到着は差の分あと */
+      const ob = altAt(day, i + 1), oa = altAt(day, i - 1);
+      if (ob !== null && pd) { r.d = new Date(+pd + ob); r.est = true; }
+      if (oa !== null && pa) { r.a = new Date(+pa + oa); r.est = true; }
       if (!an || i < an.i) return r;
-      const tr = fixedTrain(day, i);
+      const tr = fixedTrain(day, i), fd = r.d;   // 固定の発車（別の便なら、その便の時刻）
       if (i === an.i) {
         s = an.min * 6e4;
         if (pd && !tr) r.d = new Date(+pd + s); else if (!pd) r.a = new Date(+pa + s);
-        r.est = !!s && !tr; r.anchor = true;
-        if (tr && s > 0 && new Date(+(pa || pd) + s) > pd) warns.push({ i, text: `${tr.name}（${it.dep}発）に間に合うよう、ここで調整を` });
+        r.est = r.est || (!!s && !tr); r.anchor = true;
+        if (tr && s > 0 && new Date(+(pa || pd) + s) > fd) warns.push({ i, text: `${tr.name}（${tr.dep}発）に間に合うよう、ここで調整を` });
         if (tr) s = 0;
-      } else if (s) {
+      } else if (s || oa !== null) {
+        if (oa !== null) s = oa;   // 別の便で着いた所から先は、その差の分ずらす
         if (pa) r.a = new Date(+pa + s);
         if (tr) {
-          if (s > 0 && r.a && r.a > pd) warns.push({ i, text: `${tr.name}（${it.dep}発）に間に合うよう、ここで調整を` });
+          if (s > 0 && r.a && r.a > fd) warns.push({ i, text: `${tr.name}（${tr.dep}発）に間に合うよう、ここで調整を` });
           s = 0;
         } else if (pd) r.d = new Date(+pd + s);
         r.est = true;
@@ -345,6 +356,48 @@
     toast(min > 0 ? `この先の予定を${durTxt(min)}遅らせて表示しています` : min < 0 ? `この先の予定を${durTxt(-min)}早めて表示しています` : '予定どおりです。この先の時刻はそのままです', 3200);
     const y = scrollY; render(); scrollTo(0, y);
   }
+  /* 「別の便に乗った」：予定の便に乗れなかったとき、乗った便の名前・発車した（する）時刻・号車と席を入れる。
+     乗った便の時刻表は持たず、予定の便が発車の差の分だけ遅れて走るとみなす（いまどのへん？は、その差を遅れの初めの値にしてGPSで補正）。
+     日程は、降りる駅から先を「いまここ」と同じ {date, i, min} で後ろにずらす（alt にその列車を書いておき、予定の便に戻すときに一緒に消す）。
+     指定席券（予約の内容）は変えない。おためし中は sessionStorage 側（sim.js の AltRide） */
+  function altSheet(key) {
+    const tr = T.trains[key]; if (!tr || !window.AltRide) return;
+    const a = altGet(key), t = now(), v = trv(key);
+    const day = T.days.find(d => d.date === tr.date), mi = day ? day.items.findIndex(x => x.t === 'move' && x.train === key) : -1;
+    const hhmm = d => fmtHM(d).padStart(5, '0');
+    const t0 = a ? a.dep.padStart(5, '0') : ymd(t) === tr.date ? hhmm(t) : tr.dep.padStart(5, '0');
+    sheet('別の便に乗った', `<p class="sf-now">${ic('train')}<span>予定：${esc(tr.name)}　${tr.from} ${tr.dep}発 → ${tr.to} ${tr.arr}着・${tr.car}号車${a ? `<br>いま：${esc(v.name)}　${v.dep}発（${esc(v.carTxt)}）で表示しています` : ''}</span></p>
+      <form class="sf" id="af">
+        <label class="sf-row"><span class="sf-k">乗った便</span><input type="text" id="af-n" maxlength="20" placeholder="例：${esc(tr.short)}○○号" value="${a ? esc(a.name) : ''}"></label>
+        <label class="sf-row"><span class="sf-k">発車した（する）時刻</span><input type="time" id="af-t" required value="${t0}"></label>
+        <div class="sf-row"><span class="sf-k">号車・席</span><span class="sf-pm"><input type="text" id="af-c" maxlength="3" inputmode="numeric" aria-label="号車" value="${a ? esc(a.car || '') : ''}">号車<input type="text" id="af-s" class="af-s" maxlength="6" aria-label="席" placeholder="席" value="${a ? esc(a.seat || '') : ''}"></span></div>
+        <p class="small muted">号車が空欄なら「自由席」と出します。</p>
+        <div class="btns"><button class="btn fill" type="submit">この便で表示する</button>${a ? '<button class="btn quiet" type="button" data-af-reset>予定の便に戻す</button>' : ''}</div>
+      </form>
+      <p class="note">乗った便の時刻表は使わず、予定の便（${esc(tr.name)}）が、発車の差の分だけ遅れて走るとみなします。いまどのへん？は、そのあとGPSで合わせます。停車駅が予定の便と違うことがあるので、駅と時刻は目安です。指定席券の画面は、予約の内容のままです。</p>`,
+      (el, close) => {
+        const done = msg => { close(); toast(msg, 3600); const y = scrollY; render(); scrollTo(0, y); };
+        const forget = () => { window.LiveMap && LiveMap.resetDelay && LiveMap.resetDelay(key); };
+        $('#af', el).addEventListener('submit', e => {
+          e.preventDefault(); e.stopPropagation();
+          const tv = $('#af-t', el).value; if (!tv) return;
+          const name = $('#af-n', el).value.trim() || `${tr.short}（別の便）`, car = $('#af-c', el).value.trim().replace(/号車$/, ''), seat = $('#af-s', el).value.trim();
+          AltRide.set(key, { name, dep: tv.replace(/^0(\d:)/, '$1'), car, seat, at: +now() });
+          forget();
+          /* 日程：降りる駅から先を、発車の差の分あとにずらす（その日のうちだけ。もっと先で「いまここ」を押していれば、そちらを残す） */
+          const off = Math.round(altOff(key) / 6e4), S = getShift();
+          let moved = false;
+          if (day && mi >= 0 && ymd(now()) === tr.date && !(S && S.date === tr.date && S.i > mi + 1)) { setShift({ date: tr.date, i: mi + 1, min: off, at: +now(), alt: key }); moved = true; }
+          done(`${name}（${tv.replace(/^0(\d:)/, '$1')}発）で表示します。${moved && off ? `${tr.to}から先の予定を${durTxt(Math.abs(off))}${off > 0 ? '遅らせ' : '早め'}ました` : ''}`);
+        });
+        const rs = $('[data-af-reset]', el);
+        rs && rs.addEventListener('click', () => {
+          AltRide.set(key, null); forget();
+          const S = getShift(); if (S && S.alt === key) setShift(null);
+          done(`予定の便（${tr.name}）に戻しました`);
+        });
+      });
+  }
   const shortName = it => it.type === 'hotel' ? 'ホテル' : it.type === 'car' ? 'レンタカーの店' : it.type === 'parking' ? '駐車場' : it.name.replace('・大阪城公園', '');
   function nowNext(t = now()) {
     const ev = allEvents();
@@ -352,7 +405,9 @@
     const next = ev.find(e => e.start > t && e.it.t === 'stop') || null;
     return { cur, next };
   }
-  const phase = () => { const t = now(); return t < new Date(T.start) ? 'before' : t >= new Date(T.end) ? 'after' : 'during'; };
+  /* 旅行の終わりは最後の到着。帰りの日に別の便に乗ったときは、その遅れの分（いちばん大きい差）だけ延ばす（乗っているあいだに思い出モードにしない） */
+  const tripEnd = () => +new Date(T.end) + Math.max(0, ...Object.keys(T.trains).filter(k => T.trains[k].date === T.end.slice(0, 10)).map(altOff));
+  const phase = () => { const t = now(); return t < new Date(T.start) ? 'before' : t >= tripEnd() ? 'after' : 'during'; };
   const todayDay = () => T.days.find(d => d.date === ymd(now()));
   const todayN = () => (todayDay() || T.days[0]).n;
 
@@ -618,6 +673,7 @@
       { m: 1, t: 'いまいる地点の「いまここ」を押すと、そこを現在地として、この先の予定をずれた分だけ動かした見込みで出します。' },
       { m: 1, t: 'ずれと、出発の見込みです。「予定どおりに戻す」で、いつでも元に戻せます。' },
       { m: 1, t: '見込みの時刻は朱色で「ごろ」と出します。新幹線・特急の発車時刻は動かさず、間に合わなさそうなときは一言でお知らせします。' },
+      { t: '押し忘れ・押し遅れたときは、出た地点の「いまここ」を押してから、ずれの1行の「時刻を直す」で、地点と実際に出た時刻（または「予定より○分」）を入れ直します。過ぎた地点も選べます。' },
       { t: 'トップの「今日の予定」からも、いまいる所を1回押すだけで合わせられます。' },
       { t: '合わせていないときは、時計だけで決めた「予定では、いまごろ」を出します。合わせた内容はこの端末だけに残り、日付が変わると元に戻ります。' }] },
     { id: 'ride', tab: 'のりもの', where: '下のタブの〈のりもの〉の、一覧の画面の説明です。', ic: 'train', title: 'のりもの', sub: '指定席券・座席表・時刻表', pts: [
@@ -646,6 +702,7 @@
       { t: '地図の左上の「いま ○○県 ○○市」は、列車の位置から決めた、いまいる市区町村です（電波がなくても出ます）。地図の種類を「住所（市区町村）」（下は淡色の地図）か「住所（航空写真）」にすると、市区町村を色分けして、境界線と名前（ふりがな付き）を出します。色分けの濃さは、地図の種類のメニューと設定の「住所の地図の塗りの濃さ」のつまみで変えられ、いちばん左で塗りなし（境界線と名前だけ）になります。境界線は、設定か地図の種類のメニューで、どの地図にも重ねられます。' },
       { t: '立体のとき・航空写真・住所の地図では、市区町村の名前と、山（▲と標高）・川（線路が渡る所）・海や湾などの名前を、画面に向けて立てて出します。縮尺に合わせて数を絞り、見どころ・駅名と重なるときは省きます。設定の「地名」「自然地名」で消せます。' },
       { t: '止まらずに通る駅（通過駅）に近づくと、2分ほど前から「まもなく○○駅を通過」と、駅の読み・府県・ひとことが出ます。地図の駅のピンと、下の見どころ一覧からも紹介を開けます。' },
+      { t: '予定の便に乗れなかったとき：日程の列車の行か、いまどのへん？の見出しの下の「別の便に乗った」を押し、乗った便の名前・発車した（する）時刻・号車と席（空欄なら自由席）を入れます。予定の便がその分遅れて走るとみなして、いまどのへん？（時刻・駅一覧・到着・降車のお知らせ・自動でGPSを使う時間帯）と、日程の降りる駅から先を合わせます。停車駅が違うことがあるので、駅と時刻は目安です。「予定の便に戻す」で元に戻ります。指定席券の画面は、予約の内容のままです。' },
       { t: '写真はのぞみの画面です。リレーかもめ（武雄温泉〜博多）も同じ画面で、列車の印は黒い787系、時速の線は130kmでいっぱいになります。見出しの右上の「のぞみ（…）へ」「リレーかもめ（…）へ」で、もう一方の列車に移れます。' }] },
     { id: 'memories', tab: 'トップ', where: '旅行が終わったあと（10/20 の最後の到着のあと）に開いた〈トップ〉の説明です。写真は、おためしモードの「10/21 思い出モード」の画面です。', ic: 'stamp', title: '思い出モード', sub: '旅行のあとの表紙とまとめ', pts: [
       { m: 1, t: '旅行が終わると、表紙が「おかえりなさい」に変わります。' },
@@ -694,7 +751,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 33;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
+  const MAN_V = 38;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -821,6 +878,9 @@
       { id: 'lm28-kanmon', title: '10/17 12:34　のぞみ28号・関門トンネルの手前', text: 'トンネルでGPSが途切れ、時刻表からの推定に切り替わります。', t: '2026-10-17T12:34', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28' } },
       { id: 'lm28-late', title: '10/17 13:45　のぞみ28号・5分遅れ（福山の手前）', text: 'GPSから遅れを見つけて「約5分遅れ」と表示。到着時刻とアラームもずれます。', t: '2026-10-17T13:45', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28', delay: 5 } },
       { id: 'lm28-late30', title: '10/17 12:10　のぞみ28号・30分遅れ（博多で発車待ち）', text: '博多に止まったまま遅れの分数が増え、30分遅れて発車します。次の駅まで・到着・降車のお知らせ・駅一覧の時刻が、遅れを足した時刻になります。トンネルでGPSが途切れても、遅れを使い続けます。', t: '2026-10-17T12:10', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28', delay: 30 } },
+      /* 予定の便に乗れなかった：別の便（便名と時刻は例）を入れた状態で始める。おためし中だけの記録（AltRide・shift-sim は sessionStorage） */
+      { id: 'lm28-alt', title: '10/17 12:30　リレーかもめが40分遅れ → のぞみ28号に乗れず、別ののぞみに乗った', text: 'リレーかもめが博多に12:22に着き、のぞみ28号（12:15発）に乗れなかったので、後ののぞみ（便名と時刻は例：12:40発・自由席）に乗った場面です。いまどのへん？の見出し・時刻・駅一覧・到着が12:40発に合わせてずれ、日程の新大阪から先も後ろにずれます。見出しの下の「乗った便を直す・予定の便に戻す」で元に戻せます。', t: '2026-10-17T12:30', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28', delay: 25 },
+        alt: ['nozomi28', { name: 'のぞみ○○号（例）', dep: '12:40', car: '', seat: '' }] },
       { id: 'lm28-arr', title: '10/17 14:36　のぞみ28号・新大阪の7分前', text: '降車アラーム（5分前・1分前）の確認に。', t: '2026-10-17T14:36', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28' } },
       { id: 'lm17', title: '10/20 11:01　のぞみ17号・新大阪を発車（復路）', t: '2026-10-20T11:01', go: '#/ride/live/nozomi17', pos: { track: 'nozomi17' } },
       { id: 'lm17-arr', title: '10/20 13:20　のぞみ17号・博多の手前', text: '降車アラームと、リレーかもめへの乗り換えカウントダウン。', t: '2026-10-20T13:20', go: '#/ride/live/nozomi17', pos: { track: 'nozomi17' } }
@@ -839,6 +899,11 @@
     if (sc.stamps) session.set('stamps-sim', JSON.stringify(sc.stamps));   // おためし中だけの記録（Stamps は Clock.active() のあいだ sessionStorage を見る）
     session.set('memTrip', null);
     Clock.start(sc.t, { scenario: { id: sc.id, title: sc.title }, pos: sc.pos || null });
+    if (sc.alt && window.AltRide) {
+      const [k, a] = sc.alt, tr = T.trains[k], day = T.days.find(d => d.date === tr.date), mi = day.items.findIndex(x => x.t === 'move' && x.train === k);
+      AltRide.set(k, { ...a, at: +now() });
+      setShift({ date: tr.date, i: mi + 1, min: Math.round(altOff(k) / 6e4), at: +now(), alt: k });
+    }
     if (sc.go && location.hash !== sc.go) location.hash = sc.go; else render();
     if (sc.tt) setTimeout(() => openTT({ leg: sc.tt, preview: false }), 350);
   }
@@ -1139,8 +1204,9 @@
   const latestSrc = x => (x.src && x.src.length ? `<p class="lt-src small muted">出典：${x.src.map(([n, u]) => `<a class="ext" href="${u}" target="_blank" rel="noopener">${esc(n)}</a>`).join('・')}</p>` : '');
   const latestMd = x => `${+x.date.slice(5, 7)}/${+x.date.slice(8, 10)}`;
   let latestNew = [];
+  /* 旅行のあと（phase が after）は、思い出モードでも「旅行中のしおりを見る」で戻した表紙でも出さない（旅行が終われば不要なため） */
   function latestSection() {
-    const all = latestAll(); if (!all.length) return '';
+    const all = latestAll(); if (!all.length || phase() === 'after') return '';
     const un = latestUnseen().map(x => x.id);
     if (un.length) { latestNew = [...new Set(latestNew.concat(un))]; store.set('latestSeen', [...new Set(latestSeen().concat(un))]); }
     return `<section class="sec" id="latest" aria-label="旅先の最新情報">${secH('旅先の最新情報', 'Latest')}
@@ -1220,12 +1286,12 @@
 
   /* ========== いまどのへん？（のぞみ・リレーかもめ）の小さな路線図 ==========
      駅の位置（LINES の stations）を線で結んだだけの略図。列車の印は時刻表から */
-  const liveNowKey = (t = now()) => Object.keys(T.liveLine).find(k => { const tr = T.trains[k]; return t >= jst(tr.date, tr.dep) - 30 * 6e4 && t < jst(tr.date, tr.arr); }) || null;
+  const liveNowKey = (t = now()) => Object.keys(T.liveLine).find(k => { const tr = T.trains[k], o = altOff(k); return t >= +jst(tr.date, tr.dep) + o - 30 * 6e4 && t < +jst(tr.date, tr.arr) + o; }) || null;
   /* いまどのへん？を開くときの列車：乗車の時間帯の列車 → その日のまだ着いていない列車（乗る順）→ その日の最後の列車 → 日付で（10/20 からは のぞみ17号） */
   function liveDefault(t = now()) {
     const k = liveNowKey(t); if (k) return k;
     const d = ymd(t), ks = Object.keys(T.liveLine).filter(x => T.trains[x].date === d).sort((a, b) => jst(T.trains[a].date, T.trains[a].dep) - jst(T.trains[b].date, T.trains[b].dep));
-    return ks.find(x => t < jst(T.trains[x].date, T.trains[x].arr)) || ks[ks.length - 1] || (d >= '2026-10-20' ? 'nozomi17' : 'nozomi28');
+    return ks.find(x => t < +jst(T.trains[x].date, T.trains[x].arr) + altOff(x)) || ks[ks.length - 1] || (d >= '2026-10-20' ? 'nozomi17' : 'nozomi28');
   }
   const lineOfKey = key => ((window.LINES || {})[(T.trains[key] || {}).line] || window.LINE);
   /* 略図の描き方（路線ごと）。山陽新幹線は今までどおり（瀬戸内海を下に）。ほかの路線は、駅の位置が枠に収まるように縮尺を決める */
@@ -1268,21 +1334,21 @@
   }
   /* いまどのへん？の一言（次の駅・残り時間） */
   function liveLine(key, t = now()) {
-    const tr = T.trains[key], s = liveState(key, t);
+    const tr = trv(key), s = liveState(key, t);
     const mins = d => Math.max(0, Math.round((d - t) / 6e4));
     const hm = m => `${m >= 60 ? Math.floor(m / 60) + '時間' : ''}${m % 60}分`;
     const next = s.st.slice(Math.floor(s.pos) + 1).find(x => x.stop);
-    if (s.mode === 'before') return { k: '発車まで', main: 'あと' + hm(mins(s.st[0].dep)), sub: `${tr.from} ${tr.dep}発・${tr.car}号車` };
+    if (s.mode === 'before') return { k: '発車まで', main: 'あと' + hm(mins(s.st[0].dep)), sub: `${tr.from} ${tr.dep}発・${tr.alt ? tr.carTxt : tr.car + '号車'}` };
     if (s.mode === 'after') return { k: '到着', main: tr.to, sub: 'おつかれさまでした' };
     if (s.mode === 'stopped') return { k: '停車中', main: s.st[s.i].name, sub: `${fmtHM(s.st[s.i].dep)}に発車します` };
     return { k: 'つぎは', main: next ? next.name : tr.to, sub: next ? `${fmtHM(next.arr)}着・あと${hm(mins(next.arr))}` : '' };
   }
   /* 「きょう」の乗車中カード（乗車の30分前から到着まで、いちばん上に大きく） */
   function liveCard(key) {
-    const tr = T.trains[key], L = liveLine(key);
+    const tr = trv(key), L = liveLine(key);
     return `<section class="tl-card" id="today-live" aria-label="いまどのへん？">
       <a class="tl-main" href="#/ride/live/${key}/full">
-        <span class="tl-h"><span class="tl-tag">いまどのへん？</span><span class="tl-tr">${tr.name}<small class="num">${tr.from} ${tr.dep} → ${tr.to} ${tr.arr}</small></span></span>
+        <span class="tl-h"><span class="tl-tag">いまどのへん？</span><span class="tl-tr">${esc(tr.name)}<small class="num">${tr.alt ? `予定は${esc(tr.plan.name)}・` : ''}${tr.from} ${tr.dep} → ${tr.to} ${tr.arr}${tr.alt ? 'ごろ' : ''}</small></span></span>
         ${routeMini(key)}
         <span class="tl-now"><span class="tl-k">${L.k}</span><b>${esc(L.main)}</b><span class="tl-s num">${esc(L.sub)}</span></span>
         <span class="tl-go">地図を大きく開く</span>
@@ -1509,7 +1575,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=37').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=38').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -1865,7 +1931,59 @@
   function shiftBar(day) {
     const x = shiftText(day); if (!x) return '';
     return `<div class="shift-bar" role="status"><p class="shb-main">${ic('here')}<span>${esc(x.text)}</span></p>${x.warn ? `<p class="shb-warn">${esc(x.warn)}</p>` : ''}
-      <button type="button" class="act" data-unshift>予定どおりに戻す</button></div>`;
+      <div class="shb-acts"><button type="button" class="act" data-shiftfix="${day.date}">時刻を直す</button><button type="button" class="act" data-unshift>予定どおりに戻す</button></div></div>`;
+  }
+  /* 「時刻を直す」：押し忘れ・押し遅れのときに、地点と実際の時刻（または予定より±分）を入れ直す。
+     入れた値は「いまここ」と同じ {date, i, min} にそのまま入れる（新幹線・特急の発車で吸収する決まりも同じ） */
+  const baseOf = (day, it) => it.dep ? jst(day.date, it.dep) : it.arr ? jst(day.date, it.arr) : null;
+  function shiftNow(day) {
+    const sc = schedule(day), S = sc.shift; if (!S) return 'いまは、予定どおりの時刻で表示しています。';
+    const r = sc.rows[S.i], it = r.it, dep = !!it.dep, at = dep ? (fixedTrain(day, S.i) ? new Date(+r.pd + S.min * 6e4) : r.d) : r.a, m = Math.abs(S.min);
+    return `${shortName(it)}を${hm(at)}に${dep ? '出発' : '到着'}・${S.min > 0 ? `予定より${durTxt(m)}遅れ` : S.min < 0 ? `予定より${durTxt(m)}早い` : '予定どおり'}`;
+  }
+  function shiftSheet(date) {
+    const day = T.days.find(d => d.date === date); if (!day) return;
+    const S = getShift(), t = now();
+    const stops = day.items.map((it, i) => ({ it, i })).filter(x => x.it.t === 'stop' && x.it.type !== 'ramp' && (x.it.dep || x.it.arr));
+    const i0 = S && S.date === date && stops.some(x => x.i === S.i) ? S.i : (stops.slice().reverse().find(x => baseOf(day, x.it) <= t) || stops[0]).i;
+    const opt = x => `<option value="${x.i}"${x.i === i0 ? ' selected' : ''}>${x.it.dep || x.it.arr}${x.it.dep ? '発' : '着'}　${esc(shortName(x.it))}</option>`;
+    sheet('時刻を直す', `<p class="sf-now" role="status">${ic('here')}<span>${esc(shiftNow(day))}</span></p>
+      <form class="sf" id="sf">
+        <label class="sf-row"><span class="sf-k">地点</span><select id="sf-i">${stops.map(opt).join('')}</select></label>
+        <label class="sf-row"><span class="sf-k" id="sf-tk">実際に出た時刻</span><input type="time" id="sf-t" required></label>
+        <div class="sf-row"><span class="sf-k">または</span><span class="sf-pm">予定より<input type="number" id="sf-m" min="0" max="600" step="1" inputmode="numeric" aria-label="予定とのずれ（分）">分<span class="more-seg" role="group" aria-label="遅れか早いか"><button type="button" data-sf="1" aria-pressed="true">遅れ</button><button type="button" data-sf="-1" aria-pressed="false">早い</button></span></span></div>
+        <p class="small muted" id="sf-plan"></p>
+        <div class="btns"><button class="btn fill" type="submit">この時刻で直す</button><button class="btn quiet" type="button" data-sf-reset>予定どおりに戻す（ずれを消す）</button></div>
+      </form>
+      <p class="note">時刻か「予定より○分」の、どちらか一方を入れれば、もう一方は自動で合わせます。新幹線・特急の発車時刻は動かしません。</p>`,
+      (el, close) => {
+        const fI = $('#sf-i', el), fT = $('#sf-t', el), fM = $('#sf-m', el), segs = $$('[data-sf]', el);
+        let sign = 1;
+        const cur = () => day.items[+fI.value], base = () => baseOf(day, cur());
+        const hhmm = d => fmtHM(d).padStart(5, '0');
+        const setSign = v => { sign = v; segs.forEach(b => b.setAttribute('aria-pressed', +b.dataset.sf === v)); };
+        const fromTime = () => { if (!fT.value) return; const m = Math.round((jst(date, fT.value) - base()) / 6e4); fM.value = Math.abs(m); setSign(m < 0 ? -1 : 1); };
+        const fromMin = () => { const m = (+fM.value || 0) * sign; fT.value = hhmm(new Date(+base() + m * 6e4)); };
+        const label = () => { const it = cur(); $('#sf-tk', el).textContent = it.dep ? '実際に出た時刻' : '着いた時刻'; $('#sf-plan', el).textContent = `予定は${it.dep || it.arr}${it.dep ? '発' : '着'}です。`; };
+        /* 初めは、いま「いまここ」にしている地点ならそのずれ、ほかは今の時刻 */
+        if (S && S.date === date && S.i === i0) { fM.value = Math.abs(S.min); setSign(S.min < 0 ? -1 : 1); fromMin(); }
+        else { fT.value = hhmm(t); fromTime(); }
+        label();
+        fI.addEventListener('change', () => { label(); fromTime(); });
+        fT.addEventListener('input', fromTime);
+        fM.addEventListener('input', fromMin);
+        segs.forEach(b => b.addEventListener('click', () => { setSign(+b.dataset.sf); fromMin(); }));
+        $('#sf', el).addEventListener('submit', e => {
+          e.preventDefault(); e.stopPropagation();
+          if (!fT.value) return;
+          const min = Math.round((jst(date, fT.value) - base()) / 6e4);
+          setShift({ date, i: +fI.value, min, at: +now() });
+          close();
+          toast(min > 0 ? `この先の予定を${durTxt(min)}遅らせて表示しています` : min < 0 ? `この先の予定を${durTxt(-min)}早めて表示しています` : '予定どおりです。この先の時刻はそのままです', 3200);
+          const y = scrollY; render(); scrollTo(0, y);
+        });
+        $('[data-sf-reset]', el).addEventListener('click', () => { setShift(null); close(); toast('予定どおりの時刻に戻しました'); const y = scrollY; render(); scrollTo(0, y); });
+      });
   }
 
   function viewTrip(n) {
@@ -1914,8 +2032,9 @@
           <div class="time num">${time}${here}</div><div class="pin"></div>
           <div class="body">${head}${it.note ? `<p class="stop-note${it.optional ? ' opt' : ''}">${esc(it.note)}</p>` : ''}${it.to ? latestMini(it.to) : ''}${w ? `<p class="stop-warn">${esc(w)}</p>` : ''}${acts ? `<div class="acts">${acts}</div>` : ''}</div></div></li>`;
       }
-      const tr = it.train && T.trains[it.train];
+      const tr = it.train && T.trains[it.train], av = tr && trv(it.train);
       const extra = [
+        av && av.alt ? `<div class="alt-tr"><b>別の便：${esc(av.name)}　${av.dep}発・${esc(av.carTxt)}</b><br>予定は${esc(tr.name)}（${tr.dep}発・${tr.car}号車）。指定席の予約は、そのままです。</div>` : '',
         tr ? `<div>${tr.kind}・${tr.vehicle}</div>` : '',
         it.detail ? `<div>${esc(it.detail)}</div>` : '',
         it.dist ? `<div>距離 ${it.dist}</div>` : '',
@@ -1924,12 +2043,13 @@
       const acts = [
         tr && T.liveLine[it.train] ? actA(`#/ride/live/${it.train}`, 'train', 'いまどのへん？', 'pri') : '',
         tr ? actA(`#/ride/${it.train}`, 'seat', '指定席券') : '',
+        tr && (isToday || av.alt) ? actB(`data-alt="${it.train}"`, 'train', av.alt ? '乗った便を直す' : '別の便に乗った') : '',
         it.link ? actA(it.link[1], LINK_IC[it.link[1]] || 'spot', esc(it.link[0])) : ''
       ].filter(Boolean).join('');
       const openIt = tr || st === 'now' || it.note;
       /* 3段目（外の地図・乗換案内）は、区間の行の右端に1つ */
       return `<li class="${st}" id="it-${i}"><div class="row move-row"><div class="time num">${dur(it.min)}</div><div class="pin"></div>
-        <div class="body"><div class="mv-head">${extra ? `<details${openIt ? ' open' : ''}><summary class="move-line">${ic(MODE[it.mode] || 'route')}<span>${nowTag}${esc(it.line)} <span class="tog">詳細</span></span></summary><div class="move-extra">${extra}</div></details>`
+        <div class="body"><div class="mv-head">${extra ? `<details${openIt ? ' open' : ''}><summary class="move-line">${ic(MODE[it.mode] || 'route')}<span>${nowTag}${esc(av && av.alt ? it.line.replace(tr.name, av.name) : it.line)} <span class="tog">詳細</span></span></summary><div class="move-extra">${extra}</div></details>`
           : `<div class="move-line">${ic(MODE[it.mode] || 'route')}<span>${nowTag}${esc(it.line)}</span></div>`}${moveExt(day, i)}</div>${tr ? seatInline(it.train) : ''}${acts ? `<div class="acts">${acts}</div>` : ''}</div></div></li>`;
     }).join('');
     const prevN = day.n > 1 ? day.n - 1 : null, nextN = day.n < 4 ? day.n + 1 : null;
@@ -2131,8 +2251,8 @@
   function ticket(key) {
     const tr = T.trains[key], f = fam();
     const mine = f ? T.seats[key][f] : [...T.seats[key].yamaguchi, ...T.seats[key].iizuka];
-    const [m, d] = tr.date.slice(5).split('-').map(Number);
-    return `<article class="ticket-wrap" id="${key}" style="margin-top:14px"><div class="ticket">
+    const [m, d] = tr.date.slice(5).split('-').map(Number), v = trv(key);
+    return `<article class="ticket-wrap" id="${key}" style="margin-top:14px">${v.alt ? `<p class="alt-on">${ic('train')}<span>別の便（${esc(v.name)}・${v.dep}発）に乗っています（${esc(v.carTxt)}）</span></p>` : ''}<div class="ticket">
       <div class="t-head"><b>${tr.ticket}</b><span>${f ? famName() : '6名分'}</span></div>
       <div class="t-route"><span class="st">${tr.from}</span><span class="arr">→</span><span class="st">${tr.to}</span></div>
       <div class="t-time num"><span>${m}月${d}日（${tr.dep}発）</span><span>（${tr.arr}着）</span></div>
@@ -2152,7 +2272,7 @@
     /* いまどのへん？の札：この向きで乗る列車（いまどのへん？があるもの）を、乗る順に */
     const lks = keys.filter(k => T.liveLine[k]);
     return `<div class="wrap">${topbar()}${phead('Trains', 'のりもの', '指定席券・乗り換え・車窓の楽しみを、この一枚に。')}
-      ${lks.map(lk => { const ltr = T.trains[lk]; return `<a class="ride-live" href="#/ride/live/${lk}"><span class="rl-h"><span class="tl-tag">いまどのへん？</span><b>${ltr.name}</b><small class="num">${MD(ltr.date)} ${ltr.from} ${ltr.dep} → ${ltr.to} ${ltr.arr}</small></span>
+      ${lks.map(lk => { const ltr = trv(lk); return `<a class="ride-live" href="#/ride/live/${lk}"><span class="rl-h"><span class="tl-tag">いまどのへん？</span><b>${esc(ltr.name)}</b><small class="num">${ltr.alt ? `予定は${esc(ltr.plan.name)}・` : ''}${MD(ltr.date)} ${ltr.from} ${ltr.dep} → ${ltr.to} ${ltr.arr}${ltr.alt ? 'ごろ' : ''}</small></span>
         ${routeMini(lk, { demo: liveNowKey() !== lk })}<span class="rl-t">${lineKey(lk) === 'sanyo' ? '新幹線' : '特急'}の車内で、いまどこを走っているか、窓から何が見えるかが分かります。</span></a>`; }).join('')}
       <nav class="ride-idx" aria-label="のりものの一覧">${[['指定席券と座席表', '#/ride/' + keys[0]], ['駅の乗り換え（3D）', '#/ride/transfer'], ['駅の時刻表', '#/ride/tt'], ['車窓の城', '#/ride/castles'], ['駅弁', '#/ride/ekiben'], ['鉄道トリビア', '#/ride/trivia'], ['レンタカー', '#/stay/car']].map(([l, h]) => `<a href="${h}">${l}</a>`).join('')}</nav>
       <div class="segs" role="tablist"><button data-dir="go" class="${dir === 'go' ? 'on' : ''}">往路　10/17（土）</button><button data-dir="back" class="${dir === 'back' ? 'on' : ''}">復路　10/20（火）</button></div>
@@ -2186,9 +2306,10 @@
       </section></div>`;
   }
 
-  function liveState(key, t = now()) {
-    const tr = T.trains[key];
-    const st = T.liveLine[key].map(([name, pref, a, d, stop]) => ({ name, pref, arr: jst(tr.date, a || d), dep: jst(tr.date, d || a), stop: !!stop }));
+  /* 時刻表どおりの位置。別の便に乗ったときは、予定の便を発車の差の分遅らせた時刻で見る（plan のときは予定の便の時刻のまま） */
+  function liveState(key, t = now(), plan) {
+    const tr = T.trains[key], o = plan ? 0 : altOff(key);
+    const st = T.liveLine[key].map(([name, pref, a, d, stop]) => ({ name, pref, arr: new Date(+jst(tr.date, a || d) + o), dep: new Date(+jst(tr.date, d || a) + o), stop: !!stop }));
     if (t < st[0].dep) return { st, pos: 0, mode: 'before' };
     const last = st.length - 1;
     if (t >= st[last].arr) return { st, pos: last, mode: 'after' };
@@ -2203,16 +2324,18 @@
   const livePair = k => Object.keys(T.liveLine).filter(x => lineKey(x) === lineKey(k)).sort((a, b) => (T.trains[a].dir === 'go' ? 0 : 1) - (T.trains[b].dir === 'go' ? 0 : 1));
   function viewLive(key, full) {
     if (!T.liveLine[key]) key = 'nozomi28';
-    const tr = T.trains[key], hasMap = window.LINE && window.LiveMap;
+    const tr = T.trains[key], hasMap = window.LINE && window.LiveMap, v = trv(key);
     /* 全画面：地図だけの専用画面（#/ride/live/のぞみ/full で直接開ける） */
     if (full && hasMap) return liveMapBlock(key, true);
     /* もう一方の路線（のぞみ ⇔ リレーかもめ）の、同じ向きの列車へ移るリンク */
     const other = Object.keys(T.liveLine).find(x => lineKey(x) !== lineKey(key) && T.trains[x].dir === tr.dir);
     const ot = other && T.trains[other];
-    return `<div class="wrap">${topbar()}<div class="lm-phead"><div><div class="lm-ph-top">${ot ? `<a class="lm-other" href="#/ride/live/${other}">${esc(ot.short)}（${esc(ot.from)}〜${esc(ot.to)}）へ ›</a>` : ''}<span class="eyebrow">Live</span></div><h1>${tr.name}は いまどのへん？</h1><p class="small muted num">${tr.from} ${tr.dep}発 → ${tr.to} ${tr.arr}着・${tr.vehicle}</p></div></div>
+    return `<div class="wrap">${topbar()}<div class="lm-phead"><div><div class="lm-ph-top">${ot ? `<a class="lm-other" href="#/ride/live/${other}">${esc(ot.short)}（${esc(ot.from)}〜${esc(ot.to)}）へ ›</a>` : ''}<span class="eyebrow">Live</span></div><h1>${v.alt ? `${esc(v.name)}<small class="lm-plan">（予定は${esc(tr.name)}）</small>` : tr.name}は いまどのへん？</h1><p class="small muted num">${v.alt ? `${tr.from} ${v.dep}発 → ${tr.to} ${v.arr}着ごろ・${v.carTxt}` : `${tr.from} ${tr.dep}発 → ${tr.to} ${tr.arr}着・${tr.vehicle}`}</p>
+        <button type="button" class="act lm-altb" data-alt="${key}">${ic('train')}${v.alt ? '乗った便を直す・予定の便に戻す' : '別の便に乗った'}</button></div></div>
       <div class="segs lm-segs">${livePair(key).map(k => `<button data-live="${k}" class="${key === k ? 'on' : ''}">${T.trains[k].dir === 'go' ? '往路' : '復路'} ${esc(T.trains[k].name)}</button>`).join('')}</div>
       ${hasMap ? liveMapBlock(key, false) : ''}
       <div id="live-board"></div>${hasMap ? '' : '<div id="live-alert"></div>'}<div id="live-tip"></div>
+      ${v.alt ? `<p class="alt-note small">駅と時刻は、予定の便（${esc(tr.name)}）をもとにした目安です。</p>` : ''}
       <ol class="line" id="line">${T.liveLine[key].map(([n, p, a, d, s]) => `<li class="${s ? 'stp' : ''} ${T.castles.some(c => c.station === n) ? 'castle' : ''}"><span class="lt num">${s ? (a && d && a !== d ? `${a}<br>${d}` : a || d) : a + '頃'}</span><span class="ld"></span><span class="ln">${n}</span><span class="lp">${p}</span></li>`).join('')}
       <div class="fill" id="fill"></div>${PIN}</ol>
       <p class="note">大きい丸の停車駅は公式時刻表の時刻、小さい丸の通過駅は推定時刻（目安）です。実際の運行とはずれることがあります。</p>
@@ -2262,9 +2385,13 @@
     const line = $('#line'); if (!line) return;
     const k = T.liveLine[location.hash.split('/')[3]] ? location.hash.split('/')[3] : 'nozomi28';
     /* GPSで遅れを測っているときは、地図（livemap.js）と同じく遅れに合わせる：列車の印・次の駅・発車の時刻・まだ着いていない駅の時刻 */
-    const t = now(), st0 = window.LiveMap && LiveMap.schedT ? LiveMap.schedT(k) : null;
-    const dl = st0 != null && window.LiveMap ? LiveMap.delayMs() : 0, late = dl >= 2 * 6e4, gr = late ? 'ごろ' : '';
-    const tr = T.trains[k], s = liveState(k, st0 != null ? new Date(st0) : t);
+    const t = now(), off = altOff(k);
+    let st0 = window.LiveMap && LiveMap.schedT ? LiveMap.schedT(k) : null;
+    let dl = st0 != null && window.LiveMap ? LiveMap.delayMs() : 0;
+    /* 別の便に乗ったときは、GPSで測るまでは発車の差を遅れとして使う */
+    if (st0 == null && off) { st0 = +t - off; dl = off; }
+    const late = dl >= 2 * 6e4, gr = late ? 'ごろ' : '';
+    const tr = trv(k), s = liveState(k, st0 != null ? new Date(st0) : t, true);
     const lis = $$('li', line);
     const center = i => lis[i].offsetTop + lis[i].offsetHeight / 2;
     const i0 = Math.floor(s.pos), fr = s.pos - i0;
@@ -2285,9 +2412,9 @@
     const next = s.st.slice(Math.floor(s.pos) + 1).find(x => x.stop);
     const mins = d => Math.max(0, Math.round((d - t) / 6e4));
     const hm = d => fmtHM(new Date(Math.round((+d + dl) / 6e4) * 6e4));
-    const lateTxt = late ? `（約${Math.round(dl / 6e4)}分遅れ）` : '';
+    const lateTxt = dl - off >= 2 * 6e4 ? `（約${Math.round((dl - off) / 6e4)}分遅れ）` : '';   // 別の便に乗ったときは、その便の発車時刻からの遅れ
     let a, b;
-    if (s.mode === 'before') { const m = mins(+s.st[0].dep + dl); a = ['まもなく', `${tr.name} ${tr.to}`, tr.dep]; b = late && m < 1 ? `遅れて発車を待っています${lateTxt}` : m < 1440 ? `発車まで あと${m >= 60 ? Math.floor(m / 60) + '時間' : ''}${m % 60}分${lateTxt}` : `${tr.date.slice(5).replace('-', '/')} に発車します`; }
+    if (s.mode === 'before') { const m = mins(+s.st[0].dep + dl); a = ['まもなく', `${tr.name} ${tr.to}`, tr.dep]; b = lateTxt && m < 1 ? `遅れて発車を待っています${lateTxt}` : m < 1440 ? `発車まで あと${m >= 60 ? Math.floor(m / 60) + '時間' : ''}${m % 60}分${lateTxt}` : `${tr.date.slice(5).replace('-', '/')} に発車します`; }
     else if (s.mode === 'after') { a = ['到着', tr.to, late ? hm(s.st[s.st.length - 1].arr) : tr.arr]; b = 'おつかれさまでした'; }
     else if (s.mode === 'stopped') { a = ['停車中', s.st[s.i].name, hm(s.st[s.i].dep)]; b = `${hm(s.st[s.i].dep)}${gr}に発車します${lateTxt}`; }
     else { a = ['走行中', `${s.st[s.i].name} → ${s.st[s.i + 1].name}`, '']; b = next ? `つぎは ${next.name}　${hm(next.arr)}着${gr}・あと${mins(+next.arr + dl)}分` : ''; }
@@ -2908,7 +3035,7 @@
     const on = tabOf(route, sub);
     $('#nav').innerHTML = `<ul>${NAV.map(([k, l, i]) => {
       const a = k === on ? ` class="on" aria-current="page"` : '';
-      const dot = k === 'today' && latestUnseen().length;
+      const dot = k === 'today' && phase() !== 'after' && latestUnseen().length;
       return `<li>${k === 'more' ? `<button type="button" data-tab="more" data-act="more" aria-haspopup="dialog"${k === on ? ' class="on"' : ''}>${ic(i)}<span>${l}</span></button>` : `<a href="${navHref(k)}" data-tab="${k}"${a}${dot ? ' aria-label="きょう（新しい情報があります）"' : ''}>${ic(i)}${dot ? '<i class="nav-dot" aria-hidden="true"></i>' : ''}<span>${l}</span></a>`}</li>`;
     }).join('')}</ul>`;
   }
@@ -3414,6 +3541,8 @@
     }
     if ((el = q('[data-rain]'))) return rainSheet(el.dataset.rain);
     if ((el = q('[data-here]'))) { const [d, i] = el.dataset.here.split(':'); setHere(d, +i); return; }
+    if ((el = q('[data-shiftfix]'))) return shiftSheet(el.dataset.shiftfix);
+    if ((el = q('[data-alt]'))) return altSheet(el.dataset.alt);
     if ((el = q('[data-unshift]'))) { setShift(null); toast('予定どおりの時刻に戻しました'); const y = scrollY; render(); scrollTo(0, y); return; }
     if ((el = q('[data-nudge]'))) {
       let st = store.get('nudge'); const id = el.dataset.nudge;
