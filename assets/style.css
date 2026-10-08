@@ -893,6 +893,9 @@ body.sim-on .lm-full .lm-addr { margin-top: calc(0px - env(safe-area-inset-top))
 /* オフ：点線の枠と薄い地で、止まっていることが一目で分かるように */
 .lm-zbtn.off { background: var(--paper-2); border-style: dashed; color: var(--sumi-2); }
 .lm-zbtn.off b { color: var(--sumi-2); }
+/* 到着ズーム中：同じボタンの表記が「到着ズーム：やめる」に変わる（大きさは「自動ズーム：オン」とほぼ同じ）。押すと、その到着のあいだだけやめる */
+.lm-zbtn.arr { border-color: var(--shu); padding: 0 9px; font-size: calc(12px * var(--fs)); letter-spacing: -.02em; }
+.lm-zbtn.arr .lm-zk, .lm-zbtn.arr b { color: var(--shu-ink); }
 /* 押した感じ：押しているあいだは少し縮み、押したあとは短く色が変わる */
 .lm-zbtn:active, .lm-zreset:active { transform: scale(.94); }
 .lm-zbtn.tap { animation: lmztap .26s ease-out; }

@@ -696,6 +696,7 @@
       { m: 1, t: '時速です。下の線は速さの目安で、時速300kmでいっぱいになります。全画面では、この札が画面の下に出ます。' },
       { t: '地図は1回押すと、指で動かせるようになります。動かしたあとは、操作ボタンの「列車へ」で列車の位置に戻ります。' },
       { t: '地図の右下の「自動ズーム：オン」のあいだは、停車駅に近づくと着く前から少しずつ拡大し、駅前の建物や道が分かるくらいまで寄ります。駅を出ると少しずつ戻ります。押すとオフになり、縮尺を自動では変えません。指で拡大・縮小しても自動は止まらず、その縮尺を「走行中の縮尺」として覚えます。「元の縮尺に戻す」で最初の縮尺に戻ります。' },
+      { t: '到着ズーム：終点が地図に10秒ほど続けて映ると、終点を画面の上の方にして、近づくにつれて拡大します。始まると、右下のボタンが「到着ズーム：やめる」に変わり、押すか、指で地図を動かす・拡大縮小する・回すと、その到着のあいだだけやめます（次の列車ではまた働きます）。設定（⚙）の「終点に近づいたら自動で寄る（到着モード）」をオフにすると、始まりません。' },
       { t: '乗車の時間帯（発車の30分前〜到着の2時間後）は、位置の情報を許可していれば、ボタンを押さなくてもGPSで遅れを測り、「約○分遅れ」と出して、次の駅まで・到着・降車のお知らせ・駅一覧の時刻をずらします。時間帯が終わると、自動で止まります。' },
       { t: '位置の情報の許可は、端末ごとに一度だけ必要です。旅行の前に、いまどのへん？を開くと出る案内の「許可する」を押しておいてください（当日まではGPSを使いません）。許可していない端末には、乗車の時間帯に画面の上に「使う」が出ます。' },
       { t: '「GPSを止める」を押すと、そのタブのあいだは自動で使いません。それ以外の時間は、「現在地を使う」を押したときだけ使います。運行の状況は、地図の下の「JR公式の運行情報」で確かめられます。' },
@@ -751,7 +752,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 39;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
+  const MAN_V = 40;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -1575,7 +1576,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=39').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=40').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
