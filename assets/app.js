@@ -752,7 +752,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 40;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
+  const MAN_V = 41;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -1576,7 +1576,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=40').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=41').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -2260,11 +2260,146 @@
       <div class="t-seat"><span class="tn">${tr.name}</span><span class="car num">${tr.car}号車</span><span class="seats num">${mine.join('・')}</span></div>
       <div class="t-foot">${tr.kind}・${tr.vehicle}・${dur(tr.min)}</div></div>
       ${T.liveLine[key] ? `<div class="btns ticket-live"><a class="btn live-btn" href="#/ride/live/${key}">${ic('train')} いまどのへん？</a><a class="more" href="#/ride/live/${key}/full">全画面の地図</a>${key === 'nozomi28' ? xferLink(2, '新大阪での出方（3D）') : key === 'nozomi17' ? xferLink(3, '新大阪での乗り方（3D）') : ''}</div>` : ''}
+      <p class="sg-link"><a class="more" href="#/ride/seats/${key}">切符と違う席に座る？　席図を見る →</a></p>
       <details class="ticket-more"><summary>座席表とメモ</summary>${seatMap(key)}<p class="note">${esc(tr.carNote)}</p>
       <div class="btns">${ext(tr.timetable, '最新の時刻表')}</div></details></article>`;
   }
 
+  /* ========== 切符と座席ガイド（#/ride/seats） ==========
+     席図は T.seatGuide（data.js）から描く。「替」（切符の区分と違う人が座る席）と、予約A・Bの人数もそこから計算する。
+     予約番号・QR・合言葉は、ここにもデータにも置かない */
+  const SGP = { ia: { fam: '飯塚家', kind: '大人' }, ik: { fam: '飯塚家', kind: 'こども' }, y: { fam: '山口家', kind: '大人' } };
+  const sgSeat = (id) => { const m = /^(\d+)([A-E])$/.exec(id); return { row: +m[1], col: m[2] }; };
+  const sgSwap = ([p, c]) => (p === 'ik') !== (c === 'C');                 // 子どもが大人用に／大人が小人用に座る席
+  const sgPeople = (g, ids) => { const k = ids.filter(i => g.s[i][0] === 'ik').length; return `大人${ids.length - k}・こども${k}`; };
+  const sgGroups = key => { const g = T.seatGuide[key], ids = Object.keys(g.s).sort((a, b) => sgSeat(a).row - sgSeat(b).row || sgSeat(a).col.localeCompare(sgSeat(b).col)); return { g, ids, A: ids.filter(i => g.a.includes(i)), B: ids.filter(i => !g.a.includes(i)), chg: ids.filter(i => sgSwap(g.s[i])) }; };
+  const sgMark = r => `<i class="sg-ab ${r}" aria-hidden="true">${r}</i>`;
+  let sgMem = null;                                                          // 端末に保存できないときは、開いている間だけ覚える
+  const sgState = () => store.get('sgChk', null) || sgMem || {};
+  function sgSvg(key) {
+    const tr = T.trains[key], { g, ids } = sgGroups(key);
+    const [L, R] = tr.layout.split('|');
+    const used = new Set(ids.map(i => sgSeat(i).col));
+    const top = [...R].reverse().filter(c => used.has(c)), bot = [...L].reverse().filter(c => used.has(c));
+    const rows = [...new Set(ids.map(i => sgSeat(i).row))].sort((a, b) => a - b);
+    const cw = 72, ch = 96, gp = 6, GAP = 22, FW = 36, LB = 20, gx = rows.map((r, i) => i && r - rows[i - 1] > 1 ? GAP : 0);
+    const frontR = g.front === rows[rows.length - 1], lm = LB + (frontR ? 0 : FW), rm = frontR ? FW : 4;
+    const xs = []; let x = lm; rows.forEach((r, i) => { x += gx[i] ? gx[i] + gp : 0; xs.push(x); x += cw + gp; });
+    const W = x - gp + rm, lines = [...top, ...(bot.length && top.length ? ['|'] : []), ...bot];
+    let y = 24; const ys = {}; const wTop = y; y += 10;
+    lines.forEach(c => { if (c === '|') { ys.aisle = y; y += 26; } else { ys[c] = y; y += ch + gp; } });
+    y -= gp; const wBot = y + 6, H = wBot + 14;
+    const cols = c => (top.includes(c) ? top : bot).indexOf(c);
+    let s = `<svg class="sg-svg" viewBox="0 0 ${W} ${H}" width="${W}" role="img" aria-label="${esc(`${tr.name} ${tr.car}号車の席図。進行方向は図の${frontR ? '右' : '左'}。詳しい席の一覧は図の下に文字で書いています。`)}">`;
+    s += `<line class="sg-win" x1="${lm}" x2="${W - rm}" y1="${wTop}" y2="${wTop}"/><text class="sg-t3" x="${W - rm}" y="${wTop - 6}" text-anchor="end">窓</text>`;
+    if (top.length && bot.length) s += `<line class="sg-win" x1="${lm}" x2="${W - rm}" y1="${wBot}" y2="${wBot}"/><text class="sg-t3" x="${W - rm}" y="${wBot + 12}" text-anchor="end">窓</text>`;
+    else s += `<line class="sg-aisle" x1="${lm}" x2="${W - rm}" y1="${wBot}" y2="${wBot}"/><text class="sg-t3" x="${W - rm}" y="${wBot + 12}" text-anchor="end">通路</text>`;
+    if (ys.aisle !== undefined) s += `<line class="sg-aisle" x1="${lm}" x2="${W - rm}" y1="${ys.aisle + 13}" y2="${ys.aisle + 13}"/><text class="sg-t3" x="${(lm + W - rm) / 2}" y="${ys.aisle + 8}" text-anchor="middle" letter-spacing="6">通路</text>`;
+    rows.forEach((r, i) => { s += `<text class="sg-t2 num" x="${xs[i] + cw / 2}" y="15" text-anchor="middle">${r}列</text>`; if (gx[i]) s += `<text class="sg-t3" x="${xs[i] - gp - GAP / 2}" y="${(wTop + wBot) / 2}" text-anchor="middle">⋯</text>`; });
+    [...top, ...bot].forEach(c => { s += `<text class="sg-t2 num" x="${lm - 9}" y="${ys[c] + ch / 2 + 4}" text-anchor="middle">${c}</text>`; });
+    ids.forEach(id => {
+      const { row, col } = sgSeat(id), [p, c, lug] = g.s[id], pp = SGP[p], sx = xs[rows.indexOf(row)], sy = ys[col], isA = g.a.includes(id), swap = sgSwap([p, c]);
+      s += `<g class="sg-seat sgp-${p}${c === 'C' ? ' child' : ''}"><title>${esc(`${id}　${pp.fam}の${pp.kind}　切符は${c === 'A' ? '大人用' : '小人用'}${lug ? '　荷物スペースつき' : ''}${swap ? '　切符の区分と違う人が座る' : ''}　予約${isA ? 'A' : 'B'}`)}</title>
+        <rect x="${sx}" y="${sy}" width="${cw}" height="${ch}" rx="9"/>
+        <text class="sg-id num" x="${sx + cw / 2}" y="${sy + 40}" text-anchor="middle">${id}</text>
+        <text class="sg-t1" x="${sx + cw / 2}" y="${sy + 56}" text-anchor="middle">${pp.fam}</text><text class="sg-t1 b" x="${sx + cw / 2}" y="${sy + 71}" text-anchor="middle">${pp.kind}</text>
+        ${lug ? `<g class="sg-bd"><rect x="${sx + 5}" y="${sy + 5}" width="20" height="17" rx="4"/><text x="${sx + 15}" y="${sy + 18}" text-anchor="middle">荷</text></g>` : ''}
+        ${c === 'C' ? `<g class="sg-bd"><rect x="${sx + cw - 25}" y="${sy + 5}" width="20" height="17" rx="4"/><text x="${sx + cw - 15}" y="${sy + 18}" text-anchor="middle">小</text></g>` : ''}
+        ${swap ? `<g class="sg-bd chg"><rect x="${sx + cw - 25}" y="${sy + ch - 22}" width="20" height="17" rx="4"/><text x="${sx + cw - 15}" y="${sy + ch - 9}" text-anchor="middle">替</text></g>` : ''}
+        <g class="sg-ab ${isA ? 'A' : 'B'}"><circle cx="${sx + 16}" cy="${sy + ch - 14}" r="9"/><text x="${sx + 16}" y="${sy + ch - 10}" text-anchor="middle">${isA ? 'A' : 'B'}</text></g></g>`;
+    });
+    const ay = (wTop + wBot) / 2 - 36, ax = frontR ? W - rm / 2 - 1 : rm + FW / 2 - 4, d = frontR ? 1 : -1;
+    s += `<g class="sg-arrow"><path d="M${ax - 12 * d} ${ay}h24M${ax + 12 * d} ${ay}l${-7 * d} -6M${ax + 12 * d} ${ay}l${-7 * d} 6" fill="none"/>${[...'進行方向'].map((ch1, i) => `<text x="${ax}" y="${ay + 24 + i * 17}" text-anchor="middle">${ch1}</text>`).join('')}</g></svg>`;
+    return s;
+  }
+  function sgCard(key) {
+    const tr = T.trains[key], { g, ids, A, B, chg } = sgGroups(key);
+    const miss = []; const rs = [...new Set(ids.map(i => sgSeat(i).row))].sort((a, b) => a - b); rs.forEach((r, i) => { for (let m = rs[i - 1] + 1; i && m < r; m++) miss.push(m); });
+    const line = (r, list) => `<li>${sgMark(r)}<b>予約${r}</b>　<span class="num">${list.join('・')}</span><small>いま座る人：${sgPeople(g, list)}</small></li>`;
+    const relay = tr.line === 'relay' ? '<p class="note">リレーかもめは、885系で運転される日は座席の配置が変わります。当日の案内を優先してください（配置の違いの中身は公式未確認）。</p>' : '';
+    return `<article class="sg-card" id="sg-${key}">
+      <h3><span class="sg-no">${g.no}${g.way}</span>${esc(tr.name)}　<span class="num">${tr.car}号車</span></h3>
+      <p class="small muted num">${MD(tr.date)} ${esc(tr.from)} ${tr.dep} → ${esc(tr.to)} ${tr.arr}</p>
+      <p class="sg-dir"><b>進行方向：${esc(tr.to)}方面（<span class="num">${g.front}</span>列側が前）</b></p>
+      <div class="sg-fig">${sgSvg(key)}</div>
+      ${miss.length ? `<p class="sm-note">${miss.join('・')}列は、私たちの席がないので図から省いています。</p>` : ''}
+      <ul class="sg-res">${line('A', A)}${line('B', B)}</ul>
+      <p class="sg-chg"><b>切符の区分と違う人が座る席（替）</b></p>
+      <ul class="sg-chglist">${chg.map(i => { const [p, c] = g.s[i]; return `<li><span class="num">${i}</span>　${SGP[p].kind === 'こども' ? 'こども' : '大人'}が座る（切符は${c === 'A' ? '大人用' : '小人用'}）</li>`; }).join('')}</ul>
+      <p class="note">切符は人の区分で持つので、渡し直しはありません。予約AとBをまたいで入れ替えて座ります。</p>${relay}</article>`;
+  }
+  function viewSeats() {
+    const keys = Object.keys(T.seatGuide), st = sgState();
+    const say = '大人4名と、2歳と0歳の子ども2名、計6名です。6人分の運賃・料金を払って、6席を買っています。子どもの介助のために、親子が隣り合うよう席を入れ替えて座っています。このままでよろしいでしょうか。';
+    const chip = (p, c, t) => `<span class="sg-chip sgp-${p}${c === 'C' ? ' child' : ''}">${t}</span>`;
+    const bags = [['飯塚家 大人①', '自分の大人用一式＋担当する子の小人用一式'], ['飯塚家 大人②', '自分の大人用一式＋担当する子の小人用一式'], ['山口家 大人①', '自分の分だけ'], ['山口家 大人②', '自分の分だけ']];
+    const tasks = [['sg1', '説明役を決める（飯塚家の大人1名）'], ['sg2', '親子の組み合わせを決める（飯塚家の大人のどちらが、2歳児・0歳児のどちらを担当するか）'], ['sg3', '切符を4つの袋に分けて配る（袋にラベルを付ける）'], ['sg4', 'この席図をスマホに保存する（ページを一度開いておけば、電波がなくても見られます）']];
+    return `<div class="wrap">${topbar()}${phead('Tickets &amp; Seats', '切符と座席', '切符の席と座る席が違う区間があります。席図・切符の持ち方・車掌さんへの説明を、ここにまとめました。')}
+      <p class="warn">JRへの事前確認はしていません。当日、車掌さんに申し出る前提です。座り直しを求められたら、その場で従います。</p>
+
+      <section class="sec">${secH('先に知っておくこと', 'Basics', 'sg-know')}
+        <ol class="sg-know">
+          <li><b>6人分・6席は買ってあります。</b>大人4名＋2歳・0歳の子ども2名。足りない分も、余る分もありません。</li>
+          <li><b>切符の席と、座る席が違う区間があります。</b>座る席は、この席図が正です。</li>
+          <li><b>切符は「大人用／小人用」で持ちます。</b>席は入れ替えても、切符は入れ替えません。</li></ol></section>
+
+      <section class="sec">${secH('なぜ席がずれるのか', 'Why', 'sg-why')}
+        <p class="sec-lead">飯塚家が「特大荷物スペースつき座席」を使うため、各区間の予約を2件に分けました。分け方が家族と一致しないので、切符の席と座る席がずれます。子ども（2歳・0歳）は、介助と抱っこのため、それぞれ大人の隣に座ります。</p>
+        <div class="sg-why">
+          <div class="sg-box"><b>予約する</b>
+            <div class="sg-rsv"><span>${sgMark('A')}<b>予約A</b>　大人2名だけ</span><span class="sg-row">${chip('ia', 'A', '大人用')}${chip('ia', 'A', '大人用')}</span></div>
+            <div class="sg-rsv"><span>${sgMark('B')}<b>予約B</b>　大人2名＋小人2名</span><span class="sg-row">${chip('ia', 'A', '大人用')}${chip('ia', 'A', '大人用')}${chip('ik', 'C', '小人用')}${chip('ik', 'C', '小人用')}</span></div></div>
+          <div class="sg-to" aria-hidden="true">↓</div>
+          <div class="sg-box"><b>実際に座る形</b>
+            <div class="sg-rsv"><span>飯塚家　親子（1組目）</span><span class="sg-row">${chip('ia', 'A', '飯塚家 大人')}${chip('ik', 'C', '飯塚家 こども')}</span></div>
+            <div class="sg-rsv"><span>飯塚家　親子（2組目）</span><span class="sg-row">${chip('ia', 'A', '飯塚家 大人')}${chip('ik', 'C', '飯塚家 こども')}</span></div>
+            <div class="sg-rsv"><span>山口家</span><span class="sg-row">${chip('y', 'A', '山口家 大人')}${chip('y', 'A', '山口家 大人')}</span></div></div></div></section>
+
+      <section class="sec">${secH('切符の持ち方', 'Tickets', 'sg-bags')}
+        <p class="sec-lead">切符は4つの袋に分けて持ちます。袋にラベルを付け、切符そのものには何も書きません。</p>
+        <div class="sg-bags">${bags.map(([n, d], i) => `<div class="sg-bag"><span class="num">袋${i + 1}</span><b>${n}</b><small>${d}</small></div>`).join('')}</div>
+        <ul class="sg-pts"><li>「一式」は、同じ列車の切符の組み合わせです。崩しません。</li><li>改札のあとは、元の袋に戻します。席に合わせて配り直しません。</li></ul></section>
+
+      <section class="sec">${secH('予約のくくり（列車ごと）', 'Reservations', 'sg-res')}
+        <p class="sec-lead">商品名：JR九州（①②⑤⑥）は「私たちも、かもめ。早特７」、EX（③④）は「EX早特７」（スマートEX）です。JR九州の予約区間は、往路が浦上・長崎→博多、復路が博多→浦上・長崎で、実際の乗り降りは新大村です。予約番号はここには載せません。</p>
+        <div class="sg-tblw"><table class="sg-tbl"><thead><tr><th scope="col">列車</th><th scope="col">${sgMark('A')}予約A</th><th scope="col">${sgMark('B')}予約B</th></tr></thead><tbody>
+          ${keys.map(k => { const tr = T.trains[k], { g, A, B } = sgGroups(k); return `<tr><th scope="row"><a href="#/ride/seats/${k}">${g.no}${g.way}　${esc(tr.name)}</a><small class="num">${tr.car}号車</small></th><td class="num">${A.join('・')}</td><td class="num">${B.join('・')}</td></tr>`; }).join('')}</tbody></table></div></section>
+
+      <section class="sec">${secH('席図（6区間）', 'Seat maps', 'sg-maps')}
+        <div class="sg-legend" aria-label="席図の見方">
+          <p><b>見方</b>　図の上が窓側か通路側かは、窓の線と「通路」の文字で分かります。矢印は進行方向です。</p>
+          <ul>
+            <li>${chip('ia', 'A', '飯塚家 大人')}${chip('ik', 'A', '飯塚家 こども')}${chip('y', 'A', '山口家 大人')}<span>席の色と文字で、座る人を示します。</span></li>
+            <li><i class="sg-bd">小</i><span>点線の枠＋「小」：小人用の切符の席</span></li>
+            <li><i class="sg-bd">荷</i><span>荷物スペースつきの席</span></li>
+            <li><i class="sg-bd chg">替</i><span>切符の区分と違う人が座る席（大人用の切符にこども／小人用の切符に大人）</span></li>
+            <li>${sgMark('A')}${sgMark('B')}<span>予約のくくり（黒の丸＝A、白抜きの丸＝B）</span></li></ul></div>
+        ${keys.map(sgCard).join('')}</section>
+
+      <section class="sec">${secH('当日の流れ', 'Steps', 'sg-steps')}
+        <ol class="sg-steps">
+          <li><b>改札は、係員のいる改札を通ります。</b>山口家はそれぞれ自分の切符で。飯塚家は親子2組で声をかけます。返ってきた切符は、すぐ元の袋へ。
+            <div class="sg-say sm"><p id="sg-say1">「2歳と0歳で、2人とも指定席の小人券があります。抱っこと介助で一緒に通ります。」</p>${copyBtn('2歳と0歳で、2人とも指定席の小人券があります。抱っこと介助で一緒に通ります。')}</div>
+            <p class="small">新大村の改札では「切符は浦上・長崎との間の区間で、乗り降りは新大村です」と添えます。</p></li>
+          <li><b>武雄温泉の乗り換えは3分です</b>（往路も復路も、かもめとリレーかもめは同じホームの向かい）。切符の仕分けはしません。子どもと荷物の移動を優先し、席は席図②（往路）または⑤（復路）のとおりです。</li>
+          <li><b>博多の乗り換えは、JR九州分とEX分の両方を出します。</b>往路は11:42着・12:15発で33分、復路は13:30着・13:54発で24分。乗換改札は係員のいるところを通り、JR九州の切符と新幹線（EX）の切符を、それぞれ見せます。</li>
+          <li><b>車内では、席図のとおりに座ります。</b>荷物は、荷物スペースつきの席の近くにまとめます。説明役は、その列車の6人分の切符と席図をすぐ出せるようにします。車掌さんが来たら、説明役が席の入れ替えを申し出ます。
+            <p class="small">のぞみ（③④）について、スマートEXの案内に「複数人で席の入れ替えを希望する場合は、車掌に申し出る」とある、と聞いていますが、公式ページでは確かめられていません（公式未確認）。</p></li></ol></section>
+
+      <section class="sec">${secH('車掌さんが来たら', 'Conductor', 'sg-conductor')}
+        <p class="sec-lead">説明役は飯塚家の大人1名です。他の人は座ったままで構いません。</p>
+        <blockquote class="sg-say" id="sg-say">${esc(say)}</blockquote>
+        <div class="btns" style="margin-top:8px">${copyBtn(say)}</div>
+        <ul class="sg-pts"><li>JRに確認したとは言いません（確認していません）。</li><li>座り直しを求められたら、その場で指示に従います。</li></ul></section>
+
+      <section class="sec">${secH('集合のときに決めること', 'Before leaving', 'sg-todo')}
+        <ul class="check" id="sg-todo">${tasks.map(([id, t]) => `<li class="${st[id] ? 'done' : ''}"><input type="checkbox" id="b-${id}" data-sgchk="${id}" ${st[id] ? 'checked' : ''}><label for="b-${id}">${esc(t)}</label></li>`).join('')}</ul>
+        <p class="note">2歳児と0歳児のどちらがどの列に座るかは、集合のときに決めます。チェックはこの端末に残ります（保存できないときは、開いている間だけ）。</p>
+        <div class="btns"><a class="btn quiet" href="#/ride">のりものへ戻る</a></div></section></div>`;
+  }
+
   function viewRide(sub, arg, opt) {
+    if (sub === 'seats') return viewSeats();
     if (sub === 'live') return viewLive(arg, opt === 'full');
     if (T.trains[sub]) session.set('dir', T.trains[sub].dir);
     const dir = session.get('dir') || (ymd(now()) >= '2026-10-20' ? 'back' : 'go');
@@ -2275,7 +2410,7 @@
     return `<div class="wrap">${topbar()}${phead('Trains', 'のりもの', '指定席券・乗り換え・車窓の楽しみを、この一枚に。')}
       ${lks.map(lk => { const ltr = trv(lk); return `<a class="ride-live" href="#/ride/live/${lk}"><span class="rl-h"><span class="tl-tag">いまどのへん？</span><b>${esc(ltr.name)}</b><small class="num">${ltr.alt ? `予定は${esc(ltr.plan.name)}・` : ''}${MD(ltr.date)} ${ltr.from} ${ltr.dep} → ${ltr.to} ${ltr.arr}${ltr.alt ? 'ごろ' : ''}</small></span>
         ${routeMini(lk, { demo: liveNowKey() !== lk })}<span class="rl-t">${lineKey(lk) === 'sanyo' ? '新幹線' : '特急'}の車内で、いまどこを走っているか、窓から何が見えるかが分かります。</span></a>`; }).join('')}
-      <nav class="ride-idx" aria-label="のりものの一覧">${[['指定席券と座席表', '#/ride/' + keys[0]], ['駅の乗り換え（3D）', '#/ride/transfer'], ['駅の時刻表', '#/ride/tt'], ['車窓の城', '#/ride/castles'], ['駅弁', '#/ride/ekiben'], ['鉄道トリビア', '#/ride/trivia'], ['レンタカー', '#/stay/car']].map(([l, h]) => `<a href="${h}">${l}</a>`).join('')}</nav>
+      <nav class="ride-idx" aria-label="のりものの一覧">${[['切符と座席', '#/ride/seats'], ['指定席券と座席表', '#/ride/' + keys[0]], ['駅の乗り換え（3D）', '#/ride/transfer'], ['駅の時刻表', '#/ride/tt'], ['車窓の城', '#/ride/castles'], ['駅弁', '#/ride/ekiben'], ['鉄道トリビア', '#/ride/trivia'], ['レンタカー', '#/stay/car']].map(([l, h]) => `<a href="${h}">${l}</a>`).join('')}</nav>
       <div class="segs" role="tablist"><button data-dir="go" class="${dir === 'go' ? 'on' : ''}">往路　10/17（土）</button><button data-dir="back" class="${dir === 'back' ? 'on' : ''}">復路　10/20（火）</button></div>
       ${!fam() ? `<p class="small">家族を選ぶと、自分の席だけが光ります。<button class="more" data-act="fam">家族を選ぶ</button></p>` : ''}
       ${keys.map((k, i) => ticket(k) + (tf[i] ? `<div class="transfer"><span class="w">乗り換え</span><div><b>${tf[i].at}駅</b><span class="small muted">　約${tf[i].wait}</span><p class="small">${esc(tf[i].text)}</p>${tf[i].at === '博多' ? `<div class="btns" style="margin-top:6px">${xferLink(dir === 'go' ? 1 : 4, '博多の乗り換えを立体の図で', 'btn quiet')}</div>` : ''}</div></div>` : '')).join('')}
@@ -3174,6 +3309,7 @@
     if (restoreY !== null) restoreScroll(restoreY);
     else if (route === 'trivia' && parts[1] && !/^d\d$/.test(parts[1])) { const g = $('#tv-cat-' + parts[1]); g && setTimeout(() => g.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120); }
     else if (route === 'trip') { const n = $('.tl li.now'); n ? setTimeout(() => n.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200) : window.scrollTo(0, 0); }
+    else if (route === 'ride' && parts[1] === 'seats' && parts[2] && $('#sg-' + parts[2])) setTimeout(() => $('#sg-' + parts[2]).scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
     else if (anchor && route !== 'spot') { setTimeout(() => { anchor.scrollIntoView({ behavior: 'smooth', block: 'start' }); const d = $('details', anchor); d && (d.open = true); }, 120); }
     else if (route === 'spot' && parts[1] === 'stamps') setTimeout(() => $('#stamps').scrollIntoView({ behavior: 'smooth' }), 120);
     else if (!(isLive && !fresh)) window.scrollTo(0, 0);
@@ -3296,6 +3432,7 @@
     const r92 = T.liveLine.relay92 || [], r33 = T.liveLine.relay33 || [], RL = (window.LINES || {}).relay;
     r92.forEach(([nm, pref, a, d, stop], k) => { const b = r33.find(x => x[0] === nm) || []; add(`${nm}駅（${pref}県）`, `いまどのへん？・リレーかもめが${stop && b[4] ? '止まる' : stop || b[4] ? '止まる（片道だけ）' : '通る'}駅`, J([`往路 ${a || d}${stop ? '' : 'ごろ通過'}　復路 ${b[2] || b[3] || ''}${b[4] ? '' : 'ごろ通過'}`, ...(((RL && RL.stationInfo) || {})[nm] || []).slice(0, 2)]), '#/ride/live/relay92', `#line > li:nth-child(${k + 1})`); });
     ((RL && RL.spots) || []).forEach(sp => add(sp.name, `沿線の見どころ・${sp.pref}`, J([sp.kana, sp.sum, sp.genre]), '#/ride/live/relay92', '#spots'));
+    add('切符と座席ガイド', 'のりもの・席がずれる理由と席図', '切符の持ち方・車掌さんへの説明・当日の流れ', '#/ride/seats', 'h1', { k: '切符 座席 席図 入れ替え 車掌 小人 大人 予約A 予約B 替 荷物 袋' });
     Object.entries(T.trains).forEach(([k, tr]) => add(tr.name, `のりもの・${MD(tr.date)} ${tr.from} ${tr.dep} → ${tr.to} ${tr.arr}`, J([tr.kind, tr.vehicle]), `#/ride/${k}`, `#${k}`, { k: tr.ticket + ' 指定席 座席表 座席 きっぷ' }));
     T.castles.forEach((c, j) => add(c.name, `車窓の城・${c.station}駅`, J([c.side, c.text]), '#/ride/castles', `[data-sid="castle-${j}"]`));
     T.ekiben.forEach(([n, p, d], j) => add(n, '博多駅の駅弁', d, '#/ride/ekiben', `.bento > li:nth-child(${j + 1})`, { k: '駅弁 弁当' }));
@@ -3583,6 +3720,8 @@
     if ((el = q('[data-bagdel]'))) { store.set('bagExtra', store.get('bagExtra', []).filter(x => x !== el.dataset.bagdel)); const y = scrollY; render(); scrollTo(0, y); }
   });
   document.addEventListener('change', e => {
+    const sg = e.target.closest('[data-sgchk]');
+    if (sg) { const d = { ...sgState() }; sg.checked ? (d[sg.dataset.sgchk] = 1) : delete d[sg.dataset.sgchk]; sgMem = d; store.set('sgChk', d); sg.closest('li').classList.toggle('done', sg.checked); return; }
     const b = e.target.closest('[data-bag]');
     if (b) { const d = store.get('bag', {}); b.checked ? (d[b.dataset.bag] = 1) : delete d[b.dataset.bag]; store.set('bag', d); const y = scrollY; render(); scrollTo(0, y); }
   });
