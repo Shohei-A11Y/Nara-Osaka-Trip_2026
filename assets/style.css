@@ -336,10 +336,13 @@ h3.sub { font-family: var(--f-min); font-size: calc(17px * var(--fs)); letter-sp
 .pick-btn.on { border-color: var(--moegi); background: var(--moegi-tint); color: var(--moegi); }
 /* 決まったお店（夕ごはん） */
 .meal-plan { list-style: none; margin: 4px 0 10px; padding: 0; }
-.meal-plan > li { display: grid; grid-template-columns: 4.6em 1fr auto; align-items: center; gap: 4px 12px; padding: 12px 0; border-top: 1px solid var(--rule); }
+.meal-plan > li { display: grid; grid-template-columns: 6.4em 1fr auto; align-items: center; gap: 4px 12px; padding: 12px 0; border-top: 1px solid var(--rule); }
 .meal-plan > li:last-child { border-bottom: 1px solid var(--rule); }
 .mp-d { font-weight: 700; font-size: calc(15px * var(--fs)); }
 .mp-d small { font-weight: 500; color: var(--sumi-2); font-size: calc(11.5px * var(--fs)); }
+.mp-d { display: flex; flex-direction: column; line-height: 1.4; }
+.mp-d .num { white-space: nowrap; }
+.mp-k { font-style: normal; font-weight: 500; font-size: calc(12px * var(--fs)); color: var(--sumi-2); letter-spacing: .06em; }
 .mp-v { display: flex; flex-direction: column; min-width: 0; line-height: 1.5; }
 .mp-v b { font-family: var(--f-min); font-size: calc(15.5px * var(--fs)); }
 .mp-v small { font-size: calc(12px * var(--fs)); color: var(--sumi-2); }
@@ -354,6 +357,12 @@ h3.sub { font-family: var(--f-min); font-size: calc(17px * var(--fs)); letter-sp
 .sf .mf-rsv input { margin: 0; }
 .mf-opt small { font-size: calc(12px * var(--fs)); color: var(--sumi-2); }
 .mf-opt em { font-style: normal; color: var(--shu-ink); font-weight: 700; }
+/* 「その他（候補にない店・所）」：名前を書く欄 */
+.mf-other { display: grid; gap: 6px; }
+.mf-other > input[type="text"] { margin-left: 30px; width: calc(100% - 30px); }
+.rain-list > li.rain-other { padding-bottom: 6px; }
+.rain-list > li.rain-other.on .rain-h b { color: var(--moegi); }
+.ro-form { margin-top: 8px; gap: 8px; }
 .mf-rsv { display: flex; gap: 10px; align-items: center; margin: 4px 0 0; font-weight: 700; min-height: 44px; }
 
 /* 駅名標 */

@@ -330,24 +330,39 @@
     return { rain: make('rainPick', 'rain'), meals: make('meals', 'meals') };
   })();
   const pickTag = (kind, k, none) => (Picks[kind].own(k) ? ownTag(`${kind === 'meals' ? 'meal' : 'rain'}:${k}`, Picks[kind].get(k) ? 'この端末だけの値' : none) : Picks[kind].shared(k) ? sharedTag() : '');
-  /* その日に選んだ雨の日の候補（無ければ null） */
-  const rainPicked = day => { const id = Picks.rain.get(day.date); return id ? ((T.rainPlans || {})[day.n] || []).find(r => r.id === id) || null : null; };
-  /* 夕ごはんを決める枠（日程に夕ごはんの案内がある日） */
-  const mealSlots = () => T.days.filter(d => d.dinner).map(d => ({ key: `${d.date}:dinner`, day: d }));
-  const shopOf = id => T.dinner.find(x => x.id === id) || null;
-  const mealText = m => { const sh = m && shopOf(m.shop); return sh ? `${sh.name}（${m.rsv ? '予約した' : '予約なし'}）` : ''; };
+  /* 候補にない店・場所の名前（「その他」で書いたもの）：空白を詰めて20字まで */
+  const OTHER_MAX = 20;
+  const otherName = v => String(v || '').replace(/\s+/g, ' ').trim().slice(0, OTHER_MAX);
+  /* その日に選んだ雨の日の候補（無ければ null）。候補の id か、「その他」なら { other: 名前 } */
+  const rainPicked = day => {
+    const v = Picks.rain.get(day.date); if (!v) return null;
+    if (typeof v === 'object') return v.other ? { id: 'other', name: v.other, other: true } : null;
+    return ((T.rainPlans || {})[day.n] || []).find(r => r.id === v) || null;
+  };
+  /* 食事を決める枠：お昼（10/18 まるかつ・10/19 JO-TERRACE の中の店）と、夕ごはん（日程に夕ごはんの案内がある日）。日付の順・お昼が先。
+     shops：選べる候補（ごはんのページのお店）。どの枠も「その他（候補にない店）」で名前を書ける（{ shop: 'other', name, rsv }） */
+  const MEAL_KIND = { lunch: 'お昼', dinner: '夕ごはん' };
+  const mealSlots = () => T.days.flatMap(d => {
+    const out = [], lunch = d.items.find(it => it.t === 'stop' && it.type === 'food');
+    if (lunch) out.push({ key: `${d.date}:lunch`, day: d, kind: 'lunch', shops: T.lunch.filter(x => x.day === d.n), hint: T.lunch.some(x => x.day === d.n) ? '' : `${lunch.name}の中のお店など` });
+    if (d.dinner) out.push({ key: `${d.date}:dinner`, day: d, kind: 'dinner', shops: T.dinner, hint: '' });
+    return out;
+  });
+  const shopOf = id => T.dinner.find(x => x.id === id) || T.lunch.find(x => x.id === id) || null;
+  const mealName = m => (!m ? '' : m.shop === 'other' ? otherName(m.name) : (shopOf(m.shop) || {}).name || '');
+  const mealText = m => { const n = mealName(m); return n ? `${n}（${m.rsv ? '予約した' : '予約なし'}）` : ''; };
 
   /* ========== 全員への連絡の一言（assets/shared.json の notice）と、〈きょう〉の共有の帯 ==========
      連絡は作る人（トークンのある端末）だけが書ける。全員の表紙（〈きょう〉）に小さく出す。「旅先の最新情報」（latest.js）とは別。
-     旅行中は、その日の雨の日の予定・夕ごはんも1行ずつ添える */
+     旅行中は、その日の雨の日の予定・お昼・夕ごはんも1行ずつ添える */
   const noticeAt = iso => { const t = new Date(iso); if (isNaN(t)) return ''; return `${ymd(t) === ymd(now()) ? '' : `${+ymd(t).slice(5, 7)}/${+ymd(t).slice(8, 10)} `}${fmtHM(t)}`; };
   function shareStrip() {
     const n = Shared.get(['notice']), d = phase() === 'during' ? todayDay() : null, rows = [];
     if (n && n.text) rows.push(`<p class="ss-row ss-notice"><span class="ss-k">連絡</span><span class="ss-t">${esc(n.text)}<small class="num">${noticeAt(n.at)}</small></span></p>`);
     if (d) {
-      const rp = rainPicked(d), m = Picks.meals.get(`${d.date}:dinner`);
+      const rp = rainPicked(d);
       if (rp) rows.push(`<p class="ss-row"><span class="ss-k">雨の日</span><a class="ss-t" href="#/trip/${d.n}">${esc(rp.name)}</a></p>`);
-      if (m && shopOf(m.shop)) rows.push(`<p class="ss-row"><span class="ss-k">夕ごはん</span><a class="ss-t" href="#/food/meals">${esc(mealText(m))}</a></p>`);
+      mealSlots().filter(x => x.day === d).forEach(x => { const m = Picks.meals.get(x.key); if (mealName(m)) rows.push(`<p class="ss-row"><span class="ss-k">${MEAL_KIND[x.kind]}</span><a class="ss-t" href="#/food/meals">${esc(mealText(m))}</a></p>`); });
     }
     const w = Shared.writer(), upd = shareUpd();
     if (!rows.length && !w) return upd ? `<div class="share-strip bare">${upd}</div>` : '';
@@ -857,7 +872,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 44;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
+  const MAN_V = 45;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -1307,12 +1322,26 @@
         ${infoList([['予定地から', esc(r.move)], ['営業時間', esc(r.hours)], ['料金', esc(r.fee)], ['確認', r.sure ? '公式ページで確認ずみ' : '検索結果による（公式ページは未確認）。行く前に公式でご確認ください']])}
         ${r.note ? `<p class="small muted">${esc(r.note)}</p>` : ''}
         <p class="rain-links">${r.links.map(([l, u]) => `<a class="ext" href="${u}" target="_blank" rel="noopener">${esc(l)}</a>`).join('　')}</p>
-        <div class="btns"><button type="button" class="pick-btn${pk && pk.id === r.id ? ' on' : ''}" data-rainpick="${day.n}|${r.id}" aria-pressed="${!!(pk && pk.id === r.id)}">${pk && pk.id === r.id ? '選んだ ✓（押すと取り消し）' : 'これにする'}</button></div></li>`).join('')}</ol>
-      <p class="note">2026年10月2日に調べた内容です。臨時休館・貸切・料金の変更は、各施設の公式ページでご確認ください。</p>`);
+        <div class="btns"><button type="button" class="pick-btn${pk && pk.id === r.id ? ' on' : ''}" data-rainpick="${day.n}|${r.id}" aria-pressed="${!!(pk && pk.id === r.id)}">${pk && pk.id === r.id ? '選んだ ✓（押すと取り消し）' : 'これにする'}</button></div></li>`).join('')}
+        <li class="rain-other${pk && pk.other ? ' on' : ''}"><div class="rain-h"><b>その他（候補にない所）</b></div>
+          <p class="small muted">当日、現地で決めた所は、名前を書いて「これにする」を押してください（${OTHER_MAX}字まで）。</p>
+          <form class="sf ro-form" id="rf"><input type="text" id="rf-n" maxlength="${OTHER_MAX}" placeholder="例：奈良県立美術館" aria-label="その他の場所の名前" value="${pk && pk.other ? esc(pk.name) : ''}">
+            <div class="btns"><button type="submit" class="pick-btn${pk && pk.other ? ' on' : ''}">${pk && pk.other ? '名前を直す' : 'これにする'}</button>${pk && pk.other ? `<button type="button" class="pick-btn" data-rainpick="${day.n}|other">取り消す</button>` : ''}</div></form></li></ol>
+      <p class="note">2026年10月2日に調べた内容です。臨時休館・貸切・料金の変更は、各施設の公式ページでご確認ください。</p>`,
+      el => {
+        $('#rf', el).addEventListener('submit', e => {
+          e.preventDefault(); e.stopPropagation();
+          const name = otherName($('#rf-n', el).value); if (!name) { $('#rf-n', el).focus(); return; }
+          Picks.rain.set(day.date, { other: name });
+          $$('.sheet-bg').forEach(x => x.remove());
+          toast(`雨の日の予定を「${name}」にしました`);
+          const y = scrollY; quietRender = true; render(); scrollTo(0, y);
+        });
+      }, { noFocus: true });
   }
   function rainPick(v) {
     const [n, id] = v.split('|'), day = T.days.find(d => d.n === +n); if (!day) return;
-    const r = ((T.rainPlans || {})[n] || []).find(x => x.id === id), on = Picks.rain.get(day.date) === id;
+    const pk = rainPicked(day), r = ((T.rainPlans || {})[n] || []).find(x => x.id === id), on = !!pk && pk.id === id;
     Picks.rain.set(day.date, on ? null : id);
     $$('.sheet-bg').forEach(x => x.remove());
     toast(on ? '雨の日の予定を取り消しました' : `雨の日の予定を「${r ? r.name : ''}」にしました`);
@@ -1703,7 +1732,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=44').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=45').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -2121,6 +2150,11 @@
       });
   }
 
+  /* 行程表のお昼の地点に、決まったお店を1行（決めていなければ出さない） */
+  function lunchPick(day) {
+    const k = `${day.date}:lunch`, m = Picks.meals.get(k), tag = pickTag('meals', k, 'この端末だけ未定（共有では決定）');
+    return (mealName(m) ? `<p class="dinner-pick">${ic('bowl')}<span>お昼：<b>${esc(mealText(m))}</b></span></p>` : '') + (tag ? `<p class="shb-own">${tag}</p>` : '');
+  }
   function viewTrip(n) {
     const day = T.days.find(d => d.n === n) || T.days[0];
     const t = now(), evs = events(day), sc = schedule(day);
@@ -2165,7 +2199,7 @@
         const w = warnAt(i);
         return `<li class="${st}${S && S.i === i ? ' anchor' : ''}" id="it-${i}"><div class="row ${it.minor ? 'minor' : ''} ${it.type === 'ramp' ? 'ramp' : ''}">
           <div class="time num">${time}${here}</div><div class="pin"></div>
-          <div class="body">${head}${it.note ? `<p class="stop-note${it.optional ? ' opt' : ''}">${esc(it.note)}</p>` : ''}${it.to ? latestMini(it.to) : ''}${w ? `<p class="stop-warn">${esc(w)}</p>` : ''}${acts ? `<div class="acts">${acts}</div>` : ''}</div></div></li>`;
+          <div class="body">${head}${it.note ? `<p class="stop-note${it.optional ? ' opt' : ''}">${esc(it.note)}</p>` : ''}${it.type === 'food' ? lunchPick(day) : ''}${it.to ? latestMini(it.to) : ''}${w ? `<p class="stop-warn">${esc(w)}</p>` : ''}${acts ? `<div class="acts">${acts}</div>` : ''}</div></div></li>`;
       }
       const tr = it.train && T.trains[it.train], av = tr && trv(it.train);
       const extra = [
@@ -2196,7 +2230,7 @@
       ${isToday ? `<div class="trip-sync">${nudgeHtml(nudge())}${shareUpd()}${shiftBar(day) || `<p class="sync-hint">${ic('here')}<span>予定からずれたら、いまいる地点の「いまここ」を押すと、この先の時刻を合わせて表示します。</span></p>`}</div>` : ''}
       <ol class="tl">${lis}</ol>
       ${day.dinner ? (() => { const k = `${day.date}:dinner`, m = Picks.meals.get(k), tag = pickTag('meals', k, 'この端末だけ未定（共有では決定）');
-        return `<div class="dinner-note">${m && shopOf(m.shop) ? `<p class="dinner-pick">${ic('bowl')}<span>夕ごはん：<b>${esc(mealText(m))}</b></span></p>` : ''}${tag ? `<p class="shb-own">${tag}</p>` : ''}<p class="memo">${esc(day.dinner)}</p><div class="btns"><a class="btn" href="#/food/meals">${m ? '決まったお店を見る' : '夕ごはんを決める・候補を見る'}</a></div></div>`; })() : ''}
+        return `<div class="dinner-note">${mealName(m) ? `<p class="dinner-pick">${ic('bowl')}<span>夕ごはん：<b>${esc(mealText(m))}</b></span></p>` : ''}${tag ? `<p class="shb-own">${tag}</p>` : ''}<p class="memo">${esc(day.dinner)}</p><div class="btns"><a class="btn" href="#/food/meals">${m ? '決まったお店を見る' : '夕ごはんを決める・候補を見る'}</a></div></div>`; })() : ''}
       <p class="note">移動時間は、子ども連れや荷物を考えた余裕を含む目安です。「乗換案内」「徒歩ルート」「車ルート」は、外のサイト（Yahoo!乗換案内・Googleマップ）で開きます。</p>
       <div class="btns" style="justify-content:space-between;margin-top:28px">${prevN ? `<a class="btn quiet" href="#/trip/${prevN}">← ${prevN}日目</a>` : '<span></span>'}${nextN ? `<a class="btn quiet" href="#/trip/${nextN}">${nextN}日目 →</a>` : ''}</div></div>`;
   }
@@ -2711,31 +2745,40 @@
       ${infoList([['営業', esc(s.hours)], ['支払い', esc(s.pay)], ['住所', esc(s.address)], ['電話', `<a href="${tel(s.tel)}">${s.tel}</a>`]].concat(s.takeout ? [['持ち帰り', esc(s.takeout)]] : []).concat(s.rule ? [['お作法', esc(s.rule)]] : []))}
       <div class="btns"><button class="vote ${votes.includes(s.id) ? 'on' : ''}" data-vote="${s.id}">${votes.includes(s.id) ? '♥ 行きたい' : '♡ 行きたい'}</button>${ext(gmap(s.name), '地図')}${ext(s.url, 'お店の情報')}</div></article>`;
   }
-  /* 決まったお店（夕ごはん）：日ごとに、店と予約した／してない */
+  /* 決まったお店：日・お昼／夕ごはんごとに、店と予約した／してない（候補にない店は「その他」で名前を書く） */
   function mealBlock() {
-    return `<section class="sec" id="meals">${secH('決まったお店（夕ごはん）', 'Decided')}
-      <ul class="meal-plan">${mealSlots().map(({ key, day }) => { const m = Picks.meals.get(key), sh = m && shopOf(m.shop), tag = pickTag('meals', key, 'この端末だけ未定（共有では決定）');
-        return `<li><span class="mp-d num">${day.label}<small>（${day.dow}）</small></span><span class="mp-v">${sh ? `<b>${esc(sh.name)}</b><small>${m.rsv ? '予約した' : '予約なし'}</small>` : '<span class="mp-none">まだ決めていません</span>'}${tag ? `<span class="mp-tag">${tag}</span>` : ''}</span><button type="button" class="act" data-meal="${key}">${sh ? '変える' : '決める'}</button></li>`; }).join('')}</ul>
+    return `<section class="sec" id="meals">${secH('決まったお店', 'Decided')}
+      <ul class="meal-plan">${mealSlots().map(({ key, day, kind }) => { const m = Picks.meals.get(key), nm = mealName(m), tag = pickTag('meals', key, 'この端末だけ未定（共有では決定）');
+        return `<li><span class="mp-d"><span class="num">${day.label}<small>（${day.dow}）</small></span><em class="mp-k">${MEAL_KIND[kind]}</em></span><span class="mp-v">${nm ? `<b>${esc(nm)}</b><small>${m.shop === 'other' ? 'その他・' : ''}${m.rsv ? '予約した' : '予約なし'}</small>` : '<span class="mp-none">まだ決めていません</span>'}${tag ? `<span class="mp-tag">${tag}</span>` : ''}</span><button type="button" class="act" data-meal="${key}">${nm ? '変える' : '決める'}</button></li>`; }).join('')}</ul>
       <p class="small muted">${Shared.writer() ? '作る人の端末なので、決めると全員に共有します（1〜2分で反映）。' : '作る人が決めると、全員のしおりに出ます。この端末で決めると、この端末だけに残ります。'}</p>${shareUpd()}</section>`;
   }
   function mealSheet(key) {
     const sl = mealSlots().find(x => x.key === key); if (!sl) return;
-    const { day } = sl, m = Picks.meals.get(key), dow = new Date(day.date + 'T12:00:00+09:00').getDay();
+    const { day, kind, shops, hint } = sl, m = Picks.meals.get(key), dow = new Date(day.date + 'T12:00:00+09:00').getDay(), oth = !!m && m.shop === 'other';
     const opt = (v, inner, on) => `<label class="mf-opt"><input type="radio" name="mf-shop" value="${v}"${on ? ' checked' : ''}><span>${inner}</span></label>`;
-    sheet(`${day.label}（${day.dow}）の夕ごはん`, `<form class="sf" id="mf">
+    const sub = x => (x.area ? `${esc(T.dinnerAreas[x.area].name)}・${esc(x.genre)}` : esc(x.sub || '')) + ((x.closedDays || []).includes(dow) ? '・<em>この日は定休日</em>' : '');
+    sheet(`${day.label}（${day.dow}）の${MEAL_KIND[kind]}`, `<form class="sf" id="mf">
         <fieldset class="mf-list"><legend class="small muted">お店</legend>
-          ${T.dinner.map(x => opt(x.id, `<b>${esc(x.name)}</b><small>${esc(T.dinnerAreas[x.area].name)}・${esc(x.genre)}${(x.closedDays || []).includes(dow) ? '・<em>この日は定休日</em>' : ''}</small>`, m && m.shop === x.id)).join('')}
+          ${shops.map(x => opt(x.id, `<b>${esc(x.name)}</b><small>${sub(x)}</small>`, m && m.shop === x.id)).join('')}
+          <div class="mf-other">${opt('other', `<b>その他（候補にない店）</b><small>${hint ? esc(hint) + '。' : ''}当日、現地で決めた店の名前を書きます</small>`, oth)}
+            <input type="text" id="mf-n" maxlength="${OTHER_MAX}" placeholder="お店の名前（${OTHER_MAX}字まで）" aria-label="その他のお店の名前" value="${oth ? esc(mealName(m)) : ''}"${oth ? '' : ' hidden'}></div>
           ${opt('', '<b>まだ決めていない</b>', !m)}</fieldset>
         <label class="mf-rsv"><input type="checkbox" id="mf-rsv"${m && m.rsv ? ' checked' : ''}><span>予約した</span></label>
         <div class="btns"><button class="btn fill" type="submit">これで決める</button></div>
       </form>
       <p class="note">${Shared.writer() ? '作る人の端末なので、決めると全員に共有します（1〜2分で反映）。' : 'この端末だけに残ります。作る人が決めると、全員のしおりに出ます。'}予約番号は入れません。</p>`,
       (el, close) => {
+        const nIn = $('#mf-n', el);
+        /* 「その他」を選んだときだけ、名前の欄を出す */
+        $$('input[name="mf-shop"]', el).forEach(r => r.addEventListener('change', () => { const on = ($('input[name="mf-shop"]:checked', el) || {}).value === 'other'; nIn.hidden = !on; if (on) nIn.focus(); }));
+        nIn.addEventListener('focus', () => { const o = $('input[name="mf-shop"][value="other"]', el); o.checked = true; });
         $('#mf', el).addEventListener('submit', e => {
           e.preventDefault(); e.stopPropagation();
-          const v = ($('input[name="mf-shop"]:checked', el) || {}).value || '', rsv = $('#mf-rsv', el).checked;
-          Picks.meals.set(key, v ? { shop: v, rsv } : null);
-          close(); toast(v ? `${day.label}の夕ごはんを「${shopOf(v).name}」にしました` : `${day.label}の夕ごはんを「まだ決めていない」にしました`);
+          const v = ($('input[name="mf-shop"]:checked', el) || {}).value || '', rsv = $('#mf-rsv', el).checked, name = otherName(nIn.value);
+          if (v === 'other' && !name) { nIn.hidden = false; nIn.focus(); toast('お店の名前を書いてください'); return; }
+          const val = !v ? null : v === 'other' ? { shop: 'other', name, rsv } : { shop: v, rsv };
+          Picks.meals.set(key, val);
+          close(); toast(val ? `${day.label}の${MEAL_KIND[kind]}を「${mealName(val)}」にしました` : `${day.label}の${MEAL_KIND[kind]}を「まだ決めていない」にしました`);
           const y = scrollY; quietRender = true; render(); scrollTo(0, y);
         });
       }, { noFocus: true });
@@ -3050,8 +3093,8 @@
     const sh = D.shift || {}, li = [];
     if (sh.here) { const day = T.days.find(d => d.date === sh.here.date), it = day && day.items[sh.here.i]; li.push(['いまここ', `${+sh.here.date.slice(5, 7)}/${+sh.here.date.slice(8, 10)} ${it ? esc(shortName(it)) : ''}・${sh.here.min > 0 ? `予定より${durTxt(sh.here.min)}遅れ` : sh.here.min < 0 ? `予定より${durTxt(-sh.here.min)}早い` : '予定どおり'}`]); }
     Object.entries(sh.alt || {}).forEach(([k, a]) => li.push(['別の便', `${esc((T.trains[k] || {}).name || k)} → ${esc(a.name)}（${esc(a.dep)}発・${a.car ? esc(a.car) + '号車' + (a.seat ? '・' + esc(a.seat) : '') : '自由席'}）`]));
-    Object.entries(D.rain || {}).forEach(([dt, id]) => { const day = T.days.find(d => d.date === dt), r = day && ((T.rainPlans || {})[day.n] || []).find(x => x.id === id); li.push(['雨の日', `${+dt.slice(5, 7)}/${+dt.slice(8, 10)} ${esc(r ? r.name : id)}`]); });
-    Object.entries(D.meals || {}).forEach(([k, m]) => li.push(['夕ごはん', `${+k.slice(5, 7)}/${+k.slice(8, 10)} ${esc(mealText(m) || m.shop)}`]));
+    Object.entries(D.rain || {}).forEach(([dt, id]) => { const day = T.days.find(d => d.date === dt), r = day && (id && id.other ? { name: id.other + '（その他）' } : ((T.rainPlans || {})[day.n] || []).find(x => x.id === id)); li.push(['雨の日', `${+dt.slice(5, 7)}/${+dt.slice(8, 10)} ${esc(r ? r.name : String(id))}`]); });
+    Object.entries(D.meals || {}).forEach(([k, m]) => li.push([MEAL_KIND[k.split(':')[1]] || '食事', `${+k.slice(5, 7)}/${+k.slice(8, 10)} ${esc(mealText(m) || m.shop)}`]));
     if (D.notice && D.notice.text) li.push(['連絡', `${esc(D.notice.text)}（${noticeAt(D.notice.at)}）`]);
     const sn = Object.keys(D.stamps || {}).length; if (sn) li.push(['スタンプ', `${sn}か所`]);
     return `<div class="kn-st${S.n ? ' pend' : ''}" role="status">${out.map(x => `<p>${x}</p>`).join('')}
