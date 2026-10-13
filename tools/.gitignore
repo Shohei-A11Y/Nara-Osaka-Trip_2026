@@ -2,3 +2,4 @@
 .area-cache/
 __pycache__/
 .tunnel-cache/
+.road-cache/

@@ -930,6 +930,38 @@ body.sim-on .lm-full .lm-addr { margin-top: calc(0px - env(safe-area-inset-top))
 .lm-shows i.tun { width: 18px; height: 6px; border-radius: 3px; background: repeating-linear-gradient(90deg, var(--ai) 0 5px, transparent 5px 9px) var(--paper); box-shadow: 0 0 0 1px var(--rule); }
 .lm-shows li { display: flex; align-items: center; min-width: 0; }
 .lm-shows .lm-chk span { min-width: 0; }
+/* 道路（高速道路・国道・主要地方道）：名前は線に沿わせた控えめな文字、国道は▽・主要地方道は六角形の中に番号。色は地図の線と同じ（livemap.js の RD_COL） */
+.lm-rdx { pointer-events: none; }
+.lm-rdx span { display: block; font-size: calc(11px * var(--fs)); font-weight: 700; letter-spacing: .12em; line-height: 1; white-space: nowrap; color: #24603f; text-shadow: 0 0 2px var(--paper), 0 0 2px var(--paper), 0 0 3px var(--paper), 0 0 4px var(--paper); }
+.lm-rds { pointer-events: none; position: relative; width: 28px; height: 24px; }
+.lm-rds.w3 { width: 32px; }
+.lm-rds svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.lm-rds path { fill: var(--paper); stroke-width: 1.6; stroke-linejoin: round; }
+.lm-rds b { position: absolute; left: 0; right: 0; text-align: center; font-family: var(--f-got); font-weight: 700; font-size: calc(10.5px * var(--fs)); line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.lm-rds.n path { stroke: #b8692a; }
+.lm-rds.n b { top: 4px; color: #8a4a17; }   /* ▽：番号は上の広いところに */
+.lm-rds.p path { stroke: #8a7d2c; }
+.lm-rds.p b { top: 7px; color: #5f5617; }
+.lm-legend i.rdl, .lm-shows i.rdl { width: 18px; height: 4px; border-radius: 2px; background: #2f7d55; }
+.lm-legend i.rdi, .lm-shows i.rdi { width: 18px; height: 16px; border-radius: 0; background: none; }
+.lm-legend i.rdi svg, .lm-shows i.rdi svg { width: 18px; height: 16px; }
+.lm-legend i.rdi path, .lm-shows i.rdi path { fill: var(--paper); stroke-width: 2.2; stroke-linejoin: round; }
+.lm-legend i.rdi.n path, .lm-shows i.rdi.n path { stroke: #b8692a; }
+.lm-legend i.rdi.p path, .lm-shows i.rdi.p path { stroke: #8a7d2c; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .lm-rdx span { color: #8fd6ae; }
+  :root:not([data-theme="light"]) .lm-rds.n path, :root:not([data-theme="light"]) .lm-legend i.rdi.n path, :root:not([data-theme="light"]) .lm-shows i.rdi.n path { stroke: #e3a46a; }
+  :root:not([data-theme="light"]) .lm-rds.n b { color: #f0bd8c; }
+  :root:not([data-theme="light"]) .lm-rds.p path, :root:not([data-theme="light"]) .lm-legend i.rdi.p path, :root:not([data-theme="light"]) .lm-shows i.rdi.p path { stroke: #cfc070; }
+  :root:not([data-theme="light"]) .lm-rds.p b { color: #e2d68f; }
+  :root:not([data-theme="light"]) .lm-legend i.rdl, :root:not([data-theme="light"]) .lm-shows i.rdl { background: #78c79b; }
+}
+:root[data-theme="dark"] .lm-rdx span { color: #8fd6ae; }
+:root[data-theme="dark"] .lm-rds.n path, :root[data-theme="dark"] .lm-legend i.rdi.n path, :root[data-theme="dark"] .lm-shows i.rdi.n path { stroke: #e3a46a; }
+:root[data-theme="dark"] .lm-rds.n b { color: #f0bd8c; }
+:root[data-theme="dark"] .lm-rds.p path, :root[data-theme="dark"] .lm-legend i.rdi.p path, :root[data-theme="dark"] .lm-shows i.rdi.p path { stroke: #cfc070; }
+:root[data-theme="dark"] .lm-rds.p b { color: #e2d68f; }
+:root[data-theme="dark"] .lm-legend i.rdl, :root[data-theme="dark"] .lm-shows i.rdl { background: #78c79b; }
 /* 外した種類：窓から見える縁・駅名 */
 .lm-novis .lm-pin.vis .lm-pin-h { box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
 .lm-nostn .lm-stn { display: none; }
