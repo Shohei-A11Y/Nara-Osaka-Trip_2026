@@ -1,20 +1,22 @@
 /* 電波が弱い場所でも見られるように、しおり本体を端末に保存する */
-const CACHE = 'shiori-v43';
+const CACHE = 'shiori-v44';
 const TILES = 'shiori-tiles';     // 地図タイル：見た分だけ保存（地図の種類は分けず、全体でおよそ300枚まで。古いものから消す。航空写真は保存しない）
 const TILE_MAX = 300;
 const ML = 'assets/vendor/maplibre-gl/';
 const TH = 'assets/vendor/three/';      // 駅の乗り換え（3D）だけで使う。ページを開いたときだけ読み込むが、電波がなくても開けるように保存しておく
 const MAN = 'assets/manual/';          // 使い方ページの写真（電波がなくても見られるように保存）
 const INTRO = 'assets/intro/';         // 機能紹介の動画と、止まった1コマ（電波がなくても再生できるように保存）
-const GAME = ['', 'index.html', 'style.css?v=43', 'quiz.js?v=43', 'quiz.json?v=43'];   // 新幹線クイズ（別ページ）：電波がなくても遊べるように保存。地図当ての線路は上の line-*.json を使う
+const GAME = ['', 'index.html', 'style.css?v=44', 'quiz.js?v=44', 'quiz.json?v=44'];   // 新幹線クイズ（別ページ）：電波がなくても遊べるように保存。地図当ての線路は上の line-*.json を使う
 const BUDGET = 'assets/budget.json';     // 予算：管理ページから公開側を直接直すので、?v= を付けずにいつも最新を取りに行く
-const FILES = ['./', 'index.html', 'assets/style.css?v=43', 'assets/sim.js?v=43', 'assets/data.js?v=43', 'assets/timetable.js?v=43', 'assets/timetable-data.js?v=43', 'assets/line-data.js?v=43', 'assets/guide.js?v=43', 'assets/news.js?v=43', 'assets/latest.js?v=43', 'assets/budget.js?v=43', 'assets/livemap.js?v=43', 'assets/app.js?v=43', 'assets/line-sanyo.json?v=43', 'assets/line-relay.json?v=43', 'assets/roads.json?v=43',   // 道路（いまどのへん？の地図に重ねる高速・国道・主要地方道。電波がなくても出す） 'assets/area.json?v=43', 'assets/drive-route.json?v=43', BUDGET,
+const SHARED = 'assets/shared.json';     // 全員で共有する状態（いまここ・別の便・雨の日・食事・連絡・スタンプ）：予算と同じ扱い
+const LIVE = [BUDGET, SHARED];
+const FILES = ['./', 'index.html', 'assets/style.css?v=44', 'assets/sim.js?v=44', 'assets/data.js?v=44', 'assets/timetable.js?v=44', 'assets/timetable-data.js?v=44', 'assets/line-data.js?v=44', 'assets/guide.js?v=44', 'assets/news.js?v=44', 'assets/latest.js?v=44', 'assets/budget.js?v=44', 'assets/shared.js?v=44', 'assets/livemap.js?v=44', 'assets/app.js?v=44', 'assets/line-sanyo.json?v=44', 'assets/line-relay.json?v=44', 'assets/roads.json?v=44', 'assets/area.json?v=44', 'assets/drive-route.json?v=44', BUDGET, SHARED,   // roads.json：道路（いまどのへん？の地図に重ねる高速・国道・主要地方道。電波がなくても出す）
   ML + 'maplibre-gl.mjs', ML + 'maplibre-gl-shared.mjs', ML + 'maplibre-gl-worker.mjs', ML + 'maplibre-gl.css',
-  'transfer.html', TH + 'three.module.min.js?v=43', TH + 'addons/controls/OrbitControls.js', TH + 'addons/renderers/CSS2DRenderer.js', TH + 'addons/utils/BufferGeometryUtils.js',
+  'transfer.html', TH + 'three.module.min.js?v=44', TH + 'addons/controls/OrbitControls.js', TH + 'addons/renderers/CSS2DRenderer.js', TH + 'addons/utils/BufferGeometryUtils.js',
   TH + 'addons/lines/Line2.js', TH + 'addons/lines/LineMaterial.js', TH + 'addons/lines/LineGeometry.js', TH + 'addons/lines/LineSegments2.js', TH + 'addons/lines/LineSegmentsGeometry.js',
-  'assets/train-sprite.webp?v=43', 'assets/train-787.webp?v=43',   // いまどのへん？の列車の印（36方向。のぞみ・リレーかもめ）
-  MAN + 'marks.json?v=43', ...['top', 'today', 'shift', 'search', 'ride', 'xfer', 'live', 'sim', 'qr', 'a2hs', 'fs', 'offline', 'news', 'intro', 'xhelp', 'memories'].map(k => MAN + k + '.webp?v=43'),
-  ...['live', 'xfer'].flatMap(k => [INTRO + k + '.mp4?v=43', INTRO + k + '.webp?v=43']),
+  'assets/train-sprite.webp?v=44', 'assets/train-787.webp?v=44',   // いまどのへん？の列車の印（36方向。のぞみ・リレーかもめ）
+  MAN + 'marks.json?v=44', ...['top', 'today', 'shift', 'search', 'ride', 'xfer', 'live', 'sim', 'qr', 'a2hs', 'fs', 'offline', 'news', 'intro', 'xhelp', 'memories'].map(k => MAN + k + '.webp?v=44'),
+  ...['live', 'xfer'].flatMap(k => [INTRO + k + '.mp4?v=44', INTRO + k + '.webp?v=44']),
   'assets/icon.svg', 'assets/icon-192.png', 'assets/icon-512.png', 'manifest.webmanifest',
   ...GAME.map(f => 'game/' + f)];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
@@ -30,10 +32,11 @@ self.addEventListener('fetch', e => {
       if (res.ok && res.status === 200) { const cp = res.clone(); e.waitUntil(c.put(e.request.url, cp)); }
       return res;
     })).then(res => ranged(e.request, res))));
-  } else if (url.origin === location.origin && url.pathname.endsWith('/' + BUDGET)) {
-    // 予算：ネット優先（ブラウザの保存も使わずに最新を取りに行く）。取れたら保存し、圏外のときは最後に取れた値
-    e.respondWith(fetch(e.request.url, { cache: 'no-store' }).then(r => { if (r.ok) { const cp = r.clone(); e.waitUntil(caches.open(CACHE).then(c => c.put(BUDGET, cp))); } return r; })
-      .catch(() => caches.open(CACHE).then(c => c.match(BUDGET, { ignoreSearch: true })).then(r => r || Response.error())));
+  } else if (url.origin === location.origin && LIVE.some(f => url.pathname.endsWith('/' + f))) {
+    // 予算・共有の状態：ネット優先（ブラウザの保存も使わずに最新を取りに行く）。取れたら保存し、圏外のときは最後に取れた値
+    const f = LIVE.find(x => url.pathname.endsWith('/' + x));
+    e.respondWith(fetch(e.request.url, { cache: 'no-store' }).then(r => { if (r.ok) { const cp = r.clone(); e.waitUntil(caches.open(CACHE).then(c => c.put(f, cp))); } return r; })
+      .catch(() => caches.open(CACHE).then(c => c.match(f, { ignoreSearch: true })).then(r => r || Response.error())));
   } else if (url.origin === location.origin) {
     // 自分のファイル：まずネット、だめなら保存分
     e.respondWith(fetch(e.request).then(r => { const cp = r.clone(); caches.open(CACHE).then(c => c.put(e.request, cp)); return r; }).catch(() => caches.match(e.request).then(r => r || caches.match(e.request, { ignoreSearch: true })).then(r => r || (e.request.mode === 'navigate' ? caches.match('index.html') : Response.error()))));

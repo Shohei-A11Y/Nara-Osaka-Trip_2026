@@ -179,17 +179,21 @@
   /* ========== 予定の便に乗れなかったとき（別の便に乗った） ==========
      乗った便の時刻表は持たず、予定の便が「○分遅れで発車した」とみなす（いまどのへん？は、その差を遅れの初めの値にして、GPSで補正する）。
      列車ごとに { name：乗った便の名前, dep：発車した（する）時刻 'H:MM', car：号車（空なら自由席）, seat：席 } を覚える。
-     覚えるのはこの端末だけ（localStorage の alt）。おためし中は sessionStorage の alt-sim に分けて置き、おためしを始める・終えるときに消す */
+     覚えるのはこの端末（localStorage の alt）。おためし中は sessionStorage の alt-sim に分けて置き、おためしを始める・終えるときに消す。
+     全員の共有（assets/shared.json の shift.alt）：その端末に自分の値が無い列車は、共有の値を使う。作る人の端末（トークンあり）で入れると、共有にも書く。
+     その端末で「予定の便に戻す」を押したのに共有に値が残っているときは、null を覚えて「この端末では予定の便」とする（own・sync で確かめる・共有に合わせる） */
   const AltRide = (() => {
     const KEY = 'alt', SIM = 'alt-sim';
     let mem = null;   // 保存できない端末では、開いているあいだだけ
     const area = () => (Clock.active() ? sessionStorage : localStorage);
-    const read = () => {
+    const local = () => {
       let v = null;
       try { v = JSON.parse(area().getItem(Clock.active() ? SIM : KEY)); } catch { v = undefined; }
       if (v === undefined) v = mem;
       return v && typeof v === 'object' ? v : {};
     };
+    const shared = () => (Clock.active() || !window.Shared ? {} : Shared.get(['shift', 'alt']) || {});
+    const read = () => (Clock.active() || !window.Shared ? local() : Shared.mix(shared(), local()));
     const write = v => {
       mem = v;
       try { Object.keys(v).length ? area().setItem(Clock.active() ? SIM : KEY, JSON.stringify(v)) : area().removeItem(Clock.active() ? SIM : KEY); } catch { /* 保存できなくても続行 */ }
@@ -197,7 +201,15 @@
     const jst = (date, hm) => +new Date(`${date}T${hm.length === 4 ? '0' + hm : hm}:00+09:00`);
     const A = {
       get: key => { const a = read()[key]; return a && a.dep ? a : null; },
-      set(key, v) { const all = read(); if (v) all[key] = v; else delete all[key]; write(all); },
+      set(key, v) {
+        const all = local(), sh = !Clock.active() && !!window.Shared && Shared.put(['shift', 'alt', key], v || null);
+        if (v) all[key] = v; else if (!sh && shared()[key]) all[key] = null; else delete all[key];
+        write(all);
+      },
+      /* その端末だけの値か（共有と違う自分の値がある）。sync：自分の値を消して、共有に合わせる */
+      own: key => { const l = local(); return !Clock.active() && key in l && !(window.Shared && Shared.same(l[key], shared()[key] || null)); },
+      shared: key => !Clock.active() && !!shared()[key],
+      sync(key) { const all = local(); delete all[key]; write(all); },
       /* 予定の便の発車との差（ミリ秒）。別の便に乗っていなければ 0 */
       off(key) { const a = A.get(key), tr = window.TRIP && TRIP.trains[key]; return a && tr ? jst(tr.date, a.dep) - jst(tr.date, tr.dep) : 0; },
       /* 画面に出すための列車の情報（別の便なら、名前・発車・到着の目安を入れ替える。号車と席は carTxt に） */

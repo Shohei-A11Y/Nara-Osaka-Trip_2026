@@ -101,30 +101,39 @@
 
   /* ========== 旅の記録スタンプ ==========
      押した記録は {スタンプid: 押した日時（ISO）}。スポットの紹介ページの id と同じなので、後の「思い出モード」でもそのまま使える。
-     この端末だけに残す（localStorage）。おためし中は sessionStorage に分けて置き、本当の記録を汚さない。
+     この端末に残す（localStorage）。おためし中は sessionStorage に分けて置き、本当の記録を汚さない。
+     全員の共有（assets/shared.json の stamps）：作る人の端末（トークンあり）で押すと、共有にも書く。どの端末も、共有の記録とその端末の記録を合わせて数える
+     （思い出モードのまとめを全員そろえる）。その端末で取り消したのに共有に残っているときは null を覚えて「この端末では押していない」とする。
      前の版（id が違う・値が「10/18」）の記録は、読むときに今の形に直す */
   const Stamps = (() => {
     const fix = v => { const m = /^(\d{1,2})\/(\d{1,2})$/.exec(v || ''); return m ? `2026-${p0(m[1])}-${p0(m[2])}` : v; };
     function p0(n) { return String(n).padStart(2, '0'); }
-    function get() {
+    /* その端末の記録（取り消しの null も含む） */
+    function local() {
       let raw;
       if (Clock.active()) { try { raw = JSON.parse(session.get('stamps-sim')) || {}; } catch { raw = {}; } }
       else raw = store.get('stamps', {}) || {};
       const out = {};
-      Object.entries(raw).forEach(([k, v]) => { if (v) out[(T.stampOld || {})[k] || k] = fix(String(v)); });
+      Object.entries(raw).forEach(([k, v]) => { const id = (T.stampOld || {})[k] || k; if (v) out[id] = fix(String(v)); else if (v === null && !(id in out)) out[id] = null; });
       return out;
     }
+    const shared = () => { if (Clock.active()) return {}; const v = Shared.get(['stamps']) || {}, out = {}; Object.entries(v).forEach(([k, x]) => { if (x) out[k] = fix(String(x)); }); return out; };
+    const get = () => (Clock.active() ? Shared.mix({}, local()) : Shared.mix(shared(), local()));
     function set(v) { Clock.active() ? session.set('stamps-sim', JSON.stringify(v)) : store.set('stamps', v); }
     /* 押す・取り消す。戻り値：押したら true */
     function toggle(id) {
-      const v = get();
-      if (v[id]) delete v[id]; else v[id] = now().toISOString();
-      set(v); return !!v[id];
+      const on = !get()[id], v = local(), at = now().toISOString();
+      const sh = !Clock.active() && Shared.put(['stamps', id], on ? at : null);
+      if (on) v[id] = at; else if (!sh && shared()[id]) v[id] = null; else delete v[id];
+      set(v); return on;
     }
+    /* その端末だけの記録（共有と違うもの）の数。sync：その端末の記録を消して、共有に合わせる */
+    const own = () => { if (Clock.active()) return 0; const l = local(), sh = shared(); return Object.keys(l).filter(k => (l[k] || null) !== (sh[k] || null)).length; };
+    const sync = () => set({});
     const count = (v = get()) => T.stamps.filter(s => v[s.id]).length;
     /* 押した日時を短く（日付だけの古い記録は日付だけ） */
     const when = iso => { const d = new Date(iso); if (isNaN(d)) return ''; const md = d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' }); return /T/.test(iso) ? `${md} ${fmtHM(d)}` : md; };
-    return { get, toggle, count, when };
+    return { get, toggle, count, when, own, sync, shared };
   })();
   /* 印の形（64×64）。スタンプごとに形を変えて、字が読めなくても見分けられるようにする */
   const STAMP_SHAPE = (() => {
@@ -257,24 +266,111 @@
 
   /* ========== 「いまここ」：予定からのずれ ==========
      行程表（または「今日の予定」）で、いまいる地点を押すと、そこを現在地とみなし、以降の予定をずれた分だけ動かした見込みで出す。
-     覚えるのはこの端末だけ（localStorage。使えないときは開いている間だけ）。おためし中は sessionStorage に分けて置く。
+     覚えるのはこの端末（localStorage。使えないときは開いている間だけ）。おためし中は sessionStorage に分けて置く。
+     全員の共有（assets/shared.json の shift.here）：その端末に自分の値が無ければ、共有の値を使う。作る人の端末（トークンあり）で入れると、共有にも書く。
+     その端末で「予定どおりに戻す」を押したのに共有に値が残っているときは {date, off: true} を覚えて「この端末では予定どおり」とする。
      日付が変わったら、自動で元に戻す（date が今日でなければ無視して消す）。
      固定の時刻（新幹線・特急の発車）は動かさない。ずれは固定の時刻で吸収し、間に合わなさそうなら一言出す */
   let shiftMem = null;
-  function getShift() {
+  /* その端末の自分の値（無ければ null） */
+  function shiftLocal() {
     let v;
     if (Clock.active()) { try { v = JSON.parse(session.get('shift-sim')); } catch { v = null; } }
     else v = store.get('shift');
     if (v === null || v === undefined) v = shiftMem;
-    if (!v || typeof v.min !== 'number') return null;
-    if (v.date !== ymd(now())) { if (!Clock.active()) try { localStorage.removeItem('shift'); } catch { /* noop */ } return null; }
+    if (!v || typeof v !== 'object') return null;
+    if (v.date !== ymd(now())) { if (!Clock.active()) try { localStorage.removeItem('shift'); } catch { /* noop */ } shiftMem = null; return null; }
     return v;
   }
+  /* 全員の共有の値（今日のものだけ。おためし中は使わない） */
+  const shiftShared = () => { if (Clock.active()) return null; const v = Shared.get(['shift', 'here']); return v && v.date === ymd(now()) && typeof v.min === 'number' ? v : null; };
+  function getShift() {
+    const v = shiftLocal() || shiftShared();
+    return v && !v.off && typeof v.min === 'number' ? v : null;
+  }
   function setShift(v) {
+    const sh = !Clock.active() && Shared.put(['shift', 'here'], v || null);
+    if (!v && !Clock.active() && !sh && shiftShared()) v = { date: ymd(now()), off: true };
     shiftMem = v;
     if (Clock.active()) session.set('shift-sim', v ? JSON.stringify(v) : null);
     else if (v) store.set('shift', v);
     else try { localStorage.removeItem('shift'); } catch { /* noop */ }
+  }
+  /* その端末だけの値か（共有と違う自分の値がある） */
+  const shiftOwn = () => { const l = !Clock.active() && shiftLocal(); return !!l && !Shared.same(l, shiftShared()); };
+  const shiftSync = () => { shiftMem = null; try { localStorage.removeItem('shift'); } catch { /* noop */ } };
+  /* 共有の小さな表示：「この端末だけの値」＋「共有に合わせる」（自分の値を消す）／「全員の共有」 */
+  const ownTag = (k, what = 'この端末だけの値') => `<span class="own-tag"><span>${what}</span><button type="button" class="own-sync" data-sync="${esc(k)}">共有に合わせる</button></span>`;
+  const sharedTag = (what = '全員の共有') => `<span class="own-tag sh"><span>${what}</span></span>`;
+  /* 共有の更新 ○時○分（最後に作る人が書いた時刻。今日でなければ日付も） */
+  function shareUpd(cls = '') {
+    const d = Shared.data(); if (!d || !d.updatedAt || !(+d.rev > 0)) return '';
+    const t = new Date(d.updatedAt); if (isNaN(t)) return '';
+    const md = ymd(t) === ymd(new Date()) ? '' : `${+ymd(t).slice(5, 7)}/${+ymd(t).slice(8, 10)} `;
+    return `<p class="share-upd${cls ? ' ' + cls : ''}">共有の更新 <span class="num">${md}${fmtHM(t)}</span></p>`;
+  }
+
+  /* ========== 雨の日の選択・夕ごはんの決定 ==========
+     その端末の値（localStorage の rainPick・meals。おためし中は sessionStorage に分けて置く）と、全員の共有（assets/shared.json の rain・meals）を重ねる。
+     キーごとに、自分の値があればそちら（null は「この端末では決めていない」）、無ければ共有の値。作る人の端末（トークンあり）で決めると、共有にも書く。
+     rain：{ 日付: 候補の id }／meals：{ '日付:dinner': { shop: 店の id, rsv: 予約した } } */
+  const Picks = (() => {
+    const make = (lk, sk) => {
+      const local = () => { let v; if (Clock.active()) { try { v = JSON.parse(session.get(lk + '-sim')); } catch { v = null; } } else v = store.get(lk); return v && typeof v === 'object' ? v : {}; };
+      const save = v => (Clock.active() ? session.set(lk + '-sim', JSON.stringify(v)) : store.set(lk, v));
+      const shared = () => (Clock.active() ? {} : Shared.get([sk]) || {});
+      return {
+        get: k => Shared.mix(shared(), local())[k] || null,
+        set(k, v) { const L = local(), sh = !Clock.active() && Shared.put([sk, k], v || null); if (v) L[k] = v; else if (!sh && shared()[k]) L[k] = null; else delete L[k]; save(L); },
+        own: k => { const L = local(); return !Clock.active() && k in L && !Shared.same(L[k], shared()[k] || null); },
+        shared: k => !Clock.active() && !!shared()[k] && !(k in local()),
+        sync(k) { const L = local(); delete L[k]; save(L); }
+      };
+    };
+    return { rain: make('rainPick', 'rain'), meals: make('meals', 'meals') };
+  })();
+  const pickTag = (kind, k, none) => (Picks[kind].own(k) ? ownTag(`${kind === 'meals' ? 'meal' : 'rain'}:${k}`, Picks[kind].get(k) ? 'この端末だけの値' : none) : Picks[kind].shared(k) ? sharedTag() : '');
+  /* その日に選んだ雨の日の候補（無ければ null） */
+  const rainPicked = day => { const id = Picks.rain.get(day.date); return id ? ((T.rainPlans || {})[day.n] || []).find(r => r.id === id) || null : null; };
+  /* 夕ごはんを決める枠（日程に夕ごはんの案内がある日） */
+  const mealSlots = () => T.days.filter(d => d.dinner).map(d => ({ key: `${d.date}:dinner`, day: d }));
+  const shopOf = id => T.dinner.find(x => x.id === id) || null;
+  const mealText = m => { const sh = m && shopOf(m.shop); return sh ? `${sh.name}（${m.rsv ? '予約した' : '予約なし'}）` : ''; };
+
+  /* ========== 全員への連絡の一言（assets/shared.json の notice）と、〈きょう〉の共有の帯 ==========
+     連絡は作る人（トークンのある端末）だけが書ける。全員の表紙（〈きょう〉）に小さく出す。「旅先の最新情報」（latest.js）とは別。
+     旅行中は、その日の雨の日の予定・夕ごはんも1行ずつ添える */
+  const noticeAt = iso => { const t = new Date(iso); if (isNaN(t)) return ''; return `${ymd(t) === ymd(now()) ? '' : `${+ymd(t).slice(5, 7)}/${+ymd(t).slice(8, 10)} `}${fmtHM(t)}`; };
+  function shareStrip() {
+    const n = Shared.get(['notice']), d = phase() === 'during' ? todayDay() : null, rows = [];
+    if (n && n.text) rows.push(`<p class="ss-row ss-notice"><span class="ss-k">連絡</span><span class="ss-t">${esc(n.text)}<small class="num">${noticeAt(n.at)}</small></span></p>`);
+    if (d) {
+      const rp = rainPicked(d), m = Picks.meals.get(`${d.date}:dinner`);
+      if (rp) rows.push(`<p class="ss-row"><span class="ss-k">雨の日</span><a class="ss-t" href="#/trip/${d.n}">${esc(rp.name)}</a></p>`);
+      if (m && shopOf(m.shop)) rows.push(`<p class="ss-row"><span class="ss-k">夕ごはん</span><a class="ss-t" href="#/food/meals">${esc(mealText(m))}</a></p>`);
+    }
+    const w = Shared.writer(), upd = shareUpd();
+    if (!rows.length && !w) return upd ? `<div class="share-strip bare">${upd}</div>` : '';
+    return `<section class="share-strip" aria-label="全員の共有">${rows.join('')}<div class="ss-foot">${w ? `<button type="button" class="own-sync" data-act="notice">${n && n.text ? '連絡を直す' : '全員に連絡を書く'}</button>` : '<span></span>'}${upd}</div></section>`;
+  }
+  function noticeSheet() {
+    if (!Shared.writer()) return;
+    const n = Shared.get(['notice']);
+    sheet('全員への連絡', `<form class="sf" id="nf">
+        <label class="sf-col"><span class="sf-k">連絡の一言（60字まで）</span><textarea id="nf-t" maxlength="60" rows="3" placeholder="例：あすの集合は8:50、ホテルのロビーです">${n && n.text ? esc(n.text) : ''}</textarea></label>
+        <div class="btns"><button class="btn fill" type="submit">全員に送る</button>${n && n.text ? '<button class="btn quiet" type="button" data-nf-del>連絡を消す</button>' : ''}</div>
+      </form>
+      <p class="note">全員のしおりの表紙（〈きょう〉）に小さく出ます（1〜2分で反映）。名前・予約番号・合言葉は書かないでください。</p>`,
+      (el, close) => {
+        const done = msg => { close(); toast(msg, 2600); };
+        $('#nf', el).addEventListener('submit', e => {
+          e.preventDefault(); e.stopPropagation();
+          const t = $('#nf-t', el).value.replace(/\s+/g, ' ').trim().slice(0, 60); if (!t) return;
+          Shared.put(['notice'], { text: t, at: now().toISOString() }); done('連絡を送っています…');
+        });
+        const del = $('[data-nf-del]', el);
+        del && del.addEventListener('click', () => { Shared.put(['notice'], null); done('連絡を消しています…'); });
+      }, { noFocus: true });
   }
   /* 新幹線・特急に乗る地点（その発車時刻は動かさない。別の便に乗ったときは、その便の名前と発車時刻） */
   const fixedTrain = (day, i) => { const n = day.items[i + 1]; return n && n.t === 'move' && n.train ? trv(n.train) : null; };
@@ -360,6 +456,8 @@
      乗った便の時刻表は持たず、予定の便が発車の差の分だけ遅れて走るとみなす（いまどのへん？は、その差を遅れの初めの値にしてGPSで補正）。
      日程は、降りる駅から先を「いまここ」と同じ {date, i, min} で後ろにずらす（alt にその列車を書いておき、予定の便に戻すときに一緒に消す）。
      指定席券（予約の内容）は変えない。おためし中は sessionStorage 側（sim.js の AltRide） */
+  /* 別の便の共有の表示：その端末だけの値なら「共有に合わせる」、共有の値を使っていれば「全員の共有」 */
+  const altTag = key => (!window.AltRide ? '' : AltRide.own(key) ? `<br>${ownTag('alt:' + key, AltRide.get(key) ? 'この端末だけの値' : 'この端末だけ予定の便（共有では別の便）')}` : AltRide.shared(key) && AltRide.get(key) ? `<br>${sharedTag()}` : '');
   function altSheet(key) {
     const tr = T.trains[key]; if (!tr || !window.AltRide) return;
     const a = altGet(key), t = now(), v = trv(key);
@@ -374,6 +472,7 @@
         <p class="small muted">号車が空欄なら「自由席」と出します。</p>
         <div class="btns"><button class="btn fill" type="submit">この便で表示する</button>${a ? '<button class="btn quiet" type="button" data-af-reset>予定の便に戻す</button>' : ''}</div>
       </form>
+      ${altTag(key) ? `<p class="small">${altTag(key).replace(/^<br>/, '')}</p>` : ''}
       <p class="note">乗った便の時刻表は使わず、予定の便（${esc(tr.name)}）が、発車の差の分だけ遅れて走るとみなします。いまどのへん？は、そのあとGPSで合わせます。停車駅が予定の便と違うことがあるので、駅と時刻は目安です。指定席券の画面は、予約の内容のままです。</p>`,
       (el, close) => {
         const done = msg => { close(); toast(msg, 3600); const y = scrollY; render(); scrollTo(0, y); };
@@ -668,14 +767,16 @@
     { id: 'today', tab: 'きょう', where: '下のタブの〈きょう〉を押したときの、旅行中の画面の説明です。', ic: 'today', title: 'きょう', sub: '旅行中に、まず開く所', pts: [
       { m: 1, t: '下の「きょう」を押すと、いつでもこの画面に戻ります。' },
       { m: 1, t: 'いまの予定と、次の予定です。日付と時刻から自動で選びます。' },
-      { m: 1, t: '次に乗る列車と、発車までの時間です。「時刻表」で前後の便も見られます。' }] },
+      { m: 1, t: '次に乗る列車と、発車までの時間です。「時刻表」で前後の便も見られます。' },
+      { t: '作る人が入れた連絡の一言と、その日の雨の日の予定・夕ごはんは、このカードの下の帯に出ます（全員に1〜2分で反映。「共有の更新 ○時○分」が最後に入れた時刻です）。' }] },
     { id: 'shift', tab: '日程', where: '〈日程〉の行程表で、いまいる地点の「いまここ」を押したときの画面の説明です。', ic: 'here', title: 'いまここ', sub: '予定からずれたとき', pts: [
       { m: 1, t: 'いまいる地点の「いまここ」を押すと、そこを現在地として、この先の予定をずれた分だけ動かした見込みで出します。' },
       { m: 1, t: 'ずれと、出発の見込みです。「予定どおりに戻す」で、いつでも元に戻せます。' },
       { m: 1, t: '見込みの時刻は朱色で「ごろ」と出します。新幹線・特急の発車時刻は動かさず、間に合わなさそうなときは一言でお知らせします。' },
       { t: '押し忘れ・押し遅れたときは、出た地点の「いまここ」を押してから、ずれの1行の「時刻を直す」で、地点と実際に出た時刻（または「予定より○分」）を入れ直します。過ぎた地点も選べます。' },
       { t: 'トップの「今日の予定」からも、いまいる所を1回押すだけで合わせられます。' },
-      { t: '合わせていないときは、時計だけで決めた「予定では、いまごろ」を出します。合わせた内容はこの端末だけに残り、日付が変わると元に戻ります。' }] },
+      { t: '合わせていないときは、時計だけで決めた「予定では、いまごろ」を出します。合わせた内容は、日付が変わると元に戻ります。' },
+      { t: '作る人が入れると、全員のしおりに反映します（1〜2分）。自分の端末だけ直すと、そちらが優先されます（「この端末だけの値」と出ます。「共有に合わせる」で全員の値に戻せます）。' }] },
     { id: 'ride', tab: 'のりもの', where: '下のタブの〈のりもの〉の、一覧の画面の説明です。', ic: 'train', title: 'のりもの', sub: '指定席券・座席表・時刻表', pts: [
       { m: 1, t: '新幹線の中では、ここから「いまどのへん？」を開きます。' },
       { m: 1, t: '見たい項目へ移ります。駅の乗り換え（3D）・時刻表・車窓の城などがあります。' },
@@ -700,6 +801,7 @@
       { t: '乗車の時間帯（発車の30分前〜到着の2時間後）は、位置の情報を許可していれば、ボタンを押さなくてもGPSで遅れを測り、「約○分遅れ」と出して、次の駅まで・到着・降車のお知らせ・駅一覧の時刻をずらします。時間帯が終わると、自動で止まります。' },
       { t: '位置の情報の許可は、端末ごとに一度だけ必要です。旅行の前に、いまどのへん？を開くと出る案内の「許可する」を押しておいてください（当日まではGPSを使いません）。許可していない端末には、乗車の時間帯に画面の上に「使う」が出ます。' },
       { t: '「GPSを止める」を押すと、そのタブのあいだは自動で使いません。それ以外の時間は、「現在地を使う」を押したときだけ使います。運行の状況は、地図の下の「JR公式の運行情報」で確かめられます。' },
+      { t: '「別の便に乗った」を作る人が入れると、全員の端末のいまどのへん？も、1〜2分のうちにその便に合わせて動きます。自分の端末で入れ直したときは、そちらが優先されます。' },
       { t: '地図の左上の「いま ○○県 ○○市」は、列車の位置から決めた、いまいる市区町村です（電波がなくても出ます）。地図の種類を「住所（市区町村）」（下は淡色の地図）か「住所（航空写真）」にすると、市区町村を色分けして、境界線と名前（ふりがな付き）を出します。色分けの濃さは、地図の種類のメニューと設定の「住所の地図の塗りの濃さ」のつまみで変えられ、いちばん左で塗りなし（境界線と名前だけ）になります。境界線は、設定か地図の種類のメニューで、どの地図にも重ねられます。' },
       { t: '立体のとき・航空写真・住所の地図では、市区町村の名前と、山（▲と標高）・川（線路が渡る所）・海や湾などの名前を、画面に向けて立てて出します。縮尺に合わせて数を絞り、見どころ・駅名と重なるときは省きます。凡例のチェック（または設定）の「市区町村名」「山・川・海の名前」で消せます。' },
       { t: '地図に重ねるものは、左の「凡例」を開いた各行の先頭のチェックで、種類ごとに出す・出さないを選べます（見どころの種類・窓から見える縁・トンネル・駅名・市区町村名・山や川の名前・境界・道路）。上の「すべてオン／すべてオフ」で一度に切り替えられ、設定（⚙）の「地図に重ねるもの」も同じものです。この端末に覚えます。' },
@@ -755,7 +857,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 43;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
+  const MAN_V = 44;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -1083,14 +1185,15 @@
   /* 「今日の予定」のカードから、1回で「いまここ」：いちばん近い2つの地点を並べる */
   function syncBox(day, cur, next, t) {
     if (getShift()) return shiftBar(day);
+    const off = shiftOff(day);
     const ev = events(day), stops = ev.filter(e => e.it.t === 'stop' && e.it.type !== 'ramp');
     let cand = [];
     if (cur && cur.it.t === 'stop') cand = [cur, stops.find(e => e.i > cur.i)];
     else if (cur) cand = [[...stops].reverse().find(e => e.i < cur.i), stops.find(e => e.i > cur.i)];
     else cand = [[...stops].reverse().find(e => e.end <= t), stops.find(e => e.start > t)];
     cand = cand.filter(Boolean).filter((e, k, a) => a.indexOf(e) === k).slice(0, 2);
-    if (!cand.length) return '';
-    return `<div class="dc-sync"><p>予定からずれたら、いまいる所を押してください。この先の時刻を合わせます。</p>
+    if (!cand.length) return off;
+    return `${off}<div class="dc-sync"><p>予定からずれたら、いまいる所を押してください。この先の時刻を合わせます。</p>
       <div class="dc-here">${cand.map(e => `<button type="button" class="here-chip" data-here="${day.date}:${e.i}">${ic('here')}<span>${esc(shortName(e.it))}</span></button>`).join('')}<a class="more" href="#/trip/${day.n}">ほかの地点</a></div></div>`;
   }
   /* いま使いそうなもの（D-3）：時刻と行程から2〜3個だけ。つぎの列車のカードにあるもの（時刻表・指定席券・いまどのへん？）は出さない */
@@ -1181,6 +1284,13 @@
   /* 雨の日の候補：日程の見出しの下に「雨の日はこちら」を出す（その日の降水確率が50%以上の予報のときだけ。予報が取れない日は出さない） */
   async function loadRain(day) {
     const slot = $('#rain-slot'); if (!slot || !(T.rainPlans || {})[day.n]) return;
+    /* 雨の日の候補を選んであれば、予報を待たずに出す */
+    const pk = rainPicked(day);
+    if (pk) {
+      const who = Picks.rain.own(day.date) ? 'この端末だけの値' : Picks.rain.shared(day.date) ? '全員の共有' : '';
+      slot.innerHTML = `<button type="button" class="rain-btn picked" data-rain="${day.n}">${ic('rain')}<span><b>雨の日の予定：${esc(pk.name)}</b><small>${who ? who + '・' : ''}屋内の候補 ${T.rainPlans[day.n].length}か所</small></span><i aria-hidden="true">›</i></button>`;
+      return;
+    }
     let pp = simRain();
     if (!pp) { try { pp = rainPP(wxDay(await getForecast(), day)); } catch { pp = null; } }
     if (!Number.isFinite(pp) || pp < 50 || !slot.isConnected) return;
@@ -1189,12 +1299,24 @@
   }
   function rainSheet(n) {
     const day = T.days.find(d => d.n === +n), list = (T.rainPlans || {})[n]; if (!day || !list) return;
+    const pk = rainPicked(day), tag = pickTag('rain', day.date, 'この端末だけ未定（共有では決定）');
     sheet(`雨の日の候補　${day.label}（${day.dow}）`, `<p class="small muted">予定の近くで、雨でも過ごしやすい所です。どれも予約はいりません。移動の時間は目安です。</p>
-      <ol class="rain-list">${list.map(r => `<li><div class="rain-h"><b>${esc(r.name)}</b><span class="rain-kind">${esc(r.kind)}</span>${r.sure ? '' : '<span class="unsure">公式未確認</span>'}</div>
+      <div class="pick-now"><p>${pk ? `この日の雨の日の予定：<b>${esc(pk.name)}</b>` : 'まだ選んでいません。行く所が決まったら「これにする」を押してください。'}</p>${tag ? `<p>${tag}</p>` : ''}
+        <p class="small muted">${Shared.writer() ? '作る人の端末なので、選ぶと全員に共有します（1〜2分で反映）。' : '作る人が選ぶと、全員のしおりに出ます。この端末で選ぶと、この端末だけに残ります。'}</p></div>
+      <ol class="rain-list">${list.map(r => `<li${pk && pk.id === r.id ? ' class="on"' : ''}><div class="rain-h"><b>${esc(r.name)}</b><span class="rain-kind">${esc(r.kind)}</span>${r.sure ? '' : '<span class="unsure">公式未確認</span>'}</div>
         ${infoList([['予定地から', esc(r.move)], ['営業時間', esc(r.hours)], ['料金', esc(r.fee)], ['確認', r.sure ? '公式ページで確認ずみ' : '検索結果による（公式ページは未確認）。行く前に公式でご確認ください']])}
         ${r.note ? `<p class="small muted">${esc(r.note)}</p>` : ''}
-        <p class="rain-links">${r.links.map(([l, u]) => `<a class="ext" href="${u}" target="_blank" rel="noopener">${esc(l)}</a>`).join('　')}</p></li>`).join('')}</ol>
+        <p class="rain-links">${r.links.map(([l, u]) => `<a class="ext" href="${u}" target="_blank" rel="noopener">${esc(l)}</a>`).join('　')}</p>
+        <div class="btns"><button type="button" class="pick-btn${pk && pk.id === r.id ? ' on' : ''}" data-rainpick="${day.n}|${r.id}" aria-pressed="${!!(pk && pk.id === r.id)}">${pk && pk.id === r.id ? '選んだ ✓（押すと取り消し）' : 'これにする'}</button></div></li>`).join('')}</ol>
       <p class="note">2026年10月2日に調べた内容です。臨時休館・貸切・料金の変更は、各施設の公式ページでご確認ください。</p>`);
+  }
+  function rainPick(v) {
+    const [n, id] = v.split('|'), day = T.days.find(d => d.n === +n); if (!day) return;
+    const r = ((T.rainPlans || {})[n] || []).find(x => x.id === id), on = Picks.rain.get(day.date) === id;
+    Picks.rain.set(day.date, on ? null : id);
+    $$('.sheet-bg').forEach(x => x.remove());
+    toast(on ? '雨の日の予定を取り消しました' : `雨の日の予定を「${r ? r.name : ''}」にしました`);
+    const y = scrollY; quietRender = true; render(); scrollTo(0, y);
   }
 
   /* ========== 旅先の最新情報（中身は assets/latest.js） ==========
@@ -1464,8 +1586,8 @@
       </dl>
       <div class="mem-visit"><p class="mem-sh">行った場所<span class="num">スタンプ ${got.length} / ${T.stamps.length}</span></p>
         ${got.length ? `<ol class="mem-stamps">${got.map(s => `<li>${stampSvg(s, st[s.id])}<span><b>${esc(s.name)}</b><small class="num">${Stamps.when(st[s.id])}</small></span></li>`).join('')}</ol>`
-          : '<p class="small muted">この端末では、スタンプはまだ押されていません。スタンプ帳で、あとからでも押せます。</p>'}
-        <p class="small muted">スタンプの記録は、この端末に押したぶんだけです。</p></div>
+          : '<p class="small muted">スタンプは、まだ押されていません。スタンプ帳で、あとからでも押せます。</p>'}
+        <p class="small muted">スタンプは、全員の共有の記録（作る人が押したぶん）と、この端末で押したぶんを合わせて数えています。</p></div>
       <div class="btns mem-links">${hasMemo ? `<a class="btn" href="#/memo">${ic('pen')} 思い出メモを見る</a>` : `<a class="more" href="#/memo">思い出メモを書く</a>`}<a class="more" href="#/spot/stamps">スタンプ帳</a>${hasAct ? `<a class="more" href="#/money" data-bdgo="actual">予算／実績を見る</a>` : ''}</div>
       <button type="button" class="btn mem-trip" data-act="memtrip">旅行中のしおりを見る<small>日程・のりもの・まっぷは、今までどおり使えます</small></button>
     </section>`;
@@ -1476,6 +1598,7 @@
     if (memOn()) return `${memCover()}
     <div class="wrap">
       <div class="today-top" id="today-top">${memSummary()}</div>
+      ${shareStrip()}
       ${latestSection()}
       <section class="sec">${secH('4日間の旅', 'Itinerary')}
         <div>${T.days.map(d => `<a class="dayrow" href="#/trip/${d.n}" style="--c:${DAYC(d.n)}">
@@ -1498,6 +1621,7 @@
     return `${cover}
     <div class="wrap">
       <div class="today-top" id="today-top">${todayTop()}</div>
+      ${shareStrip()}
       ${ph === 'after' ? '<p class="mem-back"><button type="button" class="btn" data-act="memback">‹ 思い出モード（旅のまとめ）にもどる</button></p>' : ''}
       ${latestSection()}
       <nav class="shortcuts" aria-label="よく使う">
@@ -1579,7 +1703,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=43').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=44').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -1933,9 +2057,16 @@
   const nudgeHtml = nd => nd ? `<div class="nudge" role="note"><p>${esc(nd.text)}</p><button type="button" class="nudge-x" data-nudge="${nd.id}" aria-label="この案内を閉じる">×</button></div>` : '';
   /* ずれの帯（行程表の上と「今日の予定」） */
   function shiftBar(day) {
-    const x = shiftText(day); if (!x) return '';
-    return `<div class="shift-bar" role="status"><p class="shb-main">${ic('here')}<span>${esc(x.text)}</span></p>${x.warn ? `<p class="shb-warn">${esc(x.warn)}</p>` : ''}
+    const x = shiftText(day); if (!x) return shiftOff(day);
+    const tag = shiftOwn() ? ownTag('shift') : !Clock.active() && !shiftLocal() && shiftShared() ? sharedTag('全員の共有（作る人が入れた時刻）') : '';
+    return `<div class="shift-bar" role="status"><p class="shb-main">${ic('here')}<span>${esc(x.text)}</span></p>${x.warn ? `<p class="shb-warn">${esc(x.warn)}</p>` : ''}${tag ? `<p class="shb-own">${tag}</p>` : ''}
       <div class="shb-acts"><button type="button" class="act" data-shiftfix="${day.date}">時刻を直す</button><button type="button" class="act" data-unshift>予定どおりに戻す</button></div></div>`;
+  }
+  /* その端末だけ「予定どおり」に戻したが、全員の共有には、ずれが入っているとき */
+  function shiftOff(day) {
+    const l = !Clock.active() && shiftLocal();
+    if (!l || !l.off || !shiftShared() || day.date !== ymd(now())) return '';
+    return `<div class="shift-bar off" role="status"><p class="shb-main">${ic('here')}<span>この端末では、予定どおりの時刻で表示しています。全員の共有には、ずれが入っています。</span></p><p class="shb-own">${ownTag('shift')}</p></div>`;
   }
   /* 「時刻を直す」：押し忘れ・押し遅れのときに、地点と実際の時刻（または予定より±分）を入れ直す。
      入れた値は「いまここ」と同じ {date, i, min} にそのまま入れる（新幹線・特急の発車で吸収する決まりも同じ） */
@@ -2038,7 +2169,7 @@
       }
       const tr = it.train && T.trains[it.train], av = tr && trv(it.train);
       const extra = [
-        av && av.alt ? `<div class="alt-tr"><b>別の便：${esc(av.name)}　${av.dep}発・${esc(av.carTxt)}</b><br>予定は${esc(tr.name)}（${tr.dep}発・${tr.car}号車）。指定席の予約は、そのままです。</div>` : '',
+        av && av.alt ? `<div class="alt-tr"><b>別の便：${esc(av.name)}　${av.dep}発・${esc(av.carTxt)}</b><br>予定は${esc(tr.name)}（${tr.dep}発・${tr.car}号車）。指定席の予約は、そのままです。${altTag(it.train)}</div>` : altTag(it.train) ? `<div class="alt-tr">${altTag(it.train)}</div>` : '',
         tr ? `<div>${tr.kind}・${tr.vehicle}</div>` : '',
         it.detail ? `<div>${esc(it.detail)}</div>` : '',
         it.dist ? `<div>距離 ${it.dist}</div>` : '',
@@ -2062,9 +2193,10 @@
       <div class="acts">${day.drives ? actA('#/map/drive', 'road', 'ドライブの道順（地図とGoogleマップ）') : ''}${T.tips && T.tips.items.some(x => x.day.includes(day.n)) ? actA(`#/tips/d${day.n}`, 'tip', 'この日のワンポイント') : ''}</div>
       ${tvLine(tvPick(day.n), 'この日のトリビア', `#/trivia/d${day.n}`)}</header>
       ${(T.rainPlans || {})[day.n] ? '<div class="rain-slot" id="rain-slot"></div>' : ''}
-      ${isToday ? `<div class="trip-sync">${nudgeHtml(nudge())}${shiftBar(day) || `<p class="sync-hint">${ic('here')}<span>予定からずれたら、いまいる地点の「いまここ」を押すと、この先の時刻を合わせて表示します。</span></p>`}</div>` : ''}
+      ${isToday ? `<div class="trip-sync">${nudgeHtml(nudge())}${shareUpd()}${shiftBar(day) || `<p class="sync-hint">${ic('here')}<span>予定からずれたら、いまいる地点の「いまここ」を押すと、この先の時刻を合わせて表示します。</span></p>`}</div>` : ''}
       <ol class="tl">${lis}</ol>
-      ${day.dinner ? `<div class="dinner-note"><p class="memo">${esc(day.dinner)}</p><div class="btns"><a class="btn" href="#/food/dinner">夕ごはん候補を見る</a></div></div>` : ''}
+      ${day.dinner ? (() => { const k = `${day.date}:dinner`, m = Picks.meals.get(k), tag = pickTag('meals', k, 'この端末だけ未定（共有では決定）');
+        return `<div class="dinner-note">${m && shopOf(m.shop) ? `<p class="dinner-pick">${ic('bowl')}<span>夕ごはん：<b>${esc(mealText(m))}</b></span></p>` : ''}${tag ? `<p class="shb-own">${tag}</p>` : ''}<p class="memo">${esc(day.dinner)}</p><div class="btns"><a class="btn" href="#/food/meals">${m ? '決まったお店を見る' : '夕ごはんを決める・候補を見る'}</a></div></div>`; })() : ''}
       <p class="note">移動時間は、子ども連れや荷物を考えた余裕を含む目安です。「乗換案内」「徒歩ルート」「車ルート」は、外のサイト（Yahoo!乗換案内・Googleマップ）で開きます。</p>
       <div class="btns" style="justify-content:space-between;margin-top:28px">${prevN ? `<a class="btn quiet" href="#/trip/${prevN}">← ${prevN}日目</a>` : '<span></span>'}${nextN ? `<a class="btn quiet" href="#/trip/${nextN}">${nextN}日目 →</a>` : ''}</div></div>`;
   }
@@ -2579,6 +2711,35 @@
       ${infoList([['営業', esc(s.hours)], ['支払い', esc(s.pay)], ['住所', esc(s.address)], ['電話', `<a href="${tel(s.tel)}">${s.tel}</a>`]].concat(s.takeout ? [['持ち帰り', esc(s.takeout)]] : []).concat(s.rule ? [['お作法', esc(s.rule)]] : []))}
       <div class="btns"><button class="vote ${votes.includes(s.id) ? 'on' : ''}" data-vote="${s.id}">${votes.includes(s.id) ? '♥ 行きたい' : '♡ 行きたい'}</button>${ext(gmap(s.name), '地図')}${ext(s.url, 'お店の情報')}</div></article>`;
   }
+  /* 決まったお店（夕ごはん）：日ごとに、店と予約した／してない */
+  function mealBlock() {
+    return `<section class="sec" id="meals">${secH('決まったお店（夕ごはん）', 'Decided')}
+      <ul class="meal-plan">${mealSlots().map(({ key, day }) => { const m = Picks.meals.get(key), sh = m && shopOf(m.shop), tag = pickTag('meals', key, 'この端末だけ未定（共有では決定）');
+        return `<li><span class="mp-d num">${day.label}<small>（${day.dow}）</small></span><span class="mp-v">${sh ? `<b>${esc(sh.name)}</b><small>${m.rsv ? '予約した' : '予約なし'}</small>` : '<span class="mp-none">まだ決めていません</span>'}${tag ? `<span class="mp-tag">${tag}</span>` : ''}</span><button type="button" class="act" data-meal="${key}">${sh ? '変える' : '決める'}</button></li>`; }).join('')}</ul>
+      <p class="small muted">${Shared.writer() ? '作る人の端末なので、決めると全員に共有します（1〜2分で反映）。' : '作る人が決めると、全員のしおりに出ます。この端末で決めると、この端末だけに残ります。'}</p>${shareUpd()}</section>`;
+  }
+  function mealSheet(key) {
+    const sl = mealSlots().find(x => x.key === key); if (!sl) return;
+    const { day } = sl, m = Picks.meals.get(key), dow = new Date(day.date + 'T12:00:00+09:00').getDay();
+    const opt = (v, inner, on) => `<label class="mf-opt"><input type="radio" name="mf-shop" value="${v}"${on ? ' checked' : ''}><span>${inner}</span></label>`;
+    sheet(`${day.label}（${day.dow}）の夕ごはん`, `<form class="sf" id="mf">
+        <fieldset class="mf-list"><legend class="small muted">お店</legend>
+          ${T.dinner.map(x => opt(x.id, `<b>${esc(x.name)}</b><small>${esc(T.dinnerAreas[x.area].name)}・${esc(x.genre)}${(x.closedDays || []).includes(dow) ? '・<em>この日は定休日</em>' : ''}</small>`, m && m.shop === x.id)).join('')}
+          ${opt('', '<b>まだ決めていない</b>', !m)}</fieldset>
+        <label class="mf-rsv"><input type="checkbox" id="mf-rsv"${m && m.rsv ? ' checked' : ''}><span>予約した</span></label>
+        <div class="btns"><button class="btn fill" type="submit">これで決める</button></div>
+      </form>
+      <p class="note">${Shared.writer() ? '作る人の端末なので、決めると全員に共有します（1〜2分で反映）。' : 'この端末だけに残ります。作る人が決めると、全員のしおりに出ます。'}予約番号は入れません。</p>`,
+      (el, close) => {
+        $('#mf', el).addEventListener('submit', e => {
+          e.preventDefault(); e.stopPropagation();
+          const v = ($('input[name="mf-shop"]:checked', el) || {}).value || '', rsv = $('#mf-rsv', el).checked;
+          Picks.meals.set(key, v ? { shop: v, rsv } : null);
+          close(); toast(v ? `${day.label}の夕ごはんを「${shopOf(v).name}」にしました` : `${day.label}の夕ごはんを「まだ決めていない」にしました`);
+          const y = scrollY; quietRender = true; render(); scrollTo(0, y);
+        });
+      }, { noFocus: true });
+  }
   function viewFood(sub) {
     const L = T.lunch[0];
     const filt = session.get('ffilt') || 'all';
@@ -2599,6 +2760,7 @@
       <section class="sec" id="joterrace">${secH('10/19 お昼　JO-TERRACE OSAKA', 'Lunch')}
         <p class="small">大阪城公園の中。お店は現地で決めます。</p><div class="btns">${ext('https://jo-terrace.jp/', 'JO-TERRACE OSAKA（公式）')}<a class="more" href="#/spot/osakajo">大阪城公園のページへ</a></div>
       </section>
+      ${mealBlock()}
       <section class="sec" id="dinner">${secH('夕ごはん候補', 'Dinner')}
         <p class="sec-lead">梅田3店と新大阪4店。気になるお店に「行きたい」を押しておくと、候補を絞るときの目安になります（印はこの端末だけに残ります）。${votes.length ? `<br>いま「行きたい」：<b>${votes.map(v => (T.dinner.find(s => s.id === v) || {}).name).filter(Boolean).join('、')}</b>` : ''}</p>
         <div class="filters" role="group" aria-label="絞り込み">${Object.entries(fdays).map(([k, l]) => `<button class="fchip ${filt === k ? 'on' : ''}" data-ffilt="${k}">${l}</button>`).join('')}</div>
@@ -2614,7 +2776,9 @@
   }
   function stampsBlock() {
     const st = Stamps.get(), got = Stamps.count(st), all = got === T.stamps.length;
-    return `<p class="small muted" style="margin-bottom:14px">行った場所をタップしてスタンプを押します。スポットの紹介ページの「行った」でも押せます。もう一度タップすると消せます（この端末だけに残ります）。いま <span class="stamp-count num">${got}</span> / ${T.stamps.length}</p>
+    const own = Stamps.own(), shN = Object.keys(Stamps.shared()).length;
+    return `<p class="small muted" style="margin-bottom:${own || shN ? 6 : 14}px">行った場所をタップしてスタンプを押します。スポットの紹介ページの「行った」でも押せます。もう一度タップすると消せます。${Shared.writer() ? '作る人の端末なので、押すと全員に共有します（1〜2分で反映）。' : '作る人が押したスタンプは、全員のしおりに出ます。'}いま <span class="stamp-count num">${got}</span> / ${T.stamps.length}</p>
+      ${own ? `<p class="stamp-own">${ownTag('stamps', `この端末だけの記録 ${own}件`)}</p>` : shN ? `<p class="stamp-own">${sharedTag(`全員の共有 ${shN}件をふくみます`)}</p>` : ''}
       <div class="stamps">${T.stamps.map(s => `<button class="stamp ${st[s.id] ? 'on' : ''}" data-stamp="${s.id}" aria-pressed="${!!st[s.id]}" aria-label="${esc(s.name)}${st[s.id] ? '（押した）' : ''}">${stampSvg(s, st[s.id], 'sc')}<span class="stn">${esc(s.name)}</span><span class="num" style="color:var(--sumi-3)">${st[s.id] ? esc(Stamps.when(st[s.id])) : `${s.day}日目`}</span></button>`).join('')}</div>
       ${all ? `<div class="stamp-done">${MANGAN}<div><b>満願</b><p class="small">${T.stamps.length}の印が、すべてそろいました。おつかれさまでした。</p></div></div>` : ''}`;
   }
@@ -2875,8 +3039,32 @@
       <div class="btns kn-add"><button type="button" class="btn quiet" data-kn="gadd">＋ 分類を足す</button><button type="button" class="btn quiet" data-kn="xadd">＋ 予定外の出費を足す</button></div>
       ${V.act.rows ? `<section class="sec">${secH('決算と精算', 'Settlement')}${settleHtml(V)}</section>` : ''}`;
   }
+  /* 全員に共有（しおりの状態）：いま共有している内容・送信の状態・連絡・初期化 */
+  const KN_SH_ERR = { offline: '圏外です。電波が戻ったら自動で送ります。', net: '通信できませんでした。電波が戻ったら自動で送ります。', auth: 'トークンが使えません（期限切れか、GitHub で消されています）。下で作り直して保存してください。', perm: 'このトークンでは書き込めません（Contents の Read and write を確かめてください）。' };
+  function knShare() {
+    const S = Shared.status(), D = Shared.data() || {}, out = [];
+    if (S.busy) out.push('<b>送信中…</b>');
+    else if (S.n) out.push(`<b class="kn-pend">未送信 ${S.n}件</b>`);
+    if (S.err && !S.busy) out.push(`<span class="kn-err">${KN_SH_ERR[S.err.kind] || `送れませんでした（${esc(S.err.msg || S.err.status || '')}）。`}</span>`);
+    if (S.sent && !S.n) out.push(`${knHM(S.sent.at)} に送りました（第${S.sent.rev}版）。全員のしおりには1〜2分で反映されます。`);
+    const sh = D.shift || {}, li = [];
+    if (sh.here) { const day = T.days.find(d => d.date === sh.here.date), it = day && day.items[sh.here.i]; li.push(['いまここ', `${+sh.here.date.slice(5, 7)}/${+sh.here.date.slice(8, 10)} ${it ? esc(shortName(it)) : ''}・${sh.here.min > 0 ? `予定より${durTxt(sh.here.min)}遅れ` : sh.here.min < 0 ? `予定より${durTxt(-sh.here.min)}早い` : '予定どおり'}`]); }
+    Object.entries(sh.alt || {}).forEach(([k, a]) => li.push(['別の便', `${esc((T.trains[k] || {}).name || k)} → ${esc(a.name)}（${esc(a.dep)}発・${a.car ? esc(a.car) + '号車' + (a.seat ? '・' + esc(a.seat) : '') : '自由席'}）`]));
+    Object.entries(D.rain || {}).forEach(([dt, id]) => { const day = T.days.find(d => d.date === dt), r = day && ((T.rainPlans || {})[day.n] || []).find(x => x.id === id); li.push(['雨の日', `${+dt.slice(5, 7)}/${+dt.slice(8, 10)} ${esc(r ? r.name : id)}`]); });
+    Object.entries(D.meals || {}).forEach(([k, m]) => li.push(['夕ごはん', `${+k.slice(5, 7)}/${+k.slice(8, 10)} ${esc(mealText(m) || m.shop)}`]));
+    if (D.notice && D.notice.text) li.push(['連絡', `${esc(D.notice.text)}（${noticeAt(D.notice.at)}）`]);
+    const sn = Object.keys(D.stamps || {}).length; if (sn) li.push(['スタンプ', `${sn}か所`]);
+    return `<div class="kn-st${S.n ? ' pend' : ''}" role="status">${out.map(x => `<p>${x}</p>`).join('')}
+        <p class="small muted">第${+D.rev || 0}版${D.updatedAt ? `（${knUpd(D.updatedAt)} 更新）` : ''}</p></div>
+      ${li.length ? `<dl class="kn-shl">${li.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>` : '<p class="empty">いま共有している値はありません。</p>'}
+      <div class="btns"><button type="button" class="btn quiet" data-act="notice">${D.notice && D.notice.text ? '連絡を直す' : '全員に連絡を書く'}</button>${S.n ? `<button type="button" class="btn fill" data-kn="shsend"${S.busy ? ' disabled' : ''}>今すぐ送る</button>` : ''}<button type="button" class="btn quiet kn-danger" data-kn="shreset"${S.busy ? ' disabled' : ''}>全員の値を消す（初期化）</button></div>`;
+  }
+  function knShareRefresh() { const el = $('#kn-share'); if (el) { el.innerHTML = knShare(); applyRuby(el); } }
   function knEditor() {
     return `<div id="kn-status">${knStatus()}</div><div id="kn-main">${knMain(Budget.view())}</div>
+      <section class="sec" id="share">${secH('全員に共有（しおりの状態）', 'Shared')}
+        <p class="sec-lead">トークンを保存したこの端末で「いまここ」「時刻を直す」「別の便に乗った」「予定の便に戻す」「雨の日の選択」「夕ごはんの決定」「スタンプ」を操作すると、この端末と同時に、全員のしおりにも出ます（1〜2分で反映）。ほかの人が自分の端末で直したときは、その端末だけの値が優先されます。</p>
+        <div id="kn-share">${knShare()}</div></section>
       <section class="sec">${secH('この端末のトークン', 'Token')}
         <p class="small muted">トークンは、この端末の中だけに保存しています（期限は11月30日）。この端末で予算を直さなくなったら、消してください。GitHub の側でも、トークンの一覧から消せます。</p>
         <div class="btns"><button type="button" class="btn quiet" data-kn="logout">この端末のトークンを消す</button><a class="btn quiet ext" href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">GitHub のトークンの一覧</a></div>
@@ -3040,6 +3228,8 @@
     if (k === 'gedit') knGroupSheet(el.dataset.g);
     if (k === 'gadd') knGroupSheet(null);
     if (k === 'send') A.flush();
+    if (k === 'shsend') Shared.flush();
+    if (k === 'shreset' && confirm('全員のしおりから、共有している値（いまここ・別の便・雨の日・夕ごはん・連絡・スタンプ）を消して、最初の状態に戻します。各端末で自分で入れた値は残ります。よろしいですか？')) { Shared.reset(); toast('初期化しています…'); }
     if (k === 'reload') { await A.refresh(); toast('公開側の最新を読み直しました'); }
     if (k === 'logout') {
       const n = A.pending().length;
@@ -3266,12 +3456,36 @@
     if (st && st.n > 0) history.back(); else location.hash = backTarget(route, sub);
   }
 
+  /* 「共有に合わせる」：その端末の自分の値を消して、全員の共有の値に戻す */
+  function shareSync(k) {
+    const [kind, key] = k.split(/:(.*)/);
+    if (kind === 'shift') shiftSync();
+    else if (kind === 'alt') { AltRide.sync(key); window.LiveMap && LiveMap.resetDelay && LiveMap.resetDelay(key); }
+    else if (kind === 'stamps') { if (!confirm('この端末で押したスタンプの記録を消して、全員の共有の記録に合わせますか？')) return; Stamps.sync(); }
+    else if (kind === 'rain') Picks.rain.sync(key);
+    else if (kind === 'meal') Picks.meals.sync(key);
+    $$('.sheet-bg').forEach(x => x.remove());
+    toast('共有の値に合わせました');
+    const y = scrollY; quietRender = true; render(); scrollTo(0, y);
+  }
+  /* 共有の内容が変わったら（rev が変わったときだけ届く）、共有の値を出しているページだけ、そっと描き直す。いまどのへん？（地図）は描き直さない（時刻は1秒ごとの更新で合う） */
+  let quietRender = false;
+  Shared.on(what => {
+    const parts = location.hash.replace(/^#\/?/, '').split('/'), r = parts[0] || 'home';
+    if (r === 'kanri') { typeof knShareRefresh === 'function' && knShareRefresh(); return; }
+    if (what !== 'data') return;
+    if (r === 'ride' && parts[1] === 'live') { $('#line') && updateLive(); return; }
+    if (!['home', 'trip', 'food', 'spot', 'ride'].includes(r)) return;
+    const y = scrollY; quietRender = true; render(); scrollTo(0, y);
+  });
+
   let lastHash = null;
   function render() {
     const parts = location.hash.replace(/^#\/?/, '').split('/');
     const route = parts[0] || 'home';
     /* 同じページの描き直し（時計の操作など）か、新しく開いたか */
     const fresh = lastHash !== location.hash; lastHash = location.hash;
+    if (fresh) quietRender = false;
     const isLive = route === 'ride' && parts[1] === 'live', y0 = scrollY;
     const ent = fresh ? entryScroll() : { back: false };
     /* 戻る操作で来たときだけ、前の位置へ（のりもの「いまどのへん？」は、今までどおり） */
@@ -3307,9 +3521,10 @@
       if (window.LiveMap && $('#lm')) window.LiveMap.mount(T.liveLine[parts[2]] ? parts[2] : 'nozomi28', { esc, fmtHM, sheet, toast, gmap, ext, geoHelp, full: parts[3] === 'full', fresh });
     }
     liveKey = liveState0();
-    // スクロール位置
+    // スクロール位置（共有の更新などで、そっと描き直したときは動かさない）
     const anchor = parts[1] && document.getElementById(parts[1]);
-    if (restoreY !== null) restoreScroll(restoreY);
+    if (quietRender && !fresh) { quietRender = false; }
+    else if (restoreY !== null) restoreScroll(restoreY);
     else if (route === 'trivia' && parts[1] && !/^d\d$/.test(parts[1])) { const g = $('#tv-cat-' + parts[1]); g && setTimeout(() => g.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120); }
     else if (route === 'trip') { const n = $('.tl li.now'); n ? setTimeout(() => n.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200) : window.scrollTo(0, 0); }
     else if (route === 'ride' && parts[1] === 'seats' && parts[2] && $('#sg-' + parts[2])) setTimeout(() => $('#sg-' + parts[2]).scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
@@ -3326,7 +3541,7 @@
     if (!window.Guide) return Promise.resolve(false);
     const t = k => `#nav [data-tab="${k}"]`;
     return Guide.run('app', [
-      { el: t('today'), title: 'きょう', text: 'しおりを開いたら、まずここ。日付と時刻から、次の列車や次の予定をいちばん上に出します。新幹線に乗る前後は「いまどのへん？」もここに出ます。' },
+      { el: t('today'), title: 'きょう', text: 'しおりを開いたら、まずここ。日付と時刻から、次の列車や次の予定をいちばん上に出します。新幹線に乗る前後は「いまどのへん？」もここに出ます。作る人が入れた連絡や時刻は、全員のしおりに1〜2分で出ます。' },
       { el: t('trip'), title: '日程', text: '4日間の予定を、時刻の順に見られます。いまの予定には「いま」の印が付きます。' },
       { el: t('ride'), title: 'のりもの', text: '指定席券と座席表、駅の時刻表など。新幹線の中では「いまどのへん？」で、走っている場所と窓から見えるものが分かります。' },
       { el: t('map'), title: 'まっぷ', text: '行く場所・お店・駐車場を、日ごとにまとめています。「地図」を押すと、地図のアプリで開きます。' },
@@ -3649,6 +3864,7 @@
       if (act === 'fam') pickFamily();
       if (act === 'qr') showQR();
       if (act === 'sim') simSheet();
+      if (act === 'notice') noticeSheet();
       if (act === 'toc') showToc();
       if (act === 'more') moreSheet();
       if (act === 'a2hs') a2hsSheet(false);
@@ -3684,6 +3900,9 @@
     if ((el = q('[data-here]'))) { const [d, i] = el.dataset.here.split(':'); setHere(d, +i); return; }
     if ((el = q('[data-shiftfix]'))) return shiftSheet(el.dataset.shiftfix);
     if ((el = q('[data-alt]'))) return altSheet(el.dataset.alt);
+    if ((el = q('[data-sync]'))) { shareSync(el.dataset.sync); return; }
+    if ((el = q('[data-rainpick]'))) { rainPick(el.dataset.rainpick); return; }
+    if ((el = q('[data-meal]'))) { mealSheet(el.dataset.meal); return; }
     if ((el = q('[data-unshift]'))) { setShift(null); toast('予定どおりの時刻に戻しました'); const y = scrollY; render(); scrollTo(0, y); return; }
     if ((el = q('[data-nudge]'))) {
       let st = store.get('nudge'); const id = el.dataset.nudge;
@@ -3753,7 +3972,7 @@
   Budget.on(() => {
     const r = location.hash.replace(/^#\/?/, '').split('/')[0];
     if (r === 'money' || (r === '' && memOn())) { const y = scrollY; render(); scrollTo(0, y); }   // 思い出モードの表紙：決算が入っていれば「予算／実績」へのリンクを出す
-    if (r === 'kanri') knRefresh();
+    if (r === 'kanri') { knRefresh(); knShareRefresh(); }
   });
   Budget.load();
   window.addEventListener('resize', () => $('#line') && updateLive());

@@ -323,6 +323,38 @@ h3.sub { font-family: var(--f-min); font-size: calc(17px * var(--fs)); letter-sp
 .rain-links { margin-top: 8px; font-size: calc(13px * var(--fs)); line-height: 2; }
 
 .dinner-note { margin-top: 6px; padding: 16px 0 0; border-top: 1px dashed var(--rule); }
+.dinner-pick { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 4px; font-size: calc(14px * var(--fs)); line-height: 1.6; }
+.dinner-pick .ic { width: 18px; height: 18px; color: var(--shu); margin-top: 3px; flex: none; }
+.dinner-note .shb-own { margin: 0 0 8px; }
+/* 雨の日の候補：選んだもの（全員の共有／この端末だけ） */
+.rain-btn.picked { border-color: var(--moegi); background: var(--moegi-tint); color: var(--sumi); }
+.rain-btn.picked .ic { color: var(--moegi); }
+.pick-now { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--paper-2); display: grid; gap: 4px; font-size: calc(13.5px * var(--fs)); line-height: 1.6; }
+.pick-now p { margin: 0; }
+.rain-list > li.on .rain-h b { color: var(--moegi); }
+.pick-btn { min-height: 44px; padding: 0 16px; border: 1px solid var(--rule); border-radius: 10px; background: var(--paper); color: var(--sumi); font: inherit; font-size: calc(13.5px * var(--fs)); font-weight: 700; cursor: pointer; }
+.pick-btn.on { border-color: var(--moegi); background: var(--moegi-tint); color: var(--moegi); }
+/* 決まったお店（夕ごはん） */
+.meal-plan { list-style: none; margin: 4px 0 10px; padding: 0; }
+.meal-plan > li { display: grid; grid-template-columns: 4.6em 1fr auto; align-items: center; gap: 4px 12px; padding: 12px 0; border-top: 1px solid var(--rule); }
+.meal-plan > li:last-child { border-bottom: 1px solid var(--rule); }
+.mp-d { font-weight: 700; font-size: calc(15px * var(--fs)); }
+.mp-d small { font-weight: 500; color: var(--sumi-2); font-size: calc(11.5px * var(--fs)); }
+.mp-v { display: flex; flex-direction: column; min-width: 0; line-height: 1.5; }
+.mp-v b { font-family: var(--f-min); font-size: calc(15.5px * var(--fs)); }
+.mp-v small { font-size: calc(12px * var(--fs)); color: var(--sumi-2); }
+.mp-none { color: var(--sumi-3); font-size: calc(13.5px * var(--fs)); }
+.mp-tag { margin-top: 2px; }
+.mf-list { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
+.mf-list legend { padding: 0; margin-bottom: 4px; }
+.mf-opt { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 10px; cursor: pointer; }
+.mf-opt:has(input:checked) { border-color: var(--shu); background: var(--shu-tint); }
+.sf .mf-opt input, .sf .mf-rsv input { width: 20px; height: 20px; min-height: 0; padding: 0; margin: 3px 0 0; flex: none; accent-color: var(--shu); }
+.mf-opt span { display: flex; flex-direction: column; line-height: 1.5; min-width: 0; }
+.sf .mf-rsv input { margin: 0; }
+.mf-opt small { font-size: calc(12px * var(--fs)); color: var(--sumi-2); }
+.mf-opt em { font-style: normal; color: var(--shu-ink); font-weight: 700; }
+.mf-rsv { display: flex; gap: 10px; align-items: center; margin: 4px 0 0; font-weight: 700; min-height: 44px; }
 
 /* 駅名標 */
 .sign { background: #fff; color: #222; border-radius: 3px; box-shadow: var(--shade); overflow: hidden; margin-top: 2px; max-width: 300px; border: 1px solid #e3dfd6; }
@@ -673,6 +705,11 @@ textarea { min-height: 120px; resize: vertical; font-family: var(--f-hand); font
 .nav .on::before { content: ""; position: absolute; top: -1px; left: 30%; right: 30%; height: 2px; background: var(--shu); }
 
 .toast { position: fixed; left: 50%; transform: translateX(-50%); top: calc(16px + env(safe-area-inset-top)); z-index: 95; background: var(--sumi); color: var(--paper); font-size: calc(13px * var(--fs)); padding: 8px 16px; border-radius: 8px; }
+/* 全員に共有しました／端末だけに保存しました（assets/shared.js）：操作の知らせ（.toast）とは別に、画面の下に小さく */
+.snote { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 14px); z-index: 94; max-width: calc(100% - 32px); background: var(--card); color: var(--sumi-2); border: 1px solid var(--rule); box-shadow: var(--shade); font-size: calc(12.5px * var(--fs)); line-height: 1.5; padding: 6px 14px; border-radius: 999px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.snote::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--moegi); margin-right: 8px; vertical-align: 1px; }
+.snote.ng { white-space: normal; border-radius: 10px; }
+.snote.ng::before { background: var(--yamabuki); }
 .foot { text-align: center; font-size: calc(12px * var(--fs)); color: var(--sumi-3); margin: 52px 0 8px; }
 .foot .lat { font-size: calc(17px * var(--fs)); display: block; }
 
@@ -1569,6 +1606,36 @@ a.more-row { color: inherit; text-decoration: none; }
 .alt-tr { color: var(--sumi-2); }
 .alt-tr b { color: var(--shu-ink); }
 .dc .shift-bar { margin-top: 12px; }
+/* 全員の共有（assets/shared.json）：「この端末だけの値」＋「共有に合わせる」／「全員の共有」／「共有の更新 ○時○分」。目立たせない */
+.own-tag { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: calc(12px * var(--fs)); font-weight: 500; line-height: 1.5; color: var(--sumi-2); letter-spacing: .02em; }
+.own-tag > span { display: inline-flex; align-items: center; gap: 5px; }
+.own-tag > span::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--yamabuki); flex: none; }
+.own-tag.sh > span::before { background: var(--moegi); }
+.own-sync { font: inherit; font-size: calc(12px * var(--fs)); color: var(--ai); background: none; border: 0; border-bottom: 1px solid currentColor; padding: 2px 0; min-height: 28px; cursor: pointer; }
+.shb-own { margin: -2px 0 0; }
+.shift-bar.off { border-color: var(--rule); background: var(--paper-2); }
+.shift-bar.off .shb-main { font-weight: 500; font-size: calc(13px * var(--fs)); color: var(--sumi-2); }
+.share-upd { margin: 0; font-size: calc(11.5px * var(--fs)); color: var(--sumi-3); letter-spacing: .04em; text-align: right; }
+.stamp-own { margin: 0 0 14px; }
+/* 〈きょう〉の共有の帯：全員への連絡の一言・その日の雨の日の予定・夕ごはん・共有の更新。旅先の最新情報とは別に、小さく */
+.share-strip { margin: 16px 0 0; padding: 10px 14px 8px; border-left: 3px solid var(--ai); background: var(--paper-2); border-radius: 0 10px 10px 0; display: grid; gap: 4px; }
+.share-strip.bare { padding: 0; margin: 8px 0 0; border: 0; background: none; }
+.ss-row { margin: 0; display: grid; grid-template-columns: 4.6em minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: calc(13.5px * var(--fs)); line-height: 1.6; }
+.ss-k { font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--ai); letter-spacing: .08em; }
+.ss-t { color: var(--sumi); text-decoration: none; overflow-wrap: anywhere; }
+a.ss-t { border-bottom: 1px solid var(--rule); justify-self: start; }
+.ss-notice .ss-t { font-weight: 700; }
+.ss-t small { font-weight: 500; color: var(--sumi-3); font-size: calc(11.5px * var(--fs)); margin-left: 8px; white-space: nowrap; }
+.ss-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 28px; }
+/* 管理ページ：いま共有している内容 */
+.kn-shl { margin: 10px 0 4px; display: grid; gap: 0; font-size: calc(13.5px * var(--fs)); }
+.kn-shl > div { display: grid; grid-template-columns: 5.5em minmax(0, 1fr); gap: 8px; padding: 7px 0; border-top: 1px solid var(--rule); }
+.kn-shl > div:last-child { border-bottom: 1px solid var(--rule); }
+.kn-shl dt { font-weight: 700; color: var(--sumi-2); font-size: calc(12.5px * var(--fs)); }
+.kn-shl dd { margin: 0; overflow-wrap: anywhere; }
+.btn.kn-danger { color: var(--shu-ink); border-color: color-mix(in srgb, var(--shu) 45%, var(--rule)); }
+.sf-col { display: grid; gap: 6px; }
+.sf textarea { font: inherit; font-size: calc(15px * var(--fs)); line-height: 1.6; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); color: var(--sumi); width: 100%; resize: vertical; }
 /* 声かけ（節目で一度だけ。点滅や動きはつけない） */
 .nudge { position: relative; display: grid; grid-template-columns: 1fr auto; gap: 4px; align-items: start; border: 1px solid var(--rule); border-left: 3px solid var(--shu); border-radius: 8px; background: var(--card); padding: 8px 4px 8px 12px; font-size: calc(13px * var(--fs)); line-height: 1.65; color: var(--sumi-2); }
 .nudge-x { width: 44px; height: 44px; margin: -8px -2px -8px 0; font-size: calc(18px * var(--fs)); color: var(--sumi-3); }
