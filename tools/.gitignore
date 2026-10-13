@@ -1,3 +1,4 @@
 .relay-cache/
 .area-cache/
 __pycache__/
+.tunnel-cache/

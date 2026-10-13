@@ -239,7 +239,8 @@ def main():
             tl.append((kmof(pts[s])[0], kmof(pts[min(j, len(pts) - 1)])[0]))
         j += 1
     print('トンネル（すべて）:', [(round(x, 2), round(y, 2), round(y - x, 2)) for x, y in tl], file=sys.stderr)
-    tunnels = [[round(x, 2), round(y, 2), ''] for x, y in tl if y - x >= 2]
+    # 長さにかかわらず全部（23 から。前は2km以上だけで0本だった）。立体の線に使う標高は tools/make-tunnel-portals.js で付ける
+    tunnels = [[round(x, 2), round(y, 2), ''] for x, y in tl if y - x >= 0.02]
     # 駅
     rows = []
     for n in ORDER:

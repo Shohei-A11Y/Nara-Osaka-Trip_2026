@@ -908,8 +908,31 @@ body.sim-on .lm-full .lm-addr { margin-top: calc(0px - env(safe-area-inset-top))
 .lm-legend > button { height: 30px; padding: 0 10px; border-radius: 999px; background: var(--paper); border: 1px solid var(--rule); font-weight: 700; font-size: calc(11.5px * var(--fs)); box-shadow: 0 2px 6px rgba(28, 24, 20, .15); }
 .lm-legend > button::after { content: " ＋"; color: var(--sumi-3); }
 .lm-legend > button[aria-expanded="true"]::after { content: " －"; }
-.lm-legend ul { margin-top: 6px; padding: 8px 10px; background: var(--paper); background: color-mix(in srgb, var(--paper) 92%, transparent); border: 1px solid var(--rule); border-radius: 8px; display: grid; gap: 4px; }
+.lm-legend ul { margin-top: 6px; padding: 4px 8px 6px; background: var(--paper); background: color-mix(in srgb, var(--paper) 92%, transparent); border: 1px solid var(--rule); border-radius: 8px; display: grid; gap: 0; }
 .lm-legend li { display: flex; align-items: center; gap: 7px; line-height: 1.3; white-space: nowrap; }
+/* 表示の選択：凡例の各行（設定の一覧も同じ形）。行ぜんたいが押せる。指で押しやすい高さに */
+.lm-chk { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.lm-chk input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--shu); cursor: pointer; }
+.lm-chk input:not(:checked) ~ * { opacity: .45; }
+.lm-chk-h { justify-content: flex-end; padding: 2px 0 4px; border-bottom: 1px solid var(--rule); margin-bottom: 2px; }
+.lm-chk-all { min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--sumi-3); background: var(--paper); color: var(--sumi); font-size: calc(12px * var(--fs)); font-weight: 700; white-space: nowrap; }
+.lm-chk-all:active { transform: scale(.96); }
+.lm-legend i.stn-n, .lm-shows i.stn-n { width: auto; height: auto; padding: 0 3px; border-radius: 3px; background: var(--paper); border: 1px solid var(--rule); font-style: normal; font-family: var(--f-min); font-weight: 700; font-size: calc(9.5px * var(--fs)); line-height: 1.4; color: var(--ai); }
+.lm-legend i.pl, .lm-shows i.pl { font-family: var(--f-min); font-weight: 700; color: var(--sumi); font-size: calc(11px * var(--fs)); }
+/* 設定（⚙）の一覧：2列（狭い画面は1列） */
+.lm-shows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); column-gap: 16px; font-size: calc(13.5px * var(--fs)); }
+.lm-shows .lm-chk-h { grid-column: 1 / -1; display: flex; }
+.lm-shows i { width: 16px; height: 16px; border-radius: 50%; background: var(--g); display: grid; place-items: center; flex: none; }
+.lm-shows i.vis { background: var(--sumi-3); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--sumi-3); }
+.lm-shows .lm-sym { width: 11px; height: 11px; }
+.lm-shows i.bnd { width: 18px; height: 10px; border-radius: 0; background: linear-gradient(#7a3fa8, #7a3fa8) 0 2px / 100% 3px no-repeat, linear-gradient(#8f6db0, #8f6db0) 0 7px / 100% 1px no-repeat; }
+.lm-shows i.mt { width: auto; height: auto; background: none; font-style: normal; font-size: calc(10px * var(--fs)); color: #8b5a2b; }
+.lm-shows i.tun { width: 18px; height: 6px; border-radius: 3px; background: repeating-linear-gradient(90deg, var(--ai) 0 5px, transparent 5px 9px) var(--paper); box-shadow: 0 0 0 1px var(--rule); }
+.lm-shows li { display: flex; align-items: center; min-width: 0; }
+.lm-shows .lm-chk span { min-width: 0; }
+/* 外した種類：窓から見える縁・駅名 */
+.lm-novis .lm-pin.vis .lm-pin-h { box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+.lm-nostn .lm-stn { display: none; }
 .lm-legend i { width: 16px; height: 16px; border-radius: 50%; background: var(--g); display: grid; place-items: center; flex: none; }
 .lm-legend i.vis { background: var(--sumi-3); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--sumi-3); }
 .lm-legend .lm-sym { width: 11px; height: 11px; }
@@ -1075,7 +1098,7 @@ body.sim-on .lm-arr.big { top: calc(50px + 14vh + env(safe-area-inset-top)); }
 .lm-arr-s { font-size: calc(13.5px * var(--fs)); opacity: .95; }
 .lm-arr-more { font-size: calc(12px * var(--fs)); opacity: .85; margin-top: 6px; text-decoration: underline; text-underline-offset: 3px; }
 .lm-arr-x { position: absolute; top: 6px; right: 8px; width: 40px; height: 40px; color: #fff; font-size: calc(24px * var(--fs)); line-height: 1; }
-.lm-arr.mini { right: 0; top: calc(34vh + env(safe-area-inset-top)); }
+.lm-arr.mini { right: var(--lm-tlo, 0px); top: calc(34vh + env(safe-area-inset-top)); }   /* 地図の操作ボタンを開いているときは、その左へ（--lm-tlo は livemap.js の fitTools が入れる） */
 .lm-arr-chip { display: grid; justify-items: center; gap: 0; min-width: 64px; padding: 8px 10px 8px 12px; background: var(--shu); color: #fff; border-radius: 12px 0 0 12px; font-size: calc(12.5px * var(--fs)); font-weight: 700; line-height: 1.3; box-shadow: 0 6px 16px -6px rgba(0, 0, 0, .5); }
 .lm-arr-chip b { font-family: var(--f-min); font-size: calc(19px * var(--fs)); }
 .lm-arr.lvl2 .lm-arr-chip { background: var(--shu-ink); }
@@ -1098,7 +1121,8 @@ body.sim-on .lm-full .lm-tools, body.sim-on .lm-full .lm-back, body.sim-on .lm-f
 .lm-back { position: absolute; z-index: 4; top: calc(10px + env(safe-area-inset-top)); left: 10px; height: 40px; display: inline-flex; align-items: center; padding: 0 14px; border-radius: 999px; background: var(--paper); border: 1px solid var(--rule); box-shadow: 0 2px 6px rgba(28, 24, 20, .2); font-weight: 700; font-size: calc(14px * var(--fs)); text-decoration: none; }
 /* 情報の札は画面の下（列車の印の下・通り過ぎた側）にまとめ、進む先（印の上）には置かない。--ov-h は札の高さ（livemap.js が入れる） */
 .lm-full .lm-legend { top: auto; bottom: calc(var(--ov-h, 160px) + var(--at-h, 16px) + 10px); }
-.lm-full .lm-legend ul { position: absolute; bottom: 36px; left: 0; }
+.lm-full .lm-legend ul { position: absolute; bottom: 36px; left: 0; max-height: calc(100svh - var(--ov-h, 160px) - var(--at-h, 16px) - 130px - env(safe-area-inset-top)); overflow-y: auto; overscroll-behavior: contain; }
+body.sim-on .lm-full .lm-legend ul { max-height: calc(100svh - var(--ov-h, 160px) - var(--at-h, 16px) - 180px - env(safe-area-inset-top)); }
 .lm-full .lm-map .maplibregl-ctrl-bottom-left { bottom: var(--ov-h, 160px); }
 .lm-ov { position: absolute; z-index: 3; left: 0; right: 0; bottom: 0; display: grid; gap: 6px; pointer-events: none; }
 .lm-ov > * { pointer-events: auto; }
@@ -1117,6 +1141,39 @@ body.sim-on .lm-full .lm-tools, body.sim-on .lm-full .lm-back, body.sim-on .lm-f
   .lm-full .lm-legend { left: calc(var(--ov-w, 0px) + 10px); }
   .lm-full .lm-addr { top: calc(10px + env(safe-area-inset-top)); left: calc(var(--ov-w, 0px) + 10px); max-width: calc(100% - var(--ov-w, 0px) - var(--tl-w, 46px) - 34px); }
   .lm-full .lm-map .maplibregl-ctrl-bottom-left { left: var(--ov-w, 0px); }
+  /* 札の列は下に寄せて積むが、収まらないときは上から並べて列の中で送る（下に寄せたまま溢れると、上の札が「戻る」の裏に切れて読めなくなるため）。
+     ::before が空きを埋めるばね。溢れたときは 0 に縮む。収まらない分は、大事でない札から隠す（livemap.js の fitOv・.lm-cut） */
+  .lm-full .lm-ov { display: flex; flex-direction: column; gap: 6px; }
+  .lm-full .lm-ov::before { content: ""; flex: 1 1 auto; }
+  .lm-full .lm-ov > * { flex: none; }
+  .lm-full .lm-cut { display: none !important; }
+  /* 横向きでは高さが足りないので、札と時速を少し小さく */
+  .lm-full .lm-sheet { padding-top: 6px; }
+  .lm-full .lm-head b { font-size: calc(20px * var(--fs)); }
+  .lm-full .lm-eta em { font-size: calc(18px * var(--fs)); }
+  .lm-full .lm-spd { padding-top: 0; }
+  .lm-full .lm-spd-v b { font-size: calc(34px * var(--fs)); }
+  .lm-full .lm-sheet .lm-spd-bar { margin-top: 5px; }
+  .lm-full .lm-alert { padding: 6px 12px; }
+  .lm-full .lm-alert-h { font-size: calc(15.5px * var(--fs)); }
+  .lm-full .lm-alert-s { font-size: calc(12.5px * var(--fs)); }
+  .lm-full .lm-tunnel { padding: 6px 12px; }
+  .lm-full .lm-near b { font-size: calc(14.5px * var(--fs)); }
+  .lm-full .lm-pass-d { -webkit-line-clamp: 1; }
+  .lm-full .lm-transfer { padding: 6px 12px; }
+  /* トリビアのカード：押した札のある左の列に重ねる（右の地図と列車の印は隠さない） */
+  body.lm-full-on .lm-tvcard, body.lm-full-on .lm-tvcard.top { top: calc(64px + env(safe-area-inset-top)); bottom: auto; left: 10px; right: auto; width: calc(var(--lm-ovw, 380px) - 10px); max-width: none; max-height: calc(100vh - 74px - env(safe-area-inset-top)); margin: 0; }
+  body.sim-on.lm-full-on .lm-tvcard, body.sim-on.lm-full-on .lm-tvcard.top { top: calc(114px + env(safe-area-inset-top)); max-height: calc(100vh - 124px - env(safe-area-inset-top)); }
+  /* 降車のお知らせ（大）：小さく詰めて、全画面では右の地図の側（札の列と操作ボタンのあいだ）に置く */
+  .lm-arr.big { top: calc(10px + env(safe-area-inset-top)); width: min(80vw, 400px); }
+  body.sim-on .lm-arr.big { top: calc(60px + env(safe-area-inset-top)); }
+  body.lm-full-on .lm-arr.big { left: calc(var(--lm-ovw, 0px) + (100vw - var(--lm-ovw, 0px) - var(--lm-tlr, 56px)) / 2); width: min(calc(100vw - var(--lm-ovw, 0px) - var(--lm-tlr, 56px) - 16px), 400px); }
+  .lm-arr-card { padding: 10px 14px 10px; border-radius: 12px; border-width: 2px; }
+  .lm-arr-card b { font-size: calc(22px * var(--fs)); }
+  .lm-arr-n { font-size: calc(30px * var(--fs)); }
+  .lm-arr-s { font-size: calc(12.5px * var(--fs)); }
+  .lm-arr-more { margin-top: 2px; }
+  .lm-arr-x { top: 2px; right: 4px; }
 }
 
 /* 見どころ一覧 */

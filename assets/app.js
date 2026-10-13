@@ -701,7 +701,9 @@
       { t: '位置の情報の許可は、端末ごとに一度だけ必要です。旅行の前に、いまどのへん？を開くと出る案内の「許可する」を押しておいてください（当日まではGPSを使いません）。許可していない端末には、乗車の時間帯に画面の上に「使う」が出ます。' },
       { t: '「GPSを止める」を押すと、そのタブのあいだは自動で使いません。それ以外の時間は、「現在地を使う」を押したときだけ使います。運行の状況は、地図の下の「JR公式の運行情報」で確かめられます。' },
       { t: '地図の左上の「いま ○○県 ○○市」は、列車の位置から決めた、いまいる市区町村です（電波がなくても出ます）。地図の種類を「住所（市区町村）」（下は淡色の地図）か「住所（航空写真）」にすると、市区町村を色分けして、境界線と名前（ふりがな付き）を出します。色分けの濃さは、地図の種類のメニューと設定の「住所の地図の塗りの濃さ」のつまみで変えられ、いちばん左で塗りなし（境界線と名前だけ）になります。境界線は、設定か地図の種類のメニューで、どの地図にも重ねられます。' },
-      { t: '立体のとき・航空写真・住所の地図では、市区町村の名前と、山（▲と標高）・川（線路が渡る所）・海や湾などの名前を、画面に向けて立てて出します。縮尺に合わせて数を絞り、見どころ・駅名と重なるときは省きます。設定の「地名」「自然地名」で消せます。' },
+      { t: '立体のとき・航空写真・住所の地図では、市区町村の名前と、山（▲と標高）・川（線路が渡る所）・海や湾などの名前を、画面に向けて立てて出します。縮尺に合わせて数を絞り、見どころ・駅名と重なるときは省きます。凡例のチェック（または設定）の「市区町村名」「山・川・海の名前」で消せます。' },
+      { t: '地図に重ねるものは、左の「凡例」を開いた各行の先頭のチェックで、種類ごとに出す・出さないを選べます（見どころの種類・窓から見える縁・トンネル・駅名・市区町村名・山や川の名前・境界）。上の「すべてオン／すべてオフ」で一度に切り替えられ、設定（⚙）の「地図に重ねるもの」も同じものです。この端末に覚えます。' },
+      { t: 'トンネルは、長さにかかわらず全部を紺の点線で出します（ごく短いものは途切れない紺の線）。トンネルの中では、列車の印が半透明になります。' },
       { t: '止まらずに通る駅（通過駅）に近づくと、2分ほど前から「まもなく○○駅を通過」と、駅の読み・府県・ひとことが出ます。地図の駅のピンと、下の見どころ一覧からも紹介を開けます。' },
       { t: '予定の便に乗れなかったとき：日程の列車の行か、いまどのへん？の見出しの下の「別の便に乗った」を押し、乗った便の名前・発車した（する）時刻・号車と席（空欄なら自由席）を入れます。予定の便がその分遅れて走るとみなして、いまどのへん？（時刻・駅一覧・到着・降車のお知らせ・自動でGPSを使う時間帯）と、日程の降りる駅から先を合わせます。停車駅が違うことがあるので、駅と時刻は目安です。「予定の便に戻す」で元に戻ります。指定席券の画面は、予約の内容のままです。' },
       { t: '写真はのぞみの画面です。リレーかもめ（武雄温泉〜博多）も同じ画面で、列車の印は黒い787系、時速の線は130kmでいっぱいになります。見出しの右上の「のぞみ（…）へ」「リレーかもめ（…）へ」で、もう一方の列車に移れます。' }] },
@@ -752,7 +754,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 41;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
+  const MAN_V = 42;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -1576,7 +1578,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=41').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=42').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
