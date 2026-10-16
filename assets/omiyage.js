@@ -170,3 +170,38 @@ window.OMIYAGE = { checked: '2026-10-16', omittedNote: '大阪の雑貨（くい
       links: [['鹿のキッズはんかち', 'https://www.nakagawa-masashichi.jp/shop/g/g4547639508874/', '公式通販']] }
   ] }
 ] };
+
+/* ページの見せ方だけに使う部分（品の中身ではない）。
+   a … 品の絵（viewBox 0 0 64 64 の中身。表紙の鹿と同じ、細い線・丸い端・省略した形の線画。色は currentColor）
+   s … 閉じたカードに出す、日持ちのひとこと（上の shelf の言い換え。くわしくは開いたカードの shelf）
+   groups … ジャンル見出しの小さな絵（viewBox 0 0 24 24） */
+window.OMIYAGE_ART = {
+  items: {
+    nakatanidou: { s: '', a: '<path d="M12 50c0-14 9-24 20-24s20 10 20 24z"/><path d="M32 26c0-6 4-10 11-10 0 6-4 10-11 10zM32 26l7-6"/><g fill="currentColor" stroke="none"><circle cx="24" cy="42" r="1.5"/><circle cx="33" cy="39" r="1.5"/><circle cx="41" cy="44" r="1.5"/></g>' },
+    kikuya: { s: '30日', a: '<path d="M8 46c0-8 3.5-12 8-12s8 4 8 12zM24 46c0-8 3.5-12 8-12s8 4 8 12zM40 46c0-8 3.5-12 8-12s8 4 8 12z"/><path d="M6 50h52"/><g fill="currentColor" stroke="none"><circle cx="16" cy="29" r="1.3"/><circle cx="32" cy="29" r="1.3"/><circle cx="48" cy="29" r="1.3"/></g>' },
+    aoniyoshi: { s: '30日', a: '<rect x="14" y="14" width="36" height="36" rx="9"/><path d="M32 29c-3-4-3-8 0-9 3 1 3 5 0 9zM35 32c4-3 8-3 9 0-1 3-5 3-9 0zM32 35c3 4 3 8 0 9-3-1-3-5 0-9zM29 32c-4 3-8 3-9 0 1-3 5-3 9 0z"/><circle cx="32" cy="32" r="1.4" fill="currentColor" stroke="none"/>' },
+    rikuro: { s: '3日以内', a: '<ellipse cx="32" cy="30" rx="20" ry="7"/><path d="M12 30v12c0 4 9 8 20 8s20-4 20-8V30"/><g fill="currentColor" stroke="none"><circle cx="24" cy="29" r="1.4"/><circle cx="34" cy="32" r="1.4"/><circle cx="42" cy="28" r="1.4"/></g>' },
+    pablo: { s: '3日', a: '<ellipse cx="32" cy="32" rx="20" ry="7"/><path d="M12 32v7c0 4 9 8 20 8s20-4 20-8v-7"/><path d="M18 40v5M25 42.5v5M32 43v5M39 42.5v5M46 40v5"/><circle cx="32" cy="31" r="3.2"/><path d="M32 27.8c0-2 1-3 2.5-3.5"/>' },
+    koibito: { s: '約6か月', a: '<rect x="14" y="14" width="36" height="36" rx="4"/><path d="M32 42l-8-8a5 5 0 0 1 8-6 5 5 0 0 1 8 6z"/>' },
+    jagarico: { s: '6か月', a: '<path d="M20 26l3 24h18l3-24z"/><path d="M18 26h28M21.5 36h21M26 26l-3-14M32 26V10M38 26l3-12"/>' },
+    takopatie: { s: '日数は未確認', a: '<circle cx="32" cy="34" r="15"/><path d="M20 30c4 3 8 3 12 0s8-3 12 0M32 19V9"/><g fill="currentColor" stroke="none"><circle cx="26" cy="40" r="1.5"/><circle cx="37" cy="41" r="1.5"/><circle cx="31" cy="36" r="1.5"/></g>' },
+    hanalang: { s: '31日以上', a: '<circle cx="32" cy="32" r="18"/><circle cx="32" cy="23.8" r="4.4"/><circle cx="39.8" cy="29.5" r="4.4"/><circle cx="36.8" cy="38.7" r="4.4"/><circle cx="27.2" cy="38.7" r="4.4"/><circle cx="24.2" cy="29.5" r="4.4"/><circle cx="32" cy="32" r="1.4" fill="currentColor" stroke="none"/>' },
+    hiraso: { s: '製造日含め3日', a: '<path d="M32 8c12 4 18 12 18 22-6 4-12 4-18 4s-12 0-18-4C14 20 20 12 32 8z"/><path d="M32 12v22M32 20l-6-4M32 20l6-4M32 28l-7-4M32 28l7-4"/><rect x="14" y="38" width="36" height="12" rx="6"/><path d="M18 44h28"/>' },
+    izasa: { s: '表記に差あり', a: '<rect x="10" y="30" width="44" height="20" rx="3"/><path d="M21 30v20M32 30v20M43 30v20"/><path d="M18 30c0-8 4-14 12-16 1 8-4 14-12 16z"/><path d="M20 28l6-8"/>' },
+    imanishi: { s: '約1か月', a: '<path d="M20 18h14M22 18v4c-8 3-10 9-10 15 0 9 5 14 15 14s15-5 15-14c0-6-2-12-10-15v-4"/><path d="M16 34c7 3 15 3 22 0"/><ellipse cx="51" cy="42" rx="7" ry="9"/><path d="M51 33v18M46 35c-1.5 4-1.5 10 0 14M56 35c1.5 4 1.5 10 0 14"/>' },
+    ikeri: { s: '3年6か月', a: '<path d="M18 8C26 20 26 40 18 52M25 8C31 20 31 40 25 52M32 8v44M39 8C33 20 33 40 39 52M46 8C38 20 38 40 46 52"/><rect x="21" y="26" width="22" height="8" rx="2"/>' },
+    morino: { s: '約2年', a: '<path d="M12 38h40c0 9-8 14-20 14s-20-5-20-14z"/><path d="M32 38V12"/><circle cx="28" cy="17" r="2.8"/><circle cx="36" cy="21" r="2.8"/><circle cx="28" cy="25" r="2.8"/><circle cx="36" cy="29" r="2.8"/><circle cx="29" cy="33" r="2.8"/>' },
+    butaman: { s: '5日', a: '<path d="M12 44c0-12 8-20 20-20s20 8 20 20z"/><path d="M32 24v8M25 27l2 7M39 27l-2 7M10 49h44M24 18c-2-3 2-4 0-8M32 16c-2-3 2-4 0-8M40 18c-2-3 2-4 0-8"/>' },
+    harushika: { s: '表示に差あり', a: '<path d="M24 10h10M26 10v8c-7 4-10 10-10 18 0 8 4 14 13 14s13-6 13-14c0-8-3-14-10-18v-8"/><path d="M17 34c8 3 16 3 24 0"/><path d="M45 30h13c0 7-3 12-6.5 12S45 37 45 30z"/>' },
+    kazenomori: { s: '生酒・早めに', a: '<path d="M28 8h8v8c6 4 9 8 9 15v15c0 3-2 5-5 5H24c-3 0-5-2-5-5V31c0-7 3-11 9-15z"/><rect x="25" y="32" width="14" height="12" rx="2"/><path d="M5 24h8M3 30h10M51 22h7M51 28h9"/>' },
+    minoh: { s: '120日', a: '<path d="M20 20h24l-3 30c0 1.5-1.5 2.5-3 2.5H26c-1.5 0-3-1-3-2.5z"/><path d="M18 20c-1-6 5-8 8-5 2-4 8-4 10 0 4-2 10 1 9 5M44 26h4c4 0 4 12 0 14h-3.5"/><g fill="currentColor" stroke="none"><circle cx="29" cy="34" r="1.4"/><circle cx="34" cy="43" r="1.4"/><circle cx="37" cy="30" r="1.4"/></g>' },
+    narami: { s: '日持ち心配なし', a: '<g transform="translate(32 31) scale(1.15) translate(-47 -27)" stroke-width="1.8"><path d="M38 20l-6-12M38 20l-12-3M38 20l2-13M56 20l6-12M56 20l12-3M56 20l-2-13"/><path d="M36 25c0-4 5-6 11-6s11 2 11 6l-3 13c-1.4 5-4.6 8-8 8s-6.6-3-8-8z"/><path d="M32 27l-7 2M62 27l7 2"/><circle cx="42" cy="31" r="1.3" fill="currentColor"/><circle cx="52" cy="31" r="1.3" fill="currentColor"/></g>' },
+    hankachi: { s: '日持ち心配なし', a: '<rect x="10" y="12" width="44" height="40" rx="3"/><g transform="translate(32 33) scale(.62) translate(-47 -27)" stroke-width="3.1"><path d="M38 20l-6-12M38 20l-12-3M38 20l2-13M56 20l6-12M56 20l12-3M56 20l-2-13"/><path d="M36 25c0-4 5-6 11-6s11 2 11 6l-3 13c-1.4 5-4.6 8-8 8s-6.6-3-8-8z"/><path d="M32 27l-7 2M62 27l7 2"/><circle cx="42" cy="31" r="1.3" fill="currentColor"/><circle cx="52" cy="31" r="1.3" fill="currentColor"/></g>' }
+  },
+  groups: {
+    okashi: '<path d="M4 18c0-6 3.5-10 8-10s8 4 8 10z"/><path d="M12 8c0-2.5 1.5-4 5-4 0 2.5-1.5 4-5 4z"/>',
+    meibutsu: '<path d="M4 12h16c0 5-3.5 8-8 8s-8-3-8-8z"/><path d="M9 3l5 7M13 3l5 6"/>',
+    sake: '<path d="M9.5 3h5M11 3v4c-3 2-5 4-5 8 0 4 2 6 6 6s6-2 6-6c0-4-2-6-5-8V3"/>',
+    zakka: '<g transform="translate(12 12.5) scale(.5) translate(-47 -27)" stroke-width="3.4"><path d="M38 20l-6-12M38 20l-12-3M38 20l2-13M56 20l6-12M56 20l12-3M56 20l-2-13"/><path d="M36 25c0-4 5-6 11-6s11 2 11 6l-3 13c-1.4 5-4.6 8-8 8s-6.6-3-8-8z"/><path d="M32 27l-7 2M62 27l7 2"/></g>'
+  }
+};

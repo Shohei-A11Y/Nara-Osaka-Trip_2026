@@ -873,7 +873,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 49;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
+  const MAN_V = 50;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -1237,19 +1237,33 @@
     $('#cd-hm').textContent = `${Math.floor(ms % 864e5 / 36e5)}時間${String(Math.floor(ms % 36e5 / 6e4)).padStart(2, '0')}分`;
   }
 
-  const WX = c => c <= 1 ? ['晴', 'sun'] : c <= 3 ? ['曇', 'cloud'] : c <= 48 ? ['霧', 'cloud'] : c <= 67 || (c >= 80 && c <= 82) ? ['雨', 'rain'] : c <= 77 || (c >= 85 && c <= 86) ? ['雪', 'rain'] : ['雷', 'rain'];
+  const WX = c => c <= 1 ? ['晴', 'sun', 'sun'] : c === 2 ? ['曇', 'cloud', 'partly'] : c === 3 ? ['曇', 'cloud', 'cloud'] : c <= 48 ? ['霧', 'cloud', 'fog'] : c <= 67 || (c >= 80 && c <= 82) ? ['雨', 'rain', 'rain'] : c <= 77 || (c >= 85 && c <= 86) ? ['雪', 'rain', 'snow'] : ['雷', 'rain', 'thunder'];
+  /* 天気の絵：お土産と同じ、細い線・丸い端・省略した形の線画（色は currentColor）。晴れ時々くもり（天気コード2）は、太陽と雲を重ねた絵 */
+  const WX_CLOUD = 'M14 37h21a8 8 0 0 0 1.5-15.9A11 11 0 0 0 15.5 24 7 7 0 0 0 14 37z';
+  const WX_ART = {
+    sun: '<circle cx="24" cy="24" r="8"/><path d="M24 5v5M24 38v5M5 24h5M38 24h5M10.6 10.6l3.5 3.5M33.9 33.9l3.5 3.5M10.6 37.4l3.5-3.5M33.9 14.1l3.5-3.5"/>',
+    partly: '<circle cx="17" cy="16" r="6"/><path d="M17 4v3M17 25v1M5 16h3M26 16h-1M8.5 7.5l2 2M25.5 7.5l-2 2M8.5 24.5l2-2"/><path transform="translate(5 3) scale(.88)" d="' + WX_CLOUD + '"/>',
+    cloud: '<path d="' + WX_CLOUD + '"/>',
+    fog: '<path transform="translate(0 -7)" d="' + WX_CLOUD + '"/><path d="M9 36h30M15 42h24"/>',
+    rain: '<path transform="translate(0 -6)" d="' + WX_CLOUD + '"/><path d="M16 36l-2 6M24 36l-2 6M32 36l-2 6"/>',
+    thunder: '<path transform="translate(0 -6)" d="' + WX_CLOUD + '"/><path d="M26 29l-6 8h6l-3 8"/>',
+    snow: [0, 60, 120, 180, 240, 300].map(a => `<path transform="rotate(${a} 24 24)" d="M24 24V6M20 10l4 3 4-3"/>`).join('')
+  };
+  const wxIcon = key => `<svg class="wk-i" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${WX_ART[key]}</svg>`;
   /* 例年の気温（気象庁の平年値。data.js の tips.temps）。2日目は奈良、ほかの日は大阪 */
   const normalTemp = d => { const t = ((T.tips && T.tips.temps) || []).find(x => x.name === (d.n === 2 ? '奈良' : '大阪')); return t ? `<div class="wn num">例年 最高${Math.round(t.hi)}°／最低${Math.round(t.lo)}°</div>` : ''; };
   /* くわしい予報へのリンク（予報が取れないときも出す） */
   const WX_LINKS = '<p class="note wx-links">くわしい予報：<a class="ext" href="https://tenki.jp/forecast/6/30/6200/27100/10days.html" target="_blank" rel="noopener">大阪市（tenki.jp）</a>・<a class="ext" href="https://tenki.jp/forecast/6/32/6410/29201/10days.html" target="_blank" rel="noopener">奈良市（tenki.jp）</a>・<a class="ext" href="https://www.jma.go.jp/bosai/forecast/#area_type=offices&amp;area_code=270000" target="_blank" rel="noopener">大阪府（気象庁）</a>・<a class="ext" href="https://www.jma.go.jp/bosai/forecast/#area_type=offices&amp;area_code=290000" target="_blank" rel="noopener">奈良県（気象庁）</a></p>';
-  const wxNormalGrid = () => `<div class="weather">${T.days.map(d => `<div><div class="wd">${d.label}（${d.dow}）</div><div class="wk wait">予報<br>まち</div>${normalTemp(d)}<div class="wp">${d.n === 2 ? '奈良' : '大阪'}</div></div>`).join('')}</div>${WX_LINKS}`;
+  const wxNormalGrid = () => `<div class="weather">${T.days.map(d => `<div><div class="wd">${d.label}（${d.dow}）</div><div class="wk wait">予報<br>まち</div>${normalTemp(d)}<div class="wp">${d.n === 2 ? '奈良' : '大阪'}</div></div>`).join('')}</div>`;
+  const wxMore = t => `<details class="wx-more"><summary>くわしく</summary><div>${t ? `<p class="note">${t}</p>` : ''}${WX_LINKS}</div></details>`;
   /* 日の出・日の入り（国立天文台 暦計算室の値を、data.js に固定で入れてある。電波がなくても出る） */
   function sunBlock() {
     const S = T.sun; if (!S) return '';
     return `<div class="sun-box" id="sun-box"><h3 class="sub-h">日の出・日の入り<span class="eyebrow">Sunrise &amp; Sunset</span></h3>
       <table class="sun-t"><thead><tr><th scope="col">${S.date}</th><th scope="col">日の出</th><th scope="col">日の入り</th></tr></thead>
       <tbody>${S.rows.map(r => `<tr><th scope="row">${esc(r.name)}</th><td class="num">${r.rise}</td><td class="num">${r.set}</td></tr>`).join('')}</tbody></table>
-      <p class="note">${S.date}の時刻です。旅行中は毎日1分ほどずれます。出典：${S.rows.map(r => `<a href="${r.url}" target="_blank" rel="noopener">国立天文台 暦計算室（${esc(r.name)}）</a>`).join('・')}</p></div>`;
+      <p class="note">${S.date}の時刻です。旅行中は毎日1分ほどずれます。</p>
+      <details class="wx-more"><summary>くわしく</summary><div><p class="note">出典：${S.rows.map(r => `<a href="${r.url}" target="_blank" rel="noopener">国立天文台 暦計算室（${esc(r.name)}）</a>`).join('・')}</p></div></details></div>`;
   }
   /* 予報（Open-Meteo）は、ホームの天気と日程の「雨の日はこちら」で使う。開いている間は30分ずつ使い回す */
   let wxJob = null;
@@ -1288,13 +1302,13 @@
       el.innerHTML = `<div class="weather">${T.days.map(d => {
         const w = wxDay(fc, d), place = d.n === 2 ? '奈良' : '大阪';
         if (!w) return `<div><div class="wd">${d.label}（${d.dow}）</div><div class="wk wait">予報<br>まち</div>${normalTemp(d)}<div class="wp">${place}${simRain() ? `<br>降水 ${simRain()}%（おためし）` : ''}</div></div>`;
-        const [k, cls] = WX(w.code), pp = rainPP(w);
-        return `<div><div class="wd">${d.label}（${d.dow}）</div><div class="wk ${cls}">${k}</div><div class="wt num"><span class="hi">${Math.round(w.hi)}°</span> / <span class="lo">${Math.round(w.lo)}°</span></div><div class="wp">降水 ${pp ?? '-'}%${simRain() ? '（おためし）' : ''}・${place}</div></div>`;
-      }).join('')}</div><p class="note">予報：Open-Meteo。2日目は奈良、ほかの日は大阪の予報です。「例年」は気象庁の平年値（10月中旬）で、予報が出るまでの目安です。降水確率が50%以上の日は、日程に「雨の日はこちら」が出ます（2日目・3日目）。</p>${WX_LINKS}`;
+        const [k, cls, art] = WX(w.code), pp = rainPP(w);
+        return `<div><div class="wd">${d.label}（${d.dow}）</div><div class="wk ${cls}">${wxIcon(art)}<span class="wk-k">${k}</span></div><div class="wt num"><span class="hi">${Math.round(w.hi)}°</span> / <span class="lo">${Math.round(w.lo)}°</span></div><div class="wp">降水 ${pp ?? '-'}%${simRain() ? '（おためし）' : ''}<br>${place}</div></div>`;
+      }).join('')}</div><p class="note">予報：Open-Meteo。2日目は奈良、ほかの日は大阪の予報です。</p>${wxMore('「例年」は気象庁の平年値（10月中旬）で、予報が出るまでの目安です。降水確率が50%以上の日は、日程に「雨の日はこちら」が出ます（2日目・3日目）。')}`;
       window.__restoreScrollAgain && window.__restoreScrollAgain();
     } catch {
       el.innerHTML = `${wxNormalGrid()}
-        <p class="note">出発のおよそ2週間前（10/2ごろ）から、大阪と奈良の天気予報が自動で表示されます。「例年」は気象庁の平年値（10月中旬）です。</p>`;
+        <p class="note">天気予報は、出発のおよそ2週間前（10/2ごろ）から自動で出ます。</p>${wxMore('大阪と奈良の天気予報が自動で表示されます。「例年」は気象庁の平年値（10月中旬）です。')}`;
       window.__restoreScrollAgain && window.__restoreScrollAgain();
     }
   }
@@ -1734,7 +1748,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=49').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=50').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -3335,28 +3349,75 @@
      価格・入数・日持ちは、2つ以上の出どころで照らしたものだけ。公式が開けなかった品は「公式未確認」と出どころを添える。買ったかどうかのチェックは作らない */
   const SV_KIND = { cold: '要冷蔵', room: '常温', frozen: '冷凍', today: '当日中に', cool: '10〜20℃で保管', unknown: '保存はラベル確認' };
   const SV_MARK = { ok: '確かめ済み', diff: '出どころで差あり', one: '出どころ1つ', shop: '店頭で確認' };
+  /* 印の意味（バッジを押すと小さく開く） */
+  const SV_MARK_WHY = { ok: '2つ以上の出どころで、値が一致しています。', diff: '出どころで値が食い違います。幅で書き、出どころごとの値は、カードの中に併記しました。', one: '確かめられた出どころが、1つだけです。', shop: '価格が見つかりませんでした。店頭で確かめてください。' };
+  /* 閉じたカードの、日持ちのひとこと（アイコンと短い名前） */
+  const SV_KS = { cold: '要冷蔵', room: '常温', frozen: '冷凍', today: '当日中', cool: '10〜20℃', unknown: 'ラベル確認' };
+  const SV_KI = {
+    cold: '<rect x="5" y="5" width="14" height="14" rx="3.5"/><path d="M8.5 10l2-2"/>',
+    frozen: '<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/>',
+    room: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/>',
+    today: '<circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/>',
+    cool: '<path d="M10 14V5a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0z"/>',
+    unknown: '<path d="M4 4h8l8 8-8 8-8-8z"/><circle cx="8.5" cy="8.5" r="1"/>'
+  };
   const svDate = d => { const [y, m, dd] = String(d || '').split('-').map(Number); return y ? `${y}年${m}月${dd}日` : ''; };
+  const SV_JUMP = { okashi: 'お菓子', meibutsu: 'おかず', sake: '飲み物', zakka: '雑貨' };
+  const svSvg = (cls, vb, inner, sw) => `<svg class="${cls}" viewBox="${vb}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${inner}</svg>`;
+  /* ページの中の押す所（印の意味・奈良／大阪で絞る・ジャンルへ飛ぶ）。ページを描き直しても、1回だけ付ければよい */
+  document.addEventListener('click', e => {
+    const lg = e.target.closest('[data-svlg]');
+    if (lg) {
+      const box = lg.closest('.sv-lg'), p = $('.sv-lgp', box), k = lg.dataset.svlg, was = lg.getAttribute('aria-expanded') === 'true';
+      $$('[data-svlg]', box).forEach(b => b.setAttribute('aria-expanded', String(!was && b === lg)));
+      p.hidden = was;
+      p.textContent = SV_MARK_WHY[k];
+      return;
+    }
+    const f = e.target.closest('[data-svf]');
+    if (f) {
+      const v = f.dataset.svf, root = f.closest('.wrap');
+      $$('[data-svf]', root).forEach(b => b.setAttribute('aria-pressed', String(b === f)));
+      $$('.sv', root).forEach(x => { x.hidden = v !== 'all' && x.dataset.area !== v; });
+      $$('.tv-g', root).forEach(g => { const n = $$('.sv:not([hidden])', g).length; g.hidden = !n; $('em', g).textContent = `${n}品`; $(`[data-svg="${g.id.slice(5)}"]`, root).hidden = !n; });
+      return;
+    }
+    const j = e.target.closest('[data-svg]');
+    if (j) { const g = $('#sv-g-' + j.dataset.svg); if (g) { g.open = true; g.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }
+  });
   function viewOmiyage(sub) {
-    const O = window.OMIYAGE || { groups: [] };
+    const O = window.OMIYAGE || { groups: [] }, ART = window.OMIYAGE_ART || { items: {}, groups: {} };
     const link = ([l, u, k]) => `<a class="ext" href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a><small>（${esc(k)}）</small>`;
     const price = x => x.priceText ? `<b>${esc(x.priceText)}</b>` : x.price != null ? `<b class="num">${Number(x.price).toLocaleString('ja-JP')}円</b>（税込）${x.priceNote ? `<small class="sv-pn">${esc(x.priceNote)}</small>` : ''}` : '<b>店頭で確認</b>';
+    /* 閉じたカードの値段：幅や文で書いた品は、「（」の前までを大きく。価格が見つからない品は「店頭で確認」 */
+    const priceS = x => x.mark === 'shop' || (x.price == null && !x.priceText) ? '店頭で確認' : x.priceText ? x.priceText.split('（')[0] : `${Number(x.price).toLocaleString('ja-JP')}円`;
     const diff = x => x.diff && x.diff.length ? `<details class="sv-diff"><summary>出どころごとの値</summary><ul>${x.diff.map(d => `<li>${esc(d)}</li>`).join('')}</ul></details>` : '';
-    const item = x => `<article class="sv" id="sv-${x.id}">
-      <p class="sv-top"><span class="sv-area ${x.area === '奈良' ? 'nara' : 'osaka'}">${esc(x.area)}</span><span class="sv-st ${x.keep}">${SV_KIND[x.keep] || ''}</span><span class="sv-mark ${x.mark}">${SV_MARK[x.mark] || ''}</span></p>
-      <h3>${esc(x.name)}</h3><p class="sv-maker">${esc(x.maker)}${x.model ? `　${esc(x.model)}` : ''}</p>
+    const item = x => { const a = ART.items[x.id] || {}; return `<details class="sv" id="sv-${x.id}" data-area="${esc(x.area)}"><summary class="sv-s">
+      <span class="sv-t"><span class="sv-top"><span class="sv-area ${x.area === '奈良' ? 'nara' : 'osaka'}">${esc(x.area)}</span><small class="sv-maker">${esc(x.maker)}</small></span>
+        <h3>${esc(x.short || x.name)}</h3>
+        <span class="sv-pr"><b class="num${x.mark === 'shop' ? ' sv-shop' : ''}">${esc(priceS(x))}</b>${x.price != null && !x.priceText ? '<small>税込</small>' : ''}</span>
+        <span class="sv-sh"><span class="sv-st ${x.keep}">${svSvg('sv-ki', '0 0 24 24', SV_KI[x.keep] || '', 2)}<span>${SV_KS[x.keep] || ''}${a.s ? `・${esc(a.s)}` : ''}</span></span><span class="sv-mark ${x.mark}">${SV_MARK[x.mark] || ''}</span></span></span>
+      <span class="sv-art-w ${x.area === '奈良' ? 'nara' : 'osaka'}">${a.a ? svSvg('sv-art', '0 0 64 64', a.a + '<path d="M8 56c8-2 16-2 24 0s16 2 24 0" stroke-opacity=".5"/>', 2) : ''}</span>
+      <span class="sv-chev" aria-hidden="true"></span></summary>
+      <div class="sv-body"><p class="sv-full">${esc(x.name)}${x.model ? `　${esc(x.model)}` : ''}<br>${esc(x.maker)}</p>
       <p class="sv-lead">${esc(x.lead)}</p>
       ${infoList([['税込価格', price(x) + diff(x)], ['入数', esc(x.pack)], ['日持ち', esc(x.shelf)], ['買える場所（目安）', esc(x.where)]])}
       ${x.note ? `<p class="sv-note">${esc(x.note)}</p>` : ''}
-      <p class="sv-src">参考：${x.links.map(link).join('　')}</p></article>`;
+      <p class="sv-src">参考：${x.links.map(link).join('　')}</p></div></details>`; };
     const names = g => { const n = g.items.map(x => x.short || x.name); return n.slice(0, 5).join('・') + (n.length > 5 ? 'ほか' : ''); };
-    return `<div class="wrap">${topbar()}${phead('Souvenirs', 'お土産', '奈良と大阪の定番のお土産を、ジャンル別にまとめました。ジャンルの名前を押すと開きます。')}
-      <div class="sv-card"><h2>${ic('train')}持ち帰りの目安</h2>
-        <p>10/20 は新大阪を 11:02（のぞみ17号）に出て、15:08 に新大村へ着きます（約4時間）。<b>要冷蔵のものは、この時間を持ち歩ける保冷の用意が要ります。</b>常温で日持ちするものなら、安心です。</p></div>
-      <p class="note">価格は取材（確認）した日の目安です。店頭が正です。確認した日：${svDate(O.checked)}。</p>
-      <p class="note sv-legend">印の意味：<b>確かめ済み</b>＝2つ以上の出どころで値が一致／<b>出どころで差あり</b>＝値が食い違う（幅で書き、出どころごとの値を併記）／<b>出どころ1つ</b>＝確かめられた出どころが1つだけ／<b>店頭で確認</b>＝価格が見つからない。</p>
-      <div class="tv-list sv-list">${O.groups.map(g => `<details class="tv-g" id="sv-g-${g.id}"${sub === g.id ? ' open' : ''}><summary class="tv-h"><span><b>${esc(g.name)}</b><small>${esc(names(g))}</small></span><em class="num">${g.items.length}品</em></summary>
+    return `<div class="wrap">${topbar()}${phead('Souvenirs', 'お土産', '奈良と大阪の定番を、ジャンル別に。')}
+      <p class="sv-one sv-card">${ic('train')}<span>要冷蔵・冷凍の品は、10/20 の約4時間を持ち歩ける保冷が要ります。</span></p>
+      <div class="sv-lg sv-legend"><div class="sv-lgr" role="group" aria-label="印の意味。押すと開きます">${Object.keys(SV_MARK).map(k => `<button type="button" class="sv-mark ${k}" data-svlg="${k}" aria-expanded="false">${SV_MARK[k]}</button>`).join('')}</div><p class="sv-lgp" hidden></p></div>
+      <p class="sv-one sv-price">価格は目安。店頭が正。確認した日：${svDate(O.checked)}</p>
+      <details class="sv-more"><summary>くわしく</summary><div>
+        <p><b>持ち帰りの目安</b>　10/20 は新大阪を 11:02（のぞみ17号）に出て、15:08 に新大村へ着きます（約4時間）。要冷蔵のものは、この時間を持ち歩ける保冷の用意が要ります。常温で日持ちするものなら、安心です。</p>
+        <p><b>価格</b>　取材（確認）した日の目安です。店頭が正です。確認した日：${svDate(O.checked)}。</p>
+        <p><b>印の意味</b>　<b>確かめ済み</b>＝2つ以上の出どころで値が一致／<b>出どころで差あり</b>＝値が食い違う（幅で書き、出どころごとの値を併記）／<b>出どころ1つ</b>＝確かめられた出どころが1つだけ／<b>店頭で確認</b>＝価格が見つからない。</p></div></details>
+      <div class="sv-chips" role="group" aria-label="奈良・大阪で絞る">${[['all', 'すべて'], ['奈良', '奈良'], ['大阪', '大阪']].map(([k, l]) => `<button type="button" data-svf="${k}" aria-pressed="${k === 'all'}">${l}</button>`).join('')}</div>
+      <nav class="sv-chips sv-jump" aria-label="ジャンルへ飛ぶ">${O.groups.map(g => `<button type="button" data-svg="${g.id}">${esc(SV_JUMP[g.id] || g.name)}</button>`).join('')}</nav>
+      <div class="tv-list sv-list">${O.groups.map(g => `<details class="tv-g" id="sv-g-${g.id}"${sub === g.id ? ' open' : ''}><summary class="tv-h"><span class="sv-gh">${ART.groups[g.id] ? svSvg('sv-gi', '0 0 24 24', ART.groups[g.id], 1.8) : ''}<span><b>${esc(g.name)}</b><small>${esc(names(g))}</small></span></span><em class="num">${g.items.length}品</em></summary>
         <div class="tv-items">${g.items.map(item).join('')}</div></details>`).join('')}</div>
-      <p class="note">写真は載せていません。入数・日持ちは商品の規格で、季節や店によって変わることがあります。「公式未確認」と書いた品は、公式ページそのものを開けなかったため、検索結果に出た公式ページの内容と、別の出どころで照らしました。買う前に、店頭の表示を見てください。</p>${O.omittedNote ? `<p class="note">${esc(O.omittedNote)}</p>` : ''}</div>`;
+      <div class="sv-foot"><p>写真は載せていません。入数・日持ちは商品の規格で、季節や店によって変わることがあります。「公式未確認」と書いた品は、公式ページそのものを開けなかったため、検索結果に出た公式ページの内容と、別の出どころで照らしました。買う前に、店頭の表示を見てください。</p>${O.omittedNote ? `<p>${esc(O.omittedNote)}</p>` : ''}</div></div>`;
   }
 
   /* 服装のイラスト（旅のワンポイント）：手描き風のやさしい線画。和紙色・朱・藍で、人物は描かず、何を着る・持つかがひと目で分かる形に。
@@ -3673,7 +3734,7 @@
     const flash = () => {
       let el = mark && $(mark); if (!el) return;
       if (el.matches('input')) el = el.closest('li') || el;
-      const d = el.closest('details'); if (d) d.open = true;
+      for (let d = el.closest('details'); d; d = d.parentElement && d.parentElement.closest('details')) d.open = true;
       el.scrollIntoView({ block: 'center', behavior: 'auto' });
       el.classList.remove('nw-flash'); void el.offsetWidth; el.classList.add('nw-flash');
       setTimeout(() => el.classList.remove('nw-flash'), 2400);
