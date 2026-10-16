@@ -873,7 +873,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 52;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
+  const MAN_V = 53;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -1375,15 +1375,19 @@
   const latestSrc = x => (x.src && x.src.length ? `<p class="lt-src small muted">出典：${x.src.map(([n, u]) => `<a class="ext" href="${u}" target="_blank" rel="noopener">${esc(n)}</a>`).join('・')}</p>` : '');
   const latestMd = x => `${+x.date.slice(5, 7)}/${+x.date.slice(8, 10)}`;
   let latestNew = [];
+  const latestOpen = new Set();   // 開いている項目（描き直しても保つ。端末には残さない）
   /* 旅行のあと（phase が after）は、思い出モードでも「旅行中のしおりを見る」で戻した表紙でも出さない（旅行が終われば不要なため） */
   function latestSection() {
     const all = latestAll(); if (!all.length || phase() === 'after') return '';
     const un = latestUnseen().map(x => x.id);
     if (un.length) { latestNew = [...new Set(latestNew.concat(un))]; store.set('latestSeen', [...new Set(latestSeen().concat(un))]); }
+    const allOpen = all.every(x => latestOpen.has(x.id));
     return `<section class="sec" id="latest" aria-label="旅先の最新情報">${secH('旅先の最新情報', 'Latest')}
-      ${all.map(x => `<article class="lt-card" id="lt-${esc(x.id)}"><p class="lt-h"><span class="lt-d num">${latestMd(x)}</span>${x.mark ? `<span class="lt-mark">${esc(x.mark)}</span>` : ''}${latestNew.includes(x.id) ? '<span class="lt-new">新着</span>' : ''}</p>
-        <h3>${esc(x.title)}</h3>${x.text ? `<p class="lt-t">${esc(x.text).replace(/\n/g, '<br>')}</p>` : ''}${latestSrc(x)}
-        ${x.spot ? `<div class="btns"><a class="more" href="${/^#/.test(x.spot) ? x.spot : '#/spot/' + x.spot}">関係するページを見る</a></div>` : ''}</article>`).join('')}</section>`;
+      <p class="lt-bar small muted"><span>${all.length}件。見出しを押すと開きます</span><button type="button" class="lt-all" data-ltall="${allOpen ? 'close' : 'open'}">${allOpen ? 'すべてたたむ' : 'すべて開く'}</button></p>
+      ${all.map(x => `<details class="lt-card" id="lt-${esc(x.id)}" data-lt="${esc(x.id)}"${latestOpen.has(x.id) ? ' open' : ''}><summary class="lt-sum"><span class="lt-sumb"><span class="lt-h"><span class="lt-d num">${latestMd(x)}</span>${x.mark ? `<span class="lt-mark">${esc(x.mark)}</span>` : ''}${latestNew.includes(x.id) ? '<span class="lt-new">新着</span>' : ''}</span>
+        <h3>${esc(x.title)}</h3></span><span class="lt-chev" aria-hidden="true"></span></summary>
+        <div class="lt-body">${x.text ? `<p class="lt-t">${esc(x.text).replace(/\n/g, '<br>')}</p>` : ''}${latestSrc(x)}
+        ${x.spot ? `<div class="btns"><a class="more" href="${/^#/.test(x.spot) ? x.spot : '#/spot/' + x.spot}">関係するページを見る</a></div>` : ''}</div></details>`).join('')}</section>`;
   }
   /* 関係するページと日程の行に出す、小さな表示 */
   const latestMini = route => latestAt(route).map(x => `<div class="lt-mini" role="note"><p class="lt-h"><span class="lt-lab">最新情報${x.mark ? '・' + esc(x.mark) : ''}</span><span class="lt-d num">${latestMd(x)}</span></p><p class="lt-mt"><b>${esc(x.title)}</b></p>${x.text ? `<p class="lt-t small">${esc(x.text).replace(/\n/g, '<br>')}</p>` : ''}${latestSrc(x)}</div>`).join('');
@@ -1748,7 +1752,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=52').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=53').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -3385,6 +3389,13 @@
     $('.sv-zero', root).hidden = total > 0;
   }
   /* ページの中の押す所（印の意味・奈良／大阪で絞る・ジャンルへ飛ぶ）。ページを描き直しても、1回だけ付ければよい */
+  /* 旅先の最新情報の開閉：開いている項目を覚え（描き直しても保つ）、「すべて開く／たたむ」の表示も合わせる */
+  document.addEventListener('toggle', e => {
+    const d = e.target; if (!d || !d.matches || !d.matches('details.lt-card')) return;
+    const id = d.dataset.lt; if (!id) return; if (d.open) latestOpen.add(id); else latestOpen.delete(id);
+    const b = document.querySelector('#latest [data-ltall]');
+    if (b) { const all = latestAll().every(x => latestOpen.has(x.id)); b.dataset.ltall = all ? 'close' : 'open'; b.textContent = all ? 'すべてたたむ' : 'すべて開く'; }
+  }, true);
   document.addEventListener('click', e => {
     const lg = e.target.closest('[data-svlg]');
     if (lg) {
@@ -4066,6 +4077,7 @@
       return;
     }
     if ((el = q('[data-rain]'))) return rainSheet(el.dataset.rain);
+    if ((el = q('[data-ltall]'))) { const open = el.dataset.ltall === 'open'; latestAll().forEach(x => (open ? latestOpen.add(x.id) : latestOpen.delete(x.id))); $$('#latest details.lt-card').forEach(d => { d.open = open; }); el.dataset.ltall = open ? 'close' : 'open'; el.textContent = open ? 'すべてたたむ' : 'すべて開く'; return; }
     if ((el = q('[data-here]'))) { const [d, i] = el.dataset.here.split(':'); setHere(d, +i); return; }
     if ((el = q('[data-shiftfix]'))) return shiftSheet(el.dataset.shiftfix);
     if ((el = q('[data-alt]'))) return altSheet(el.dataset.alt);

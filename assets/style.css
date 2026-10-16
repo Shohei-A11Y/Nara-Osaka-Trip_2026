@@ -1996,6 +1996,16 @@ ruby { ruby-align: center; }
 
 /* ---------- 旅先の最新情報 ---------- */
 .lt-card { margin-top: 12px; padding: 14px 16px 14px; border: 1px solid var(--rule); border-left: 4px solid var(--shu); border-radius: 10px; background: var(--card); }
+.lt-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.lt-all { border: 1px solid var(--rule); background: var(--card); color: var(--sumi); border-radius: 999px; padding: 6px 14px; min-height: 36px; font: inherit; font-size: calc(12.5px * var(--fs)); font-weight: 700; }
+.lt-card { padding: 0; }
+.lt-sum { display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; list-style: none; min-height: 48px; }
+.lt-sum::-webkit-details-marker { display: none; }
+.lt-sumb { flex: 1; min-width: 0; }
+.lt-sum .lt-h { margin-bottom: 2px; }
+.lt-chev { flex: none; width: 10px; height: 10px; border-right: 2px solid var(--sumi-2); border-bottom: 2px solid var(--sumi-2); transform: rotate(45deg); margin: -4px 4px 0 0; transition: transform .2s; }
+.lt-card[open] .lt-chev { transform: rotate(-135deg); margin-top: 4px; }
+.lt-body { padding: 0 16px 14px; border-top: 1px dashed var(--rule); }
 .lt-card h3 { font-size: calc(15px * var(--fs)); font-weight: 700; line-height: 1.5; }
 .lt-h { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
 .lt-d { font-size: calc(12px * var(--fs)); color: var(--sumi-2); font-weight: 700; }
