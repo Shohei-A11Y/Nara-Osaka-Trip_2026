@@ -873,7 +873,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 48;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
+  const MAN_V = 49;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -1734,7 +1734,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=48').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=49').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -3333,26 +3333,30 @@
   /* ========== お土産（#/omiyage、#/omiyage/ジャンルid でそのジャンルを開く） ==========
      奈良・大阪の定番のお土産を、ジャンル別に。データは assets/omiyage.js（OMIYAGE）。写真は載せない（公開サイトのため）。
      価格・入数・日持ちは、2つ以上の出どころで照らしたものだけ。公式が開けなかった品は「公式未確認」と出どころを添える。買ったかどうかのチェックは作らない */
-  const SV_KIND = { cold: '要冷蔵', room: '常温', frozen: '冷凍', today: '当日中に' };
+  const SV_KIND = { cold: '要冷蔵', room: '常温', frozen: '冷凍', today: '当日中に', cool: '10〜20℃で保管', unknown: '保存はラベル確認' };
+  const SV_MARK = { ok: '確かめ済み', diff: '出どころで差あり', one: '出どころ1つ', shop: '店頭で確認' };
   const svDate = d => { const [y, m, dd] = String(d || '').split('-').map(Number); return y ? `${y}年${m}月${dd}日` : ''; };
   function viewOmiyage(sub) {
     const O = window.OMIYAGE || { groups: [] };
     const link = ([l, u, k]) => `<a class="ext" href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a><small>（${esc(k)}）</small>`;
-    const price = x => x.price != null ? `<b class="num">${Number(x.price).toLocaleString('ja-JP')}円</b>（税込）${x.priceNote ? `<small class="sv-pn">${esc(x.priceNote)}</small>` : ''}` : '—';
+    const price = x => x.priceText ? `<b>${esc(x.priceText)}</b>` : x.price != null ? `<b class="num">${Number(x.price).toLocaleString('ja-JP')}円</b>（税込）${x.priceNote ? `<small class="sv-pn">${esc(x.priceNote)}</small>` : ''}` : '<b>店頭で確認</b>';
+    const diff = x => x.diff && x.diff.length ? `<details class="sv-diff"><summary>出どころごとの値</summary><ul>${x.diff.map(d => `<li>${esc(d)}</li>`).join('')}</ul></details>` : '';
     const item = x => `<article class="sv" id="sv-${x.id}">
-      <p class="sv-top"><span class="sv-area ${x.area === '奈良' ? 'nara' : 'osaka'}">${esc(x.area)}</span><span class="sv-st ${x.keep}">${SV_KIND[x.keep] || ''}</span></p>
+      <p class="sv-top"><span class="sv-area ${x.area === '奈良' ? 'nara' : 'osaka'}">${esc(x.area)}</span><span class="sv-st ${x.keep}">${SV_KIND[x.keep] || ''}</span><span class="sv-mark ${x.mark}">${SV_MARK[x.mark] || ''}</span></p>
       <h3>${esc(x.name)}</h3><p class="sv-maker">${esc(x.maker)}${x.model ? `　${esc(x.model)}` : ''}</p>
       <p class="sv-lead">${esc(x.lead)}</p>
-      ${infoList([['税込価格', price(x)], ['入数', esc(x.pack)], ['日持ち', esc(x.shelf)], ['買える場所（目安）', esc(x.where)]])}
+      ${infoList([['税込価格', price(x) + diff(x)], ['入数', esc(x.pack)], ['日持ち', esc(x.shelf)], ['買える場所（目安）', esc(x.where)]])}
       ${x.note ? `<p class="sv-note">${esc(x.note)}</p>` : ''}
       <p class="sv-src">参考：${x.links.map(link).join('　')}</p></article>`;
+    const names = g => { const n = g.items.map(x => x.short || x.name); return n.slice(0, 5).join('・') + (n.length > 5 ? 'ほか' : ''); };
     return `<div class="wrap">${topbar()}${phead('Souvenirs', 'お土産', '奈良と大阪の定番のお土産を、ジャンル別にまとめました。ジャンルの名前を押すと開きます。')}
       <div class="sv-card"><h2>${ic('train')}持ち帰りの目安</h2>
         <p>10/20 は新大阪を 11:02（のぞみ17号）に出て、15:08 に新大村へ着きます（約4時間）。<b>要冷蔵のものは、この時間を持ち歩ける保冷の用意が要ります。</b>常温で日持ちするものなら、安心です。</p></div>
       <p class="note">価格は取材（確認）した日の目安です。店頭が正です。確認した日：${svDate(O.checked)}。</p>
-      <div class="tv-list sv-list">${O.groups.map(g => `<details class="tv-g" id="sv-g-${g.id}"${sub === g.id ? ' open' : ''}><summary class="tv-h"><span><b>${esc(g.name)}</b><small>${esc(g.items.map(x => x.short || x.name).join('・'))}</small></span><em class="num">${g.items.length}品</em></summary>
+      <p class="note sv-legend">印の意味：<b>確かめ済み</b>＝2つ以上の出どころで値が一致／<b>出どころで差あり</b>＝値が食い違う（幅で書き、出どころごとの値を併記）／<b>出どころ1つ</b>＝確かめられた出どころが1つだけ／<b>店頭で確認</b>＝価格が見つからない。</p>
+      <div class="tv-list sv-list">${O.groups.map(g => `<details class="tv-g" id="sv-g-${g.id}"${sub === g.id ? ' open' : ''}><summary class="tv-h"><span><b>${esc(g.name)}</b><small>${esc(names(g))}</small></span><em class="num">${g.items.length}品</em></summary>
         <div class="tv-items">${g.items.map(item).join('')}</div></details>`).join('')}</div>
-      <p class="note">写真は載せていません。入数・日持ちは商品の規格で、季節や店によって変わることがあります。「公式未確認」と書いた品は、公式ページそのものを開けなかったため、検索結果に出た公式ページの内容と、別の出どころで照らしました。買う前に、店頭の表示を見てください。</p>${O.omitted ? `<p class="note">${esc(O.omitted)}は、有名ですが、価格や日持ちが出どころの間で食い違う、または確かめられる出どころが1つしかなかったため、載せていません。</p>` : ''}</div>`;
+      <p class="note">写真は載せていません。入数・日持ちは商品の規格で、季節や店によって変わることがあります。「公式未確認」と書いた品は、公式ページそのものを開けなかったため、検索結果に出た公式ページの内容と、別の出どころで照らしました。買う前に、店頭の表示を見てください。</p>${O.omittedNote ? `<p class="note">${esc(O.omittedNote)}</p>` : ''}</div>`;
   }
 
   /* 服装のイラスト（旅のワンポイント）：手描き風のやさしい線画。和紙色・朱・藍で、人物は描かず、何を着る・持つかがひと目で分かる形に。
@@ -3726,8 +3730,8 @@
     T.castles.forEach((c, j) => add(c.name, `車窓の城・${c.station}駅`, J([c.side, c.text]), '#/ride/castles', `[data-sid="castle-${j}"]`));
     T.ekiben.forEach(([n, p, d], j) => add(n, '博多駅の駅弁', d, '#/ride/ekiben', `.bento > li:nth-child(${j + 1})`, { k: '駅弁 弁当' }));
     (T.triviaCats || []).forEach(c => { add(`トリビア：${c.name}`, 'トリビア', c.sub, `#/trivia/${c.id}`, `#tv-cat-${c.id}`, { k: 'トリビア 雑学 豆知識' }); triviaItems(c.id).forEach(x => add(x.q, `トリビア・${c.name}`, J([x.k, x.a]), `#/trivia/${c.id}`, `#tv-${x.id}`, { k: 'トリビア' })); });
-    add('お土産', 'お土産（奈良・大阪）', '奈良 大阪 ジャンル別 価格 入数 日持ち 買える場所 持ち帰り 保冷', '#/omiyage', 'h1', { k: 'おみやげ 土産 みやげ ギフト プレゼント' });
-    ((window.OMIYAGE || {}).groups || []).forEach(g => g.items.forEach(x => add(x.name, `お土産・${g.name}（${x.area}）`, J([x.kana, x.maker, x.model, x.lead, x.pack, x.shelf, x.where, SV_KIND[x.keep] + (x.keep === 'cold' || x.keep === 'frozen' ? ' 保冷' : '')]), `#/omiyage/${g.id}`, `#sv-${x.id}`, { k: 'お土産 おみやげ 土産 みやげ' })));
+    add('お土産', 'お土産（奈良・大阪）', '奈良 大阪 ジャンル別 価格 入数 日持ち 買える場所 持ち帰り 保冷 確かめ済み 出どころで差あり 出どころ1つ 店頭で確認', '#/omiyage', 'h1', { k: 'おみやげ 土産 みやげ ギフト プレゼント' });
+    ((window.OMIYAGE || {}).groups || []).forEach(g => g.items.forEach(x => add(x.name, `お土産・${g.name}（${x.area}）`, J([x.kana, x.maker, x.model, x.lead, x.priceText, x.pack, x.shelf, x.where, SV_MARK[x.mark], SV_KIND[x.keep] + (x.keep === 'cold' || x.keep === 'frozen' ? ' 保冷' : ''), (x.diff || []).join(' ')]), `#/omiyage/${g.id}`, `#sv-${x.id}`, { k: 'お土産 おみやげ 土産 みやげ' })));
     XFER.forEach(x => add(`${x.title}（3D）`, `駅の乗り換え（3D）・${x.when}`, x.sub, xferHref(x.s), null, { k: '乗り換え 3D 立体 構内 エレベーター 階段' }));
     MANUAL.forEach(x => add(x.title, `使い方・${x.tab}`, J([x.sub, x.where, ...x.pts.map(p => p.t)]), `#/help/${x.id}`, '.hp-head'));
     T.bag.forEach(g => g.items.forEach(([n, why]) => add(n, `持ち物・${g.cat}`, why, '#/bag', `[data-bag="${cssq(n)}"]`)));
