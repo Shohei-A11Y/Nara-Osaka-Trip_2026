@@ -1858,6 +1858,30 @@ ruby { ruby-align: center; }
 .tv-src { margin-top: 6px; font-size: calc(12px * var(--fs)); color: var(--sumi-3); overflow-wrap: anywhere; }
 .tv-src a { color: var(--ai); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
 
+/* ---------- お土産（#/omiyage） ---------- */
+.sv-card { margin-top: 12px; padding: 14px 16px 16px; border: 1px solid var(--rule); border-left: 4px solid var(--ai); border-radius: 10px; background: var(--card); }
+.sv-card h2 { display: flex; align-items: center; gap: 8px; font-size: calc(15px * var(--fs)); font-weight: 700; margin-bottom: 6px; }
+.sv-card h2 .ic { width: 20px; height: 20px; color: var(--ai); flex: none; }
+.sv-card p { font-size: calc(14px * var(--fs)); line-height: 1.85; }
+.sv-list { margin-top: 14px; }
+.sv { padding: 14px 0 16px; border-top: 1px dashed var(--rule); scroll-margin-top: 20px; }
+.sv-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sv-area, .sv-st { font-size: calc(11.5px * var(--fs)); font-weight: 700; letter-spacing: .06em; line-height: 1.7; padding: 0 9px; border-radius: 999px; border: 1px solid var(--rule); color: var(--sumi); }
+.sv-area.nara { background: var(--shu-tint); border-color: var(--shu); }
+.sv-area.osaka { background: var(--ai-tint); border-color: var(--ai); }
+.sv-st.cold, .sv-st.frozen, .sv-st.today { background: var(--yamabuki-tint); border-color: var(--yamabuki); }
+.sv-st.room { background: var(--paper-2); }
+.sv h3 { margin-top: 6px; word-break: auto-phrase; font-family: var(--f-min); font-weight: 800; font-size: calc(17px * var(--fs)); line-height: 1.5; }
+.sv-maker { margin-top: 2px; font-size: calc(12.5px * var(--fs)); color: var(--sumi-2); }
+.sv-lead { margin-top: 6px; font-size: calc(14.5px * var(--fs)); line-height: 1.8; }
+.sv .info { margin-top: 8px; }
+.sv .info > div { grid-template-columns: 5.6em 1fr; gap: 10px; padding: 8px 0; overflow-wrap: anywhere; }
+.sv-pn { display: block; margin-top: 2px; font-size: calc(12px * var(--fs)); color: var(--sumi-2); }
+.sv-note { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--yamabuki-tint); font-size: calc(12.5px * var(--fs)); line-height: 1.7; }
+.sv-src { margin-top: 8px; font-size: calc(12.5px * var(--fs)); line-height: 1.9; color: var(--sumi-2); overflow-wrap: anywhere; }
+.sv-src small { font-size: calc(11.5px * var(--fs)); margin-right: 4px; }
+.sv-src a { color: var(--ai); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+
 /* ---------- ここに停めた・ここに集合（きょう） ---------- */
 .ht-card { margin-top: 12px; padding: 14px 16px 16px; border: 1px solid var(--rule); border-radius: 10px; background: var(--card); }
 .ht-card h3 { display: flex; align-items: center; gap: 8px; font-size: calc(15px * var(--fs)); font-weight: 700; margin-bottom: 6px; }

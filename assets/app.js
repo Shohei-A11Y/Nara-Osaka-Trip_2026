@@ -79,7 +79,8 @@
     search: '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/>',
     tip: '<path d="M9 17.5h6M9.8 20.5h4.4M12 3.5a5.5 5.5 0 0 0-3.3 9.9c.7.6 1.1 1.3 1.2 2.1h4.2c.1-.8.5-1.5 1.2-2.1A5.5 5.5 0 0 0 12 3.5z"/>',
     book: '<path d="M4.5 5.5c2.6-.8 5.1-.6 7.5.9v13c-2.4-1.5-4.9-1.7-7.5-.9zM19.5 5.5c-2.6-.8-5.1-.6-7.5.9v13c2.4-1.5 4.9-1.7 7.5-.9z"/>',
-    rain: '<path d="M3.5 12a8.5 8.5 0 0 1 17 0z"/><path d="M12 12v6.5a2 2 0 0 1-4 0"/><path d="M12 3.5v-1"/>'
+    rain: '<path d="M3.5 12a8.5 8.5 0 0 1 17 0z"/><path d="M12 12v6.5a2 2 0 0 1-4 0"/><path d="M12 3.5v-1"/>',
+    gift: '<path d="M4.5 10.5v9h15v-9M3.5 7h17v3.5h-17zM12 7v12.5"/><path d="M12 7C10.4 3.6 7.2 4 7.6 5.8 8 7.3 10.6 7 12 7zM12 7c1.6-3.4 4.8-3 4.4-1.2C16 7.3 13.4 7 12 7z"/>'
   };
   const ic = (n, cls = 'ic') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`;
 
@@ -699,7 +700,7 @@
     ['日程', [['1日目　10/17（土）', '#/trip/1', ''], ['2日目　10/18（日）', '#/trip/2', ''], ['3日目　10/19（月）', '#/trip/3', ''], ['4日目　10/20（火）', '#/trip/4', '']]],
     ['のりもの', [['いまどのへん？（のぞみ）', '#/ride/live/nozomi28', ''], ['いまどのへん？（リレーかもめ）', '#/ride/live/relay92', '武雄温泉〜博多'], ['指定席券と座席表', '#/ride', ''], ['駅の乗り換え（3D）', '#/ride/transfer', '博多・新大阪'], ['駅の時刻表（大阪市内）', '#/ride/tt', '7駅'], ['車窓から見える城', '#/ride/castles', ''], ['博多駅の駅弁', '#/ride/ekiben', ''], ['鉄道トリビア', '#/ride/trivia', ''], ['レンタカー', '#/stay/car', '10/18']]],
     ['まっぷ', [['おでかけマップ', '#/map/outing', '1枚の地図で'], ['行く場所の地図', '#/map', ''], ['ドライブの道順', '#/map/drive', '10/18'], ['公式の案内図', '#/map/official', ''], ['おでかけ', '#/spot', '7か所'], ['ごはん', '#/food', ''], ['奈良公園近くの駐車場', '#/sos/parking', '10/18']]],
-    ['その他', [['旅のワンポイント', '#/tips', '気温・服装・コツ'], ['トリビア', '#/trivia', '5つの分類'], ['持ち物チェック', '#/bag', ''], ['予算と割り勘メモ', '#/money', ''], ['ホテルとお部屋', '#/stay', ''], ['緊急連絡先・病院', '#/sos', ''], ['思い出メモ', '#/memo', ''], ['スタンプ帳', '#/spot/stamps', ''], ['おためしモード', '#sim', '旅行中の画面を先に体験'], ['使い方', '#/help', '機能ごとの説明書']]]
+    ['その他', [['旅のワンポイント', '#/tips', '気温・服装・コツ'], ['トリビア', '#/trivia', '5つの分類'], ['お土産（奈良・大阪）', '#/omiyage', 'ジャンル別'], ['持ち物チェック', '#/bag', ''], ['予算と割り勘メモ', '#/money', ''], ['ホテルとお部屋', '#/stay', ''], ['緊急連絡先・病院', '#/sos', ''], ['思い出メモ', '#/memo', ''], ['スタンプ帳', '#/spot/stamps', ''], ['おためしモード', '#sim', '旅行中の画面を先に体験'], ['使い方', '#/help', '機能ごとの説明書']]]
   ];
   const TOC_ACT = { '#qr': 'qr', '#sim': 'sim' };
   const tocLinks = list => list.map(([l, href, s]) => `<a href="${href}"${TOC_ACT[href] ? ` data-act="${TOC_ACT[href]}"` : ''}>${l}<span>${s}</span></a>`).join('');
@@ -738,7 +739,7 @@
 
   /* ========== その他（下から出る一覧） ========== */
   const MORE = [
-    ['旅のしたく', [['tip', '旅のワンポイント', '#/tips'], ['book', 'トリビア', '#/trivia'], ['bag', '持ち物チェック', '#/bag'], ['yen', '予算と割り勘メモ', '#/money']]],
+    ['旅のしたく', [['tip', '旅のワンポイント', '#/tips'], ['book', 'トリビア', '#/trivia'], ['gift', 'お土産', '#/omiyage'], ['bag', '持ち物チェック', '#/bag'], ['yen', '予算と割り勘メモ', '#/money']]],
     ['やど', [['bed', 'ホテルとお部屋', '#/stay'], ['qr', 'チェックインQR', '#qr']]],
     ['もしも', [['sos', '緊急連絡先・病院', '#/sos']]],
     ['旅の記録', [['pen', '思い出メモ', '#/memo'], ['stamp', 'スタンプ帳', '#/spot/stamps']]]
@@ -872,7 +873,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 47;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
+  const MAN_V = 48;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -1221,6 +1222,7 @@
       if (!near) return;
       if (it.qr) add('qr', `<button type="button" class="tool" data-act="qr">${ic('qr')}チェックインQR</button>`);
       if (it.t === 'move' && it.dr) add('drive', `<a class="tool" href="#/map/drive">${ic('road')}ドライブの道順</a>`);
+      if (it.t === 'stop' && it.link && it.link[1] === '#/omiyage') add('omiyage', `<a class="tool" href="#/omiyage">${ic('gift')}お土産の参考</a>`);
       if (it.type === 'parking' && !it.minor) add('park', `<a class="tool" href="#/sos/parking">${ic('car')}駐車場の候補</a>`);
       const xf = it.t === 'stop' && XFER.find(x => x.date === day.date && x.st === it.name && x.arr === it.arr);
       if (xf) add('xf' + xf.s, `<a class="tool" href="${xferHref(xf.s)}">${ic('cube')}${xferLabel(xf)}</a>`);
@@ -1732,7 +1734,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=47').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=48').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -2051,7 +2053,7 @@
   const actB = (attrs, icon, label, tier = '') => `<button type="button" class="act${tier ? ' ' + tier : ''}" ${attrs}>${ic(icon)}<span>${label}</span></button>`;
   const actX = (href, icon, label, aria) => `<a class="act ext-s" href="${href}" target="_blank" rel="noopener" aria-label="${esc(aria)}" title="${esc(aria)}">${ic(icon)}<span>${label}</span></a>`;
   const TO_ACT = { spot: ['spot', 'くわしく'], visit: ['spot', 'くわしく'], hotel: ['bed', 'ホテルの案内'], car: ['car', 'レンタカー'], parking: ['car', '駐車場の候補'], food: ['bowl', 'お店のページ'] };
-  const LINK_IC = { '#/ride/ekiben': 'bowl', '#/spot/loop': 'road' };
+  const LINK_IC = { '#/ride/ekiben': 'bowl', '#/spot/loop': 'road', '#/omiyage': 'gift' };
   const xferLabel = xf => `${xf.st === '博多' ? '乗り換え' : xf.s === 2 ? '駅の出方' : '駅での乗り方'}（3D）`;
   /* 区間の外部リンク：電車・地下鉄は Yahoo!乗換案内（日付と出発時刻入り）、徒歩・車は Googleマップの道順。新幹線・特急はしおりの中の案内に任せる */
   function moveExt(day, i) {
@@ -3328,6 +3330,31 @@
       <p class="note">出典は、公式サイト・自治体・博物館・鉄道会社などのページです（2026年9月に確認）。数字や年は、その時点のものです。</p></div>`;
   }
 
+  /* ========== お土産（#/omiyage、#/omiyage/ジャンルid でそのジャンルを開く） ==========
+     奈良・大阪の定番のお土産を、ジャンル別に。データは assets/omiyage.js（OMIYAGE）。写真は載せない（公開サイトのため）。
+     価格・入数・日持ちは、2つ以上の出どころで照らしたものだけ。公式が開けなかった品は「公式未確認」と出どころを添える。買ったかどうかのチェックは作らない */
+  const SV_KIND = { cold: '要冷蔵', room: '常温', frozen: '冷凍', today: '当日中に' };
+  const svDate = d => { const [y, m, dd] = String(d || '').split('-').map(Number); return y ? `${y}年${m}月${dd}日` : ''; };
+  function viewOmiyage(sub) {
+    const O = window.OMIYAGE || { groups: [] };
+    const link = ([l, u, k]) => `<a class="ext" href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a><small>（${esc(k)}）</small>`;
+    const price = x => x.price != null ? `<b class="num">${Number(x.price).toLocaleString('ja-JP')}円</b>（税込）${x.priceNote ? `<small class="sv-pn">${esc(x.priceNote)}</small>` : ''}` : '—';
+    const item = x => `<article class="sv" id="sv-${x.id}">
+      <p class="sv-top"><span class="sv-area ${x.area === '奈良' ? 'nara' : 'osaka'}">${esc(x.area)}</span><span class="sv-st ${x.keep}">${SV_KIND[x.keep] || ''}</span></p>
+      <h3>${esc(x.name)}</h3><p class="sv-maker">${esc(x.maker)}${x.model ? `　${esc(x.model)}` : ''}</p>
+      <p class="sv-lead">${esc(x.lead)}</p>
+      ${infoList([['税込価格', price(x)], ['入数', esc(x.pack)], ['日持ち', esc(x.shelf)], ['買える場所（目安）', esc(x.where)]])}
+      ${x.note ? `<p class="sv-note">${esc(x.note)}</p>` : ''}
+      <p class="sv-src">参考：${x.links.map(link).join('　')}</p></article>`;
+    return `<div class="wrap">${topbar()}${phead('Souvenirs', 'お土産', '奈良と大阪の定番のお土産を、ジャンル別にまとめました。ジャンルの名前を押すと開きます。')}
+      <div class="sv-card"><h2>${ic('train')}持ち帰りの目安</h2>
+        <p>10/20 は新大阪を 11:02（のぞみ17号）に出て、15:08 に新大村へ着きます（約4時間）。<b>要冷蔵のものは、この時間を持ち歩ける保冷の用意が要ります。</b>常温で日持ちするものなら、安心です。</p></div>
+      <p class="note">価格は取材（確認）した日の目安です。店頭が正です。確認した日：${svDate(O.checked)}。</p>
+      <div class="tv-list sv-list">${O.groups.map(g => `<details class="tv-g" id="sv-g-${g.id}"${sub === g.id ? ' open' : ''}><summary class="tv-h"><span><b>${esc(g.name)}</b><small>${esc(g.items.map(x => x.short || x.name).join('・'))}</small></span><em class="num">${g.items.length}品</em></summary>
+        <div class="tv-items">${g.items.map(item).join('')}</div></details>`).join('')}</div>
+      <p class="note">写真は載せていません。入数・日持ちは商品の規格で、季節や店によって変わることがあります。「公式未確認」と書いた品は、公式ページそのものを開けなかったため、検索結果に出た公式ページの内容と、別の出どころで照らしました。買う前に、店頭の表示を見てください。</p>${O.omitted ? `<p class="note">${esc(O.omitted)}は、有名ですが、価格や日持ちが出どころの間で食い違う、または確かめられる出どころが1つしかなかったため、載せていません。</p>` : ''}</div>`;
+  }
+
   /* 服装のイラスト（旅のワンポイント）：手描き風のやさしい線画。和紙色・朱・藍で、人物は描かず、何を着る・持つかがひと目で分かる形に。
      インラインSVGなので電波がなくても出る。色は CSS（.wear-art）の変数から取るので、暗い画面でもなじむ */
   const WEAR_ART = (() => {
@@ -3538,7 +3565,7 @@
     window.LiveMap && window.LiveMap.unmount();
     const views = {
       home: viewHome, trip: () => viewTrip(+parts[1] || todayN()), ride: () => viewRide(parts[1], parts[2], parts[3]), food: () => viewFood(parts[1]),
-      spot: () => viewSpots(parts[1]), stay: viewStay, sos: viewSos, money: viewMoney, bag: viewBag, memo: viewMemo, map: () => (parts[1] === 'outing' ? viewOuting() : viewMap()), help: () => viewHelp(parts[1]), tips: viewTips, trivia: () => viewTrivia(parts[1]), kanri: viewKanri
+      spot: () => viewSpots(parts[1]), stay: viewStay, sos: viewSos, money: viewMoney, bag: viewBag, memo: viewMemo, map: () => (parts[1] === 'outing' ? viewOuting() : viewMap()), help: () => viewHelp(parts[1]), tips: viewTips, trivia: () => viewTrivia(parts[1]), omiyage: () => viewOmiyage(parts[1]), kanri: viewKanri
     };
     if (dmMap) { try { dmMap.remove(); } catch { /* noop */ } dmMap = null; }
     if (omCleanup) { omCleanup(); omCleanup = null; }
@@ -3549,7 +3576,7 @@
     drawNav(views[route] ? route : 'home', parts[1]);
     simBar();
     geoAsk();
-    document.title = { home: '旅のしおり｜奈良・大阪 2026', map: 'まっぷ｜旅のしおり', trip: '旅程｜旅のしおり', ride: 'のりもの｜旅のしおり', food: 'ごはん｜旅のしおり', spot: 'おでかけ｜旅のしおり', stay: 'やど・くるま｜旅のしおり', sos: 'もしも｜旅のしおり', money: '予算｜旅のしおり', kanri: '予算の管理｜旅のしおり', help: '使い方｜旅のしおり', tips: '旅のワンポイント｜旅のしおり', trivia: 'トリビア｜旅のしおり', bag: '持ち物｜旅のしおり', memo: '思い出メモ｜旅のしおり' }[route] || '旅のしおり｜奈良・大阪 2026';
+    document.title = { home: '旅のしおり｜奈良・大阪 2026', map: 'まっぷ｜旅のしおり', trip: '旅程｜旅のしおり', ride: 'のりもの｜旅のしおり', food: 'ごはん｜旅のしおり', spot: 'おでかけ｜旅のしおり', stay: 'やど・くるま｜旅のしおり', sos: 'もしも｜旅のしおり', money: '予算｜旅のしおり', kanri: '予算の管理｜旅のしおり', help: '使い方｜旅のしおり', tips: '旅のワンポイント｜旅のしおり', trivia: 'トリビア｜旅のしおり', omiyage: 'お土産｜旅のしおり', bag: '持ち物｜旅のしおり', memo: '思い出メモ｜旅のしおり' }[route] || '旅のしおり｜奈良・大阪 2026';
     if (route === 'map' && parts[1] === 'outing') document.title = 'おでかけマップ｜旅のしおり';
     CoverTrain.mount(route === 'home' || !views[route] ? $('.cover:not(.slim):not(.mem)') : null);
     if (route === 'home') loadWeather($('#weather'));
@@ -3568,6 +3595,7 @@
     const anchor = parts[1] && document.getElementById(parts[1]);
     if (quietRender && !fresh) { quietRender = false; }
     else if (restoreY !== null) restoreScroll(restoreY);
+    else if (route === 'omiyage' && parts[1]) { const g = $('#sv-g-' + parts[1]); g && setTimeout(() => g.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120); }
     else if (route === 'trivia' && parts[1] && !/^d\d$/.test(parts[1])) { const g = $('#tv-cat-' + parts[1]); g && setTimeout(() => g.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120); }
     else if (route === 'trip') { const n = $('.tl li.now'); n ? setTimeout(() => n.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200) : window.scrollTo(0, 0); }
     else if (route === 'ride' && parts[1] === 'seats' && parts[2] && $('#sg-' + parts[2])) setTimeout(() => $('#sg-' + parts[2]).scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
@@ -3698,6 +3726,8 @@
     T.castles.forEach((c, j) => add(c.name, `車窓の城・${c.station}駅`, J([c.side, c.text]), '#/ride/castles', `[data-sid="castle-${j}"]`));
     T.ekiben.forEach(([n, p, d], j) => add(n, '博多駅の駅弁', d, '#/ride/ekiben', `.bento > li:nth-child(${j + 1})`, { k: '駅弁 弁当' }));
     (T.triviaCats || []).forEach(c => { add(`トリビア：${c.name}`, 'トリビア', c.sub, `#/trivia/${c.id}`, `#tv-cat-${c.id}`, { k: 'トリビア 雑学 豆知識' }); triviaItems(c.id).forEach(x => add(x.q, `トリビア・${c.name}`, J([x.k, x.a]), `#/trivia/${c.id}`, `#tv-${x.id}`, { k: 'トリビア' })); });
+    add('お土産', 'お土産（奈良・大阪）', '奈良 大阪 ジャンル別 価格 入数 日持ち 買える場所 持ち帰り 保冷', '#/omiyage', 'h1', { k: 'おみやげ 土産 みやげ ギフト プレゼント' });
+    ((window.OMIYAGE || {}).groups || []).forEach(g => g.items.forEach(x => add(x.name, `お土産・${g.name}（${x.area}）`, J([x.kana, x.maker, x.model, x.lead, x.pack, x.shelf, x.where, SV_KIND[x.keep] + (x.keep === 'cold' || x.keep === 'frozen' ? ' 保冷' : '')]), `#/omiyage/${g.id}`, `#sv-${x.id}`, { k: 'お土産 おみやげ 土産 みやげ' })));
     XFER.forEach(x => add(`${x.title}（3D）`, `駅の乗り換え（3D）・${x.when}`, x.sub, xferHref(x.s), null, { k: '乗り換え 3D 立体 構内 エレベーター 階段' }));
     MANUAL.forEach(x => add(x.title, `使い方・${x.tab}`, J([x.sub, x.where, ...x.pts.map(p => p.t)]), `#/help/${x.id}`, '.hp-head'));
     T.bag.forEach(g => g.items.forEach(([n, why]) => add(n, `持ち物・${g.cat}`, why, '#/bag', `[data-bag="${cssq(n)}"]`)));

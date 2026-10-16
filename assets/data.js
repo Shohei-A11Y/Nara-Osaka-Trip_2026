@@ -300,7 +300,7 @@ window.TRIP = {
         { t: 'move', dr: 'noon', min: 24, mode: 'car', line: 'レンタカー', dist: '11.9km' },
         { t: 'stop', arr: '13:54', dep: '14:00', name: '奈良公園近くの駐車場', type: 'parking', note: '第一候補はタイムズ奈良公園南。満車なら次の候補へ', to: '#/sos/parking' },
         { t: 'move', min: 10, mode: 'walk', line: '徒歩', dist: '536m' },
-        { t: 'stop', arr: '14:10', dep: '16:10', name: '奈良公園・東大寺', type: 'spot', note: '鹿と大仏さま。2時間のおさんぽ', to: '#/spot/todaiji' },
+        { t: 'stop', arr: '14:10', dep: '16:10', name: '奈良公園・東大寺', type: 'spot', note: '鹿と大仏さま。2時間のおさんぽ', to: '#/spot/todaiji', link: ['お土産の参考', '#/omiyage'] },
         { t: 'move', min: 10, mode: 'walk', line: '徒歩', dist: '536m' },
         { t: 'stop', arr: '16:20', name: '奈良公園近くの駐車場', type: 'parking', minor: 1 },
         { t: 'move', dr: 'eve', min: 16, mode: 'car', line: 'レンタカー', dist: '8.0km' },
@@ -376,7 +376,7 @@ window.TRIP = {
       items: [
         { t: 'stop', dep: '10:20', name: 'からくさホテルグランデ新大阪タワー', type: 'hotel', kind: 'start', note: 'チェックアウトは11:00まで', due: '11:00', dueAt: 'dep', dueName: 'チェックアウト（11:00まで）' },
         { t: 'move', min: 10, mode: 'walk', line: '徒歩', dist: '410m' },
-        { t: 'stop', arr: '10:30', dep: '11:02', name: '新大阪', type: 'station', roma: 'Shin-Ōsaka', note: '発車まで約30分。お弁当やおみやげはここで' },
+        { t: 'stop', arr: '10:30', dep: '11:02', name: '新大阪', type: 'station', roma: 'Shin-Ōsaka', note: '発車まで約30分。お弁当やおみやげはここで', link: ['お土産の参考', '#/omiyage'] },
         { t: 'move', min: 148, mode: 'shinkansen', line: '山陽新幹線 のぞみ17号', train: 'nozomi17' },
         { t: 'stop', arr: '13:30', dep: '13:54', name: '博多', type: 'station', roma: 'Hakata', minor: 1, note: '乗り換え約24分' },
         { t: 'move', min: 60, mode: 'train', line: 'JR特急 リレーかもめ33号', train: 'relay33' },
