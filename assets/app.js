@@ -873,7 +873,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 51;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
+  const MAN_V = 52;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -1748,7 +1748,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=51').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=52').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -3410,7 +3410,8 @@
   });
   function viewOmiyage(sub) {
     const O = window.OMIYAGE || { groups: [] }, ART = window.OMIYAGE_ART || { items: {}, groups: {} };
-    const link = ([l, u, k]) => `<a class="ext" href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a><small>（${esc(k)}）</small>`;
+    /* 参考リンク：[表示名, URL, 出どころの種類, 状態]。状態 'top'＝個別ページを確かめきれず、サイトのトップに替えた／'list'＝一覧・店のページに替えた／'none'＝リンクを外した（URL は null） */
+    const link = ([l, u, k, st]) => u ? `<a class="ext" href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a><small>（${esc(k)}${st === 'top' ? '・サイトのトップへ' : st === 'list' ? '・一覧のページへ' : ''}）</small>` : `<span class="sv-nolink">${esc(l)}</span><small>（${esc(k)}・リンク切れのため名前のみ）</small>`;
     const price = x => x.priceText ? `<b>${esc(x.priceText)}</b>` : x.price != null ? `<b class="num">${Number(x.price).toLocaleString('ja-JP')}円</b>（税込）${x.priceNote ? `<small class="sv-pn">${esc(x.priceNote)}</small>` : ''}` : '<b>店頭で確認</b>';
     /* 閉じたカードの値段：幅や文で書いた品は、「（」の前までを大きく。価格が見つからない品は「店頭で確認」 */
     const priceS = x => x.mark === 'shop' || (x.price == null && !x.priceText) ? '店頭で確認' : x.priceText ? x.priceText.split('（')[0] : `${Number(x.price).toLocaleString('ja-JP')}円`;

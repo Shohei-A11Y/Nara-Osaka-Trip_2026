@@ -421,7 +421,7 @@ window.TRIP = {
       picks: [['ねぎおこ（豚）', 1380, 'ねぎ焼きとお好み焼きのいいとこどり'], ['牛すじ玉', 1380, '甘辛く煮込んだ牛すじとこんにゃくが自慢'], ['豚玉', 1130, '']] },
     { id: 'botejyu', code: 'B-2', area: 'shinosaka', name: 'ぼてぢゅう 新大阪駅店', genre: 'お好み焼き', place: 'JR新大阪駅構内2F', address: '大阪府大阪市淀川区西中島5丁目16-1 JR新大阪駅構内2F', tel: '06-6390-9080', hours: '10:00〜23:00（L.O. 22:00）', closed: '施設に準じる', pay: 'カード可、電子マネー可、QR決済可（PayPay・d払い・楽天ペイ・auPAYなど）', url: 'https://tabelog.com/osaka/A2701/A270301/27007878/',
       picks: [['元祖とん玉', 1298, '豚肉'], ['大阪ミックス玉', 1848, '豚肉・海老・いか'], ['たこ焼コンビ（6個）', 770, 'たこ焼とねぎたこ焼を3個ずつ']] },
-    { id: 'wanaka', code: 'B-3', area: 'shinosaka', name: 'たこ焼道楽 わなか 新大阪駅店', genre: 'たこ焼き', place: 'JR新大阪駅2F アルデ新大阪', address: '大阪府大阪市淀川区西中島5-16-1 JR新大阪駅2F アルデ新大阪', tel: '06-6307-2068', hours: '10:00〜21:00（L.O. 20:30）', closed: '', pay: 'カード可・電子マネー可・QR決済可', url: 'http://takoyaki-wanaka.com/#content04', takeout: '持ち帰りできます',
+    { id: 'wanaka', code: 'B-3', area: 'shinosaka', name: 'たこ焼道楽 わなか 新大阪駅店', genre: 'たこ焼き', place: 'JR新大阪駅2F アルデ新大阪', address: '大阪府大阪市淀川区西中島5-16-1 JR新大阪駅2F アルデ新大阪', tel: '06-6307-2068', hours: '10:00〜21:00（L.O. 20:30）', closed: '', pay: 'カード可・電子マネー可・QR決済可', url: 'https://takoyaki-wanaka.com/', takeout: '持ち帰りできます',
       picks: [['たこ焼き（8個）', 700, '12個1,050円。ネギ・チーズのトッピング各+100円'], ['おおいり（9個）', 950, 'ソース・ねぎ塩・麻婆ソースなど4種を一皿で'], ['たこせん', 300, 'わなか特製えび煎餅にたこ焼をはさむ']] },
     { id: 'daruma', code: 'B-4', area: 'shinosaka', name: '串かつだるま アルデ新大阪店', genre: '串かつ', place: 'JR新大阪駅2F アルデ新大阪', address: '大阪府大阪市淀川区西中島5-16-1 JR新大阪駅2階 アルデ新大阪', tel: '06-4805-8844', hours: '10:30〜22:30（L.O. 30分前）', closed: '年中無休', pay: 'カード可、電子マネー可（ICOCA・Suicaなど）、QR決済可（PayPay・d払いなど）', url: 'https://www.kushikatu-daruma.com/location/arude_shinosaka', takeout: '持ち帰りはセットのみ（容器代・ソース代込み）',
       picks: [['持ち帰り 串かつ8本セット', 1310, '元祖串かつ3本・キス・ウインナー・アスパラ'], ['持ち帰り 串かつ10本セット', 1761, '天然えび・うずら卵・鳥つくねなど'], ['持ち帰り 串かつ12本セット', 2058, '紅しょうが・キスまで入った全部のせ']] }
@@ -448,13 +448,13 @@ window.TRIP = {
       walkNote: '往復で約5km歩く目安。階段を避けて、広い園路や参道を選びます。砂利や石畳では無理せず抱っこに切り替え。鹿のいる場所は日によって変わります。',
       warn: '奈良公園の鹿は人に慣れていますが、野生動物です。むやみに触ったり、食べ物を見せたりしないようにしましょう。',
       url: 'https://www.pref.nara.lg.jp/site/park/index.html', map: '東大寺 大仏殿', trivia: ['nara1', 'nara2'],
-      maps: [['奈良公園マップ（奈良県）', 'https://www.pref.nara.jp/57798.htm']] },
+      maps: [['奈良公園マップ（奈良県）', 'https://www.pref.nara.lg.jp/n113/57798.html']] },
     { id: 'loop', day: 2, when: '10/18（日）17:06〜17:25', name: '阪神高速 環状線ドライブ', area: '大阪市内', kana: 'はんしんこうそく かんじょうせん',
       lead: '奈良からの帰り道、阪神高速1号環状線を時計回りに一周。車窓から大阪の高層ビルや大阪城を眺めます（見えるとは限りません）。',
       steps: ['東船場JCTから阪神高速1号環状線に入る', '時計回りに環状線を一周', '東船場JCT付近まで戻ったら一周完了', 'そのまま近道して、土佐堀ランプから出る'],
       info: [['区間', '東船場JCT 17:06 → 土佐堀ランプ 17:25'], ['距離', '9.4km・約19分']],
       warn: '運転する人は景色を見ずに運転に集中。景色は同乗者の楽しみです。',
-      links: [['環状線あんぜん走行MAP', 'https://www.hanshin-exp.co.jp/drivers/driver/files/anzenmap202203.pdf'], ['環状線案内図', 'https://www.hanshin-exp.co.jp/drivers/ryoukin/images/amap_osaka.pdf']] },
+      links: [['環状線あんぜん走行MAP', 'https://www.hanshin-exp.co.jp/drivers/driver/safety/map/line1.html'], ['阪神高速 路線網図', 'https://www.hanshin-exp.co.jp/drivers/ryoukin/annai/network/']] },
     { id: 'dotonbori', day: 3, when: '10/19（月）9:40〜10:10', name: '道頓堀', area: '大阪・ミナミ', kana: 'どうとんぼり',
       lead: 'グリコサインなど巨大な立体看板が並ぶ、大阪らしさのかたまりのような通り。川沿いには遊歩道「とんぼりリバーウォーク」があります。',
       info: [['住所', '大阪市中央区道頓堀'], ['電話', '06-6211-4542（道頓堀商店会事務局）'], ['行き方', 'なんば駅14番出口から徒歩約12分（384m）']],
@@ -578,7 +578,7 @@ window.TRIP = {
     { name: '博多駅の構内図', by: 'JRおでかけネット', url: 'https://www.jr-odekake.net/eki/premises?id=0910127', when: '10/17・10/20 乗り換え' },
     { name: '新大阪駅の構内図', by: 'JRおでかけネット', url: 'https://www.jr-odekake.net/eki/premises?id=0610155', when: '10/17・10/20' },
     { name: 'Osaka Metro 路線図', by: 'Osaka Metro', url: 'https://subway.osakametro.co.jp/guide/routemap.php', when: '10/17・10/19' },
-    { name: '奈良公園マップ', by: '奈良県', url: 'https://www.pref.nara.jp/57798.htm', when: '10/18', spot: 'todaiji' },
+    { name: '奈良公園マップ', by: '奈良県', url: 'https://www.pref.nara.lg.jp/n113/57798.html', when: '10/18', spot: 'todaiji' },
     { name: '大阪城公園MAP（PDF）', by: '大阪城公園', url: 'https://www.osakacastlepark.jp/pdf/osakacastlemap_2025.pdf', when: '10/19', spot: 'osakajo' }
   ],
 
@@ -620,13 +620,13 @@ window.TRIP = {
      奈良公園・大阪城公園・中之島などの公園のトイレは、この作業環境から公式の地図を開けず確かめられなかったので、載せていない。ベンチも確かめられなかったので書かない */
   rest: [
     { id: 'jr-shinosaka', name: 'JR新大阪駅のトイレ', near: '新大阪', days: [1, 3, 4], ll: [34.73414, 135.50185], text: '改札の中と外にあります。どちらも車いす対応・ベビーベッド・オストメイト対応。', by: 'JR西日本（JRおでかけネット）', url: 'https://www.jr-odekake.net/eki/barrierfree?id=0610155' },
-    { id: 'om-shinosaka', name: 'Osaka Metro 新大阪駅のトイレ', near: '新大阪', days: [1, 3], ll: [34.73252, 135.49859], text: '駅の中にお手洗いと多機能トイレがあります。場所は、公式の駅構内図で確かめてください。', by: 'Osaka Metro（駅の案内）', url: 'https://subway.osakametro.co.jp/station_guide/M/m13/index.php' },
-    { id: 'om-umeda', name: 'Osaka Metro 梅田駅のトイレ', near: '梅田・大阪ステーションシティ', days: [1], ll: [34.70314, 135.49768], text: '駅の中にお手洗いと多機能トイレがあります。場所は、公式の駅構内図で確かめてください。', by: 'Osaka Metro（駅の案内）', url: 'https://subway.osakametro.co.jp/station_guide/M/m16/index.php' },
+    { id: 'om-shinosaka', name: 'Osaka Metro 新大阪駅のトイレ', near: '新大阪', days: [1, 3], ll: [34.73252, 135.49859], text: '駅の中にお手洗いと多機能トイレがあります。場所は、公式の駅構内図で確かめてください。', by: 'Osaka Metro（駅の案内）', url: 'https://subway.osakametro.co.jp/station_guide/m/m13/' },
+    { id: 'om-umeda', name: 'Osaka Metro 梅田駅のトイレ', near: '梅田・大阪ステーションシティ', days: [1], ll: [34.70314, 135.49768], text: '駅の中にお手洗いと多機能トイレがあります。場所は、公式の駅構内図で確かめてください。', by: 'Osaka Metro（駅の案内）', url: 'https://subway.osakametro.co.jp/station_guide/m/m16/' },
     { id: 'jr-osaka', name: 'JR大阪駅のトイレ', near: '梅田・大阪ステーションシティ', days: [1, 3], ll: [34.7025, 135.49586], text: '改札の中と外にあります。どちらも車いす対応・ベビーベッド・オストメイト対応。', by: 'JR西日本（JRおでかけネット）', url: 'https://www.jr-odekake.net/eki/barrierfree?id=0610130' },
-    { id: 'om-namba', name: 'Osaka Metro なんば駅のトイレ', near: 'なんば・道頓堀', days: [3], ll: [34.66723, 135.50027], text: '駅の中にお手洗いと多機能トイレがあります。場所は、公式の駅構内図で確かめてください。', by: 'Osaka Metro（駅の案内）', url: 'https://subway.osakametro.co.jp/station_guide/M/m20/index.php' },
-    { id: 'om-tani4', name: 'Osaka Metro 谷町四丁目駅のトイレ', near: '谷町四丁目・大阪城公園', days: [3], ll: [34.68146, 135.51731], text: '駅の中にお手洗いと多機能トイレがあります。場所は、公式の駅構内図で確かめてください。', by: 'Osaka Metro（駅の案内）', url: 'https://subway.osakametro.co.jp/station_guide/T/t23/index.php' },
+    { id: 'om-namba', name: 'Osaka Metro なんば駅のトイレ', near: 'なんば・道頓堀', days: [3], ll: [34.66723, 135.50027], text: '駅の中にお手洗いと多機能トイレがあります。場所は、公式の駅構内図で確かめてください。', by: 'Osaka Metro（駅の案内）', url: 'https://subway.osakametro.co.jp/station_guide/Y/y15/' },
+    { id: 'om-tani4', name: 'Osaka Metro 谷町四丁目駅のトイレ', near: '谷町四丁目・大阪城公園', days: [3], ll: [34.68146, 135.51731], text: '駅の中にお手洗いと多機能トイレがあります。場所は、公式の駅構内図で確かめてください。', by: 'Osaka Metro（駅の案内）', url: 'https://subway.osakametro.co.jp/station_guide/C/c18/' },
     { id: 'jr-osakajokoen', name: 'JR大阪城公園駅のトイレ', near: '大阪城公園', days: [3], ll: [34.68788, 135.53439], text: '改札の中に、車いす対応・ベビーベッド・オストメイト対応のトイレがあります。', by: 'JR西日本（JRおでかけネット）', url: 'https://www.jr-odekake.net/eki/barrierfree?id=0610515' },
-    { id: 'om-yodoyabashi', name: 'Osaka Metro 淀屋橋駅のトイレ', near: '淀屋橋・中之島・WowUs', days: [3], ll: [34.69108, 135.50095], text: '駅の中にお手洗いと多機能トイレがあります。場所は、公式の駅構内図で確かめてください。', by: 'Osaka Metro（駅の案内）', url: 'https://subway.osakametro.co.jp/station_guide/M/m17/index.php' }
+    { id: 'om-yodoyabashi', name: 'Osaka Metro 淀屋橋駅のトイレ', near: '淀屋橋・中之島・WowUs', days: [3], ll: [34.69108, 135.50095], text: '駅の中にお手洗いと多機能トイレがあります。場所は、公式の駅構内図で確かめてください。', by: 'Osaka Metro（駅の案内）', url: 'https://subway.osakametro.co.jp/station_guide/m/m17/' }
   ],
 
   /* ---------------- 読みにくい地名・駅名（ルビ。しおり内の検索でも、この読みで探せる） ----------------
@@ -668,7 +668,7 @@ window.TRIP = {
     'rail-0-0': [['N700S（JR東海）', 'https://railway.jr-central.co.jp/train/shinkansen/n700s/']],
     'rail-0-1': [['N700S「かもめ」と西九州新幹線（JR九州・日本アルミニウム協会の講演資料）', 'https://www.aluminum.or.jp/railway_vehicle/meeting/19/files/19_04.pdf']],
     'rail-0-2': [['N700S（JR東海）', 'https://railway.jr-central.co.jp/train/shinkansen/n700s/']],
-    'rail-1-0': [['787系運行開始30周年（JR九州の報道資料）', 'https://www.jrkyushu.co.jp/news/__icsFiles/afieldfile/2022/06/21/220621_787_30th_kinengou.pdf']],
+    'rail-1-0': [['787系運行開始30周年（JR九州の報道資料）', 'https://www.jrkyushu.co.jp/common/inc/news/newtopics/__icsFiles/afieldfile/2022/06/21/220621_787_30th_kinengou.pdf']],
     'rail-1-2': [['主なデザイン関連受賞歴（JR九州）', 'https://www.jrkyushu.co.jp/company/info/history/history_award.html']],
     'rail-0-3': [['西九州新幹線車両デザイン決定（JR九州の報道資料）', 'https://www.jrkyushu.co.jp/news/__icsFiles/afieldfile/2021/07/28/210728_nishikyusyu_design.pdf']],
     'rail-1-1': [['787系の特別運行（JR九州の報道資料）', 'https://www.jrkyushu.co.jp/news/__icsFiles/afieldfile/2021/11/17/211117_787_tokubetu_unkou.pdf']],
@@ -676,7 +676,7 @@ window.TRIP = {
     'rail-2-0': [['N700S（JR東海）', 'https://railway.jr-central.co.jp/train/shinkansen/n700s/']],
     'rail-2-1': [['N700S（JR東海）', 'https://railway.jr-central.co.jp/train/shinkansen/n700s/']],
     'rail-2-2': [['N700系・N700A（JR東海）', 'https://railway.jr-central.co.jp/train/shinkansen/detail_01_01/']],
-    'rail-2-3': [['東海道・山陽新幹線から来春300系が引退します（JR東海）', 'https://jr-central.co.jp/news/release/nws000874.html'], ['同（JR西日本）', 'https://www.westjr.co.jp/press/article/2011/10/page_921.html']],
+    'rail-2-3': [['東海道・山陽新幹線から来春300系が引退します（JR東海）', 'https://jr-central.co.jp/news/release/_pdf/000013152.pdf'], ['同（JR西日本）', 'https://www.westjr.co.jp/press/article/2011/10/page_921.html']],
     'pass-0': [['山陽新幹線のトンネル数と延長（JR西日本の報道資料）', 'https://www.westjr.co.jp/press/article/items/161221_00_tuushin.pdf']],
     'osaka-0': [['6代目「道頓堀グリコサイン」完成（江崎グリコ）', 'https://www.glico.com/jp/newscenter/pressrelease/9609/']],
     'osaka-1': [['道頓堀（大阪観光局）', 'https://osaka-info.jp/spot/dotonbori/']],
@@ -729,7 +729,7 @@ window.TRIP = {
       ['姫路', '姫路城は、日本で最初の世界遺産のひとつ', '1993年12月、法隆寺地域の仏教建造物とともに、日本で初めて世界文化遺産に登録されました。天守は国宝で、白く優美な姿から「白鷺城」とも呼ばれます。', [['世界文化遺産・国宝姫路城（姫路市）', 'https://www.city.himeji.lg.jp/castle/0000007744.html']]],
       ['岡山', '岡山後楽園は、日本三名園のひとつ', '岡山藩主の池田綱政が造らせ、1700年にひとまず完成した大名庭園です。水戸の偕楽園、金沢の兼六園とともに日本三名園に数えられ、国の特別名勝に指定されています。', [['歴史・概要（岡山後楽園）', 'https://okayama-korakuen.jp/rekishi/index.html']]],
       ['明石', '明石は、日本の時刻の基準の町', '日本の標準時は、明石市を通る東経135度の子午線で決められています。明石市立天文科学館は、この子午線の真上に建っています。', [['東経135度と日本標準時（明石市立天文科学館）', 'https://www.am12.jp/135-jstm/']]],
-      ['山陽新幹線', '山陽新幹線は、2回に分けて開業した', '新大阪〜岡山は1972年、岡山〜博多は1975年3月10日に開業しました。2025年には、全線開業から50年を迎えています。', [['山陽新幹線 岡山開業50周年（JRおでかけネット）', 'https://www.jr-odekake.net/railroad/sanyo_shinkansen_okayama_50th/'], ['山陽新幹線全線開業50周年（JRおでかけネット）', 'https://www.jr-odekake.net/navi/sanyo_shinkansen_zensen_50th/']]],
+      ['山陽新幹線', '山陽新幹線は、2回に分けて開業した', '新大阪〜岡山は1972年、岡山〜博多は1975年3月10日に開業しました。2025年には、全線開業から50年を迎えています。', [['山陽新幹線 岡山開業50周年（JRおでかけネット）', 'https://www.jr-odekake.net/railroad/sanyo_shinkansen_okayama_50th/'], ['山陽新幹線全線開業50周年（JRおでかけネット）', 'https://www.jr-odekake.net/railroad/shinkansen/']]],
       ['新関門トンネル', 'いちばん長いのは、海の下のトンネル', '小倉〜新下関で関門海峡の下を通る新関門トンネルは、長さ18,713mで、山陽新幹線でいちばん長いトンネルです。2番目は新神戸の東の六甲トンネル（16,250m）です。', [['トンネルベストテン（日本トンネル技術協会）', 'https://www.japan-tunnel.org/Gallery_best10']]],
       ['広島', '原爆ドームは、1996年に世界遺産に', 'もとは1915年に建てられた「広島県産業奨励館」です。核兵器の惨禍を伝える平和記念碑として、1996年12月に世界遺産に登録されました。', [['原爆ドームはいつ世界遺産に認定されたんですか（広島市）', 'https://www.city.hiroshima.lg.jp/faq/atomicbomb-peace/1001616/1002398.html']]],
       ['岩国', '錦帯橋は、5つのアーチの木の橋', '1673年に岩国藩主の吉川広嘉が架けた、5連の木造のアーチ橋です。1950年の台風で流されましたが、市民の強い声を受けて、木造のまま再建されました。', [['錦帯橋の概要（岩国市）', 'https://kintaikyo.iwakuni-city.net/summary.html']]]
