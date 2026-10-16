@@ -15,7 +15,7 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const MIN = 6e4;
   const MAPLIBRE = 'assets/vendor/maplibre-gl/maplibre-gl.mjs';
-  const LINE_URLS = { sanyo: 'assets/line-sanyo.json?v=50', relay: 'assets/line-relay.json?v=50' };
+  const LINE_URLS = { sanyo: 'assets/line-sanyo.json?v=51', relay: 'assets/line-relay.json?v=51' };
   const GPS_MAX_OFF = 0.5, GPS_MAX_ACC = 1000, GPS_MAX_AGE = 30e3, V_MAX = 330;
 
   /* ========== 線路の形（km ⇔ 緯度経度） ========== */
@@ -652,7 +652,7 @@
      - 境界線（設定）：どの地図にも重ねる。府県境は太線、市区町村境は細線。隣と共有する線だけ描く（海岸は描かない）。座標から線として描くので、立体の地形の上でもくっきり
      - 地名・自然地名（設定）：画面に向かって立てた文字。placeLabels で見どころ・駅名のあとに置き、重なるものは出さない（市区町村名 → 自然地名の順）
      - 「いま ○○県○○市」：列車の位置が、どの市区町村の形に入るかで決める（電波は使わない） */
-  const AREA_URL = 'assets/area.json?v=50';
+  const AREA_URL = 'assets/area.json?v=51';
   let AREA = null, areaReq = null;
   const perf = { decode: 0, place: [] };   // 重さの記録（_debug で見る）：形の組み立て（ms）・名前の配置（ms、最近20回）
   const loadArea = () => areaReq || (areaReq = fetch(AREA_URL).then(r => r.json()).then(d => { const t0 = performance.now(); AREA = decodeArea(d); perf.decode = performance.now() - t0; return AREA; }).catch(() => { areaReq = null; return null; }));
@@ -685,7 +685,7 @@
   /* ---------- 道路（高速道路・国道・主要地方道の抜粋。tools/make-roads.py で線路の左右12kmだけを作った assets/roads.json） ----------
      線は地図のレイヤー（鉄道の赤い線・トンネルの点線より下で、細く控えめな色）。高速道路の名前は線に沿わせた文字、国道は▽、主要地方道は六角形の中に番号。
      名前・印は、見どころ・駅名・市区町村名・自然地名を先に置き、残った所にだけ置く（placeRoads）。縮尺が小さいときは高速と国道だけ */
-  const ROADS_URL = 'assets/roads.json?v=50';
+  const ROADS_URL = 'assets/roads.json?v=51';
   const RD_ATTR = OSM_ATTR;
   const RD_Z = { x: 5, n: 8.5, p: 10.5 };        // 線を出し始める縮尺
   const RD_LZ = { x: 8.5, n: 9.5, p: 11 };      // 名前・印を出し始める縮尺

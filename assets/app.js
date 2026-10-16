@@ -873,7 +873,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 50;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
+  const MAN_V = 51;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -1748,7 +1748,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=50').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=51').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
@@ -3364,6 +3364,26 @@
   const svDate = d => { const [y, m, dd] = String(d || '').split('-').map(Number); return y ? `${y}年${m}月${dd}日` : ''; };
   const SV_JUMP = { okashi: 'お菓子', meibutsu: 'おかず', sake: '飲み物', zakka: '雑貨' };
   const svSvg = (cls, vb, inner, sw) => `<svg class="${cls}" viewBox="${vb}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${inner}</svg>`;
+  /* 並べ方：ジャンルの中は、定番 → 通好み、その中は奈良 → 大阪（データの並びは変えない） */
+  const SV_RANK = x => (x.tier === 'niche' ? 2 : 0) + (x.area === '大阪' ? 1 : 0);
+  /* 価格帯の下限：値段があればそれ、幅や文なら最初の数字。価格が見つからない品は、価格帯に入れない */
+  const svPmin = x => x.price != null ? x.price : x.mark === 'shop' || !x.priceText ? null : (m => m ? +m[0].replace(/,/g, '') : null)(/\d[\d,]*/.exec(x.priceText));
+  /* 絞り込みの状態は、画面の中のボタン（aria-pressed）にだけ持つ。端末には残さない */
+  const svShow = (x, st) => (st.tier === 'all' || x.tier !== 'niche') && (!st.area || x.area === st.area) && st.tags.every(g => (x.tags || []).includes(g)) && (!st.max || (svPmin(x) != null && svPmin(x) <= st.max));
+  const svNames = n => n.slice(0, 5).join('・') + (n.length > 5 ? 'ほか' : '');
+  function svApply(root) {
+    const on = k => $$(`[data-svc="${k}"][aria-pressed="true"]`, root).map(b => b.dataset.v), tier = $('[data-svt][aria-pressed="true"]', root).dataset.svt;
+    const st = { tier, area: on('area')[0], tags: on('tag'), max: +on('max')[0] || 0 };
+    $$('.sv', root).forEach(el => { const d = el.dataset; el.hidden = !svShow({ tier: d.tier, area: d.area, tags: d.tags.split(' '), price: d.pmin === '' ? null : +d.pmin, mark: 'ok' }, st); });
+    let total = 0;
+    $$('.tv-g', root).forEach(g => {
+      const v = $$('.sv:not([hidden])', g); total += v.length; g.hidden = !v.length;
+      $('em', g).textContent = `${v.length}品`; $('.sv-gn', g).textContent = svNames(v.map(x => $('h3', x).textContent));
+      const j = $(`[data-svg="${g.id.slice(5)}"]`, root); if (j) j.hidden = !v.length;
+    });
+    $('.sv-count', root).textContent = `${tier === 'all' ? 'すべて' : '定番だけ'}：${total}品`;
+    $('.sv-zero', root).hidden = total > 0;
+  }
   /* ページの中の押す所（印の意味・奈良／大阪で絞る・ジャンルへ飛ぶ）。ページを描き直しても、1回だけ付ければよい */
   document.addEventListener('click', e => {
     const lg = e.target.closest('[data-svlg]');
@@ -3374,14 +3394,17 @@
       p.textContent = SV_MARK_WHY[k];
       return;
     }
-    const f = e.target.closest('[data-svf]');
-    if (f) {
-      const v = f.dataset.svf, root = f.closest('.wrap');
-      $$('[data-svf]', root).forEach(b => b.setAttribute('aria-pressed', String(b === f)));
-      $$('.sv', root).forEach(x => { x.hidden = v !== 'all' && x.dataset.area !== v; });
-      $$('.tv-g', root).forEach(g => { const n = $$('.sv:not([hidden])', g).length; g.hidden = !n; $('em', g).textContent = `${n}品`; $(`[data-svg="${g.id.slice(5)}"]`, root).hidden = !n; });
-      return;
+    const root = e.target.closest('.wrap');
+    const t = e.target.closest('[data-svt]');
+    if (t) { $$('[data-svt]', root).forEach(b => b.setAttribute('aria-pressed', String(b === t))); svApply(root); return; }
+    const c = e.target.closest('[data-svc]');
+    if (c) {
+      const on = c.getAttribute('aria-pressed') !== 'true';
+      /* 奈良／大阪は、どちらか1つ。価格帯も、どちらか1つ（ほかの絞り込みは「かつ」） */
+      if (on && c.dataset.svc !== 'tag') $$(`[data-svc="${c.dataset.svc}"]`, root).forEach(b => b.setAttribute('aria-pressed', 'false'));
+      c.setAttribute('aria-pressed', String(on)); svApply(root); return;
     }
+    if (e.target.closest('[data-svreset]')) { $$('[data-svc]', root).forEach(b => b.setAttribute('aria-pressed', 'false')); svApply(root); return; }
     const j = e.target.closest('[data-svg]');
     if (j) { const g = $('#sv-g-' + j.dataset.svg); if (g) { g.open = true; g.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }
   });
@@ -3392,8 +3415,8 @@
     /* 閉じたカードの値段：幅や文で書いた品は、「（」の前までを大きく。価格が見つからない品は「店頭で確認」 */
     const priceS = x => x.mark === 'shop' || (x.price == null && !x.priceText) ? '店頭で確認' : x.priceText ? x.priceText.split('（')[0] : `${Number(x.price).toLocaleString('ja-JP')}円`;
     const diff = x => x.diff && x.diff.length ? `<details class="sv-diff"><summary>出どころごとの値</summary><ul>${x.diff.map(d => `<li>${esc(d)}</li>`).join('')}</ul></details>` : '';
-    const item = x => { const a = ART.items[x.id] || {}; return `<details class="sv" id="sv-${x.id}" data-area="${esc(x.area)}"><summary class="sv-s">
-      <span class="sv-t"><span class="sv-top"><span class="sv-area ${x.area === '奈良' ? 'nara' : 'osaka'}">${esc(x.area)}</span><small class="sv-maker">${esc(x.maker)}</small></span>
+    const item = x => { const a = ART.items[x.id] || {}; return `<details class="sv" id="sv-${x.id}" data-area="${esc(x.area)}" data-tier="${x.tier === 'niche' ? 'niche' : 'standard'}" data-tags="${(x.tags || []).join(' ')}" data-pmin="${svPmin(x) ?? ''}"${x.tier === 'niche' ? ' hidden' : ''}><summary class="sv-s">
+      <span class="sv-t"><span class="sv-top"><span class="sv-area ${x.area === '奈良' ? 'nara' : 'osaka'}">${esc(x.area)}</span>${x.tier === 'niche' ? '<span class="sv-niche">通好み</span>' : ''}<small class="sv-maker">${esc(x.maker)}</small></span>
         <h3>${esc(x.short || x.name)}</h3>
         <span class="sv-pr"><b class="num${x.mark === 'shop' ? ' sv-shop' : ''}">${esc(priceS(x))}</b>${x.price != null && !x.priceText ? '<small>税込</small>' : ''}</span>
         <span class="sv-sh"><span class="sv-st ${x.keep}">${svSvg('sv-ki', '0 0 24 24', SV_KI[x.keep] || '', 2)}<span>${SV_KS[x.keep] || ''}${a.s ? `・${esc(a.s)}` : ''}</span></span><span class="sv-mark ${x.mark}">${SV_MARK[x.mark] || ''}</span></span></span>
@@ -3404,7 +3427,8 @@
       ${infoList([['税込価格', price(x) + diff(x)], ['入数', esc(x.pack)], ['日持ち', esc(x.shelf)], ['買える場所（目安）', esc(x.where)]])}
       ${x.note ? `<p class="sv-note">${esc(x.note)}</p>` : ''}
       <p class="sv-src">参考：${x.links.map(link).join('　')}</p></div></details>`; };
-    const names = g => { const n = g.items.map(x => x.short || x.name); return n.slice(0, 5).join('・') + (n.length > 5 ? 'ほか' : ''); };
+    const shown = g => g.items.filter(x => x.tier !== 'niche');   // 初めは「定番」だけ
+    const sorted = g => g.items.map((x, i) => [x, i]).sort((p, q) => SV_RANK(p[0]) - SV_RANK(q[0]) || p[1] - q[1]).map(p => p[0]);
     return `<div class="wrap">${topbar()}${phead('Souvenirs', 'お土産', '奈良と大阪の定番を、ジャンル別に。')}
       <p class="sv-one sv-card">${ic('train')}<span>要冷蔵・冷凍の品は、10/20 の約4時間を持ち歩ける保冷が要ります。</span></p>
       <div class="sv-lg sv-legend"><div class="sv-lgr" role="group" aria-label="印の意味。押すと開きます">${Object.keys(SV_MARK).map(k => `<button type="button" class="sv-mark ${k}" data-svlg="${k}" aria-expanded="false">${SV_MARK[k]}</button>`).join('')}</div><p class="sv-lgp" hidden></p></div>
@@ -3413,10 +3437,15 @@
         <p><b>持ち帰りの目安</b>　10/20 は新大阪を 11:02（のぞみ17号）に出て、15:08 に新大村へ着きます（約4時間）。要冷蔵のものは、この時間を持ち歩ける保冷の用意が要ります。常温で日持ちするものなら、安心です。</p>
         <p><b>価格</b>　取材（確認）した日の目安です。店頭が正です。確認した日：${svDate(O.checked)}。</p>
         <p><b>印の意味</b>　<b>確かめ済み</b>＝2つ以上の出どころで値が一致／<b>出どころで差あり</b>＝値が食い違う（幅で書き、出どころごとの値を併記）／<b>出どころ1つ</b>＝確かめられた出どころが1つだけ／<b>店頭で確認</b>＝価格が見つからない。</p></div></details>
-      <div class="sv-chips" role="group" aria-label="奈良・大阪で絞る">${[['all', 'すべて'], ['奈良', '奈良'], ['大阪', '大阪']].map(([k, l]) => `<button type="button" data-svf="${k}" aria-pressed="${k === 'all'}">${l}</button>`).join('')}</div>
+      <div class="sv-bar">
+        <div class="sv-seg" role="group" aria-label="定番と通好みの切り替え"><button type="button" data-svt="standard" aria-pressed="true">定番</button><button type="button" data-svt="all" aria-pressed="false">すべて</button></div>
+        <p class="sv-count" aria-live="polite">定番だけ：${O.groups.reduce((n, g) => n + shown(g).length, 0)}品</p>
+      </div>
+      <div class="sv-chips sv-scroll" role="group" aria-label="絞り込み（押すとオン・オフ。いくつ選んでも「かつ」）">${[['area', '奈良', '奈良'], ['area', '大阪', '大阪'], ['tag', 'share', '配りやすい'], ['tag', 'self', '自分用'], ['tag', 'kids', '子ども向け'], ['tag', 'nocool', '保冷いらず'], ['max', '1000', '〜1,000円'], ['max', '2000', '〜2,000円']].map(([k, v, l]) => `<button type="button" data-svc="${k}" data-v="${v}" aria-pressed="false">${l}</button>`).join('')}</div>
+      <div class="sv-zero" hidden><p>条件に合う品がありません。</p><button type="button" data-svreset>条件を外す</button></div>
       <nav class="sv-chips sv-jump" aria-label="ジャンルへ飛ぶ">${O.groups.map(g => `<button type="button" data-svg="${g.id}">${esc(SV_JUMP[g.id] || g.name)}</button>`).join('')}</nav>
-      <div class="tv-list sv-list">${O.groups.map(g => `<details class="tv-g" id="sv-g-${g.id}"${sub === g.id ? ' open' : ''}><summary class="tv-h"><span class="sv-gh">${ART.groups[g.id] ? svSvg('sv-gi', '0 0 24 24', ART.groups[g.id], 1.8) : ''}<span><b>${esc(g.name)}</b><small>${esc(names(g))}</small></span></span><em class="num">${g.items.length}品</em></summary>
-        <div class="tv-items">${g.items.map(item).join('')}</div></details>`).join('')}</div>
+      <div class="tv-list sv-list">${O.groups.map(g => `<details class="tv-g" id="sv-g-${g.id}"${sub === g.id ? ' open' : ''}><summary class="tv-h"><span class="sv-gh">${ART.groups[g.id] ? svSvg('sv-gi', '0 0 24 24', ART.groups[g.id], 1.8) : ''}<span><b>${esc(g.name)}</b><small class="sv-gn">${esc(svNames(shown(g).map(x => x.short || x.name)))}</small></span></span><em class="num">${shown(g).length}品</em></summary>
+        <div class="tv-items">${sorted(g).map(item).join('')}</div></details>`).join('')}</div>
       <div class="sv-foot"><p>写真は載せていません。入数・日持ちは商品の規格で、季節や店によって変わることがあります。「公式未確認」と書いた品は、公式ページそのものを開けなかったため、検索結果に出た公式ページの内容と、別の出どころで照らしました。買う前に、店頭の表示を見てください。</p>${O.omittedNote ? `<p>${esc(O.omittedNote)}</p>` : ''}</div></div>`;
   }
 
@@ -3733,6 +3762,7 @@
     if (/^transfer\.html/.test(go)) { session.set('xferFrom', location.hash || '#/'); location.href = go; return; }
     const flash = () => {
       let el = mark && $(mark); if (!el) return;
+      if (el.closest('[hidden]') && $('[data-svt]')) { const all = $('[data-svt="all"]'); all && all.click(); const rs = $('[data-svreset]'); rs && rs.click(); el = $(mark) || el; }
       if (el.matches('input')) el = el.closest('li') || el;
       for (let d = el.closest('details'); d; d = d.parentElement && d.parentElement.closest('details')) d.open = true;
       el.scrollIntoView({ block: 'center', behavior: 'auto' });
@@ -3792,7 +3822,7 @@
     T.ekiben.forEach(([n, p, d], j) => add(n, '博多駅の駅弁', d, '#/ride/ekiben', `.bento > li:nth-child(${j + 1})`, { k: '駅弁 弁当' }));
     (T.triviaCats || []).forEach(c => { add(`トリビア：${c.name}`, 'トリビア', c.sub, `#/trivia/${c.id}`, `#tv-cat-${c.id}`, { k: 'トリビア 雑学 豆知識' }); triviaItems(c.id).forEach(x => add(x.q, `トリビア・${c.name}`, J([x.k, x.a]), `#/trivia/${c.id}`, `#tv-${x.id}`, { k: 'トリビア' })); });
     add('お土産', 'お土産（奈良・大阪）', '奈良 大阪 ジャンル別 価格 入数 日持ち 買える場所 持ち帰り 保冷 確かめ済み 出どころで差あり 出どころ1つ 店頭で確認', '#/omiyage', 'h1', { k: 'おみやげ 土産 みやげ ギフト プレゼント' });
-    ((window.OMIYAGE || {}).groups || []).forEach(g => g.items.forEach(x => add(x.name, `お土産・${g.name}（${x.area}）`, J([x.kana, x.maker, x.model, x.lead, x.priceText, x.pack, x.shelf, x.where, SV_MARK[x.mark], SV_KIND[x.keep] + (x.keep === 'cold' || x.keep === 'frozen' ? ' 保冷' : ''), (x.diff || []).join(' ')]), `#/omiyage/${g.id}`, `#sv-${x.id}`, { k: 'お土産 おみやげ 土産 みやげ' })));
+    ((window.OMIYAGE || {}).groups || []).forEach(g => g.items.forEach(x => add(x.name, `お土産・${g.name}（${x.area}）`, J([x.kana, x.maker, x.model, x.lead, x.priceText, x.pack, x.shelf, x.where, SV_MARK[x.mark], x.tier === 'niche' ? '通好み' : '定番', SV_KIND[x.keep] + (x.keep === 'cold' || x.keep === 'frozen' ? ' 保冷' : ''), (x.diff || []).join(' ')]), `#/omiyage/${g.id}`, `#sv-${x.id}`, { k: 'お土産 おみやげ 土産 みやげ' })));
     XFER.forEach(x => add(`${x.title}（3D）`, `駅の乗り換え（3D）・${x.when}`, x.sub, xferHref(x.s), null, { k: '乗り換え 3D 立体 構内 エレベーター 階段' }));
     MANUAL.forEach(x => add(x.title, `使い方・${x.tab}`, J([x.sub, x.where, ...x.pts.map(p => p.t)]), `#/help/${x.id}`, '.hp-head'));
     T.bag.forEach(g => g.items.forEach(([n, why]) => add(n, `持ち物・${g.cat}`, why, '#/bag', `[data-bag="${cssq(n)}"]`)));
