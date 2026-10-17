@@ -1,7 +1,7 @@
 {
   "v": 1,
-  "rev": 5,
-  "updated": "2026-10-18T00:01:33+09:00",
+  "rev": 6,
+  "updated": "2026-10-18T00:04:20+09:00",
   "people": {
     "iizuka": {
       "大人": 2,
@@ -268,22 +268,6 @@
             ]
           },
           "split": "half"
-        },
-        {
-          "id": "r-mvcixnt10cq",
-          "name": "1日目 夕食",
-          "split": "half",
-          "calc": {
-            "parts": [
-              {
-                "who": "大人",
-                "n": 4,
-                "unit": 2000
-              }
-            ]
-          },
-          "actual": 1880,
-          "payer": "iizuka"
         }
       ]
     },
@@ -296,6 +280,7 @@
         {
           "id": "ticket-1",
           "name": "1日目 地下鉄",
+          "split": "people",
           "calc": {
             "parts": [
               {
@@ -306,7 +291,7 @@
             ],
             "post": "（子どもは無料）"
           },
-          "split": "people"
+          "actual": 0
         },
         {
           "id": "ticket-2",
