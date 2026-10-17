@@ -874,7 +874,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 56;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
+  const MAN_V = 57;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -987,7 +987,7 @@
       { id: 'nara', title: '10/18 11:00　奈良公園', t: '2026-10-18T11:00', go: '#/trip/2' },
       { id: 'lunch18', title: '10/18 12:30　まるかつ天理店でお昼', t: '2026-10-18T12:30', go: '#/trip/2' },
       { id: 'hosp', title: '10/18 14:10　天理よろづ相談所病院（面会のとき）', t: '2026-10-18T14:10', go: '#/trip/2' },
-      { id: 'loop', title: '10/18 16:15　環状線ドライブ', t: '2026-10-18T16:15', go: '#/trip/2' },
+      { id: 'loop', title: '10/18 16:55　環状線ドライブ', t: '2026-10-18T16:55', go: '#/trip/2' },
       { id: 'dotonbori', title: '10/19 9:50　道頓堀', t: '2026-10-19T09:50', go: '#/trip/3' },
       { id: 'nozomi17', title: '10/20 11:24　のぞみ17号・姫路の手前', t: '2026-10-20T11:24', go: '#/ride/live/nozomi17', pos: { track: 'nozomi17' } },
       { id: 'after', title: '10/20 18:00　旅行のあと', t: '2026-10-20T18:00', go: '#/' },
@@ -1748,7 +1748,8 @@
       <ol class="dm-legs">${d.drives.map((v, k) => `<li data-drive="${v.id}"><span class="dm-n num">${k + 1}</span><div><b>${esc(v.label)}</b><small class="num">${esc(v.when)}</small><p>${esc(v.via)}</p>
         <div class="acts">${actX(driveUrl(v), 'out', 'Googleマップで開く', `Googleマップ：${v.label}（経由地入り）`).replace('ext-s', 'ext-s dm-go')}</div>${v.id === 'eve' ? '<p class="small muted dm-warn">Googleマップでは一般道に寄ることがあります。道順はしおりの赤線が正しいです（ナビアプリでは高速優先で）。</p>' : ''}</div></li>`).join('')}</ol>
       <p class="note">Googleマップには、経由地を予定の順に入れて、予定の道筋に近づけています。経由地の間で別の道が出ることや、スマホのアプリでは経由地の数が限られることがあります（Google側の都合です）。運転中の案内はGoogleマップにお任せください。この地図は、予定の確認用です。</p>
-      <p class="note">まるかつ天理店 → 天理よろづ相談所病院 → 宝来ランプの間は、位置と道筋のデータを確かめられていないため、線を描いていません。Googleマップの道順をご覧ください。</p>
+      ${d.toll ? `<p class="note">${esc(d.toll)}</p>` : ''}
+      <p class="note">まるかつ天理店 → 天理よろづ相談所病院 → 東大阪線の間は、位置と道筋のデータを確かめられていないため、線を描いていません（帰りは、ナビでは 天理IC → 西名阪 → 近畿道 → 東大阪線の道です）。Googleマップやナビの道順をご覧ください。</p>
       <p class="note">地図の下地は、電波がないときは一度表示した所だけ出ます。道筋の線は、電波がなくても出ます。地図：地理院タイル（国土地理院）。道筋：国土地理院の道路中心線から作成。</p></div>`;
   }
   let dmMap = null;
@@ -1757,7 +1758,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=56').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=57').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
