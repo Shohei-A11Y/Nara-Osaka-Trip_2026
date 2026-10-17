@@ -94,10 +94,11 @@
     river: '<path d="M6 16h36M6 16v6M42 16v6M12 16v-5h24v5"/><path d="M4 32c4-3 8-3 12 0s8 3 12 0 8-3 12 0M4 39c4-3 8-3 12 0s8 3 12 0 8-3 12 0"/>',
     castle: '<path d="M10 42h28M13 42V32h22v10M16 32l-3-5h22l-3 5M18 27v-6h12v6M15 21l9-7 9 7M20 14h8M24 8v6M21 42v-5h6v5"/>',
     tower: '<path d="M16 42V10l8-4 8 4v32M12 42h24M20 14h8M20 20h8M20 26h8M20 32h8M24 6V2"/>',
-    food: '<path d="M8 22h32a16 16 0 0 1-32 0z"/><path d="M26 8l-6 14M33 7l-9 15M4 42h40"/>'
+    food: '<path d="M8 22h32a16 16 0 0 1-32 0z"/><path d="M26 8l-6 14M33 7l-9 15M4 42h40"/>',
+    hospital: '<path d="M6 42h36M12 42V14h24v28M24 20v12M18 26h12M21 42v-5h6v5"/>'
   };
   const art = (k, cls = '') => `<svg class="${cls}" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ART[k]}</svg>`;
-  const SPOT_ART = { osakastation: 'station', sakurai: 'torii', todaiji: 'deer', loop: 'loop', dotonbori: 'river', osakajo: 'castle', wowus: 'tower' };
+  const SPOT_ART = { osakastation: 'station', todaiji: 'deer', loop: 'loop', hospital: 'hospital', dotonbori: 'river', osakajo: 'castle', wowus: 'tower' };
   const DAYC = n => `var(--day${n})`;
 
   /* ========== 旅の記録スタンプ ==========
@@ -873,7 +874,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 54;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
+  const MAN_V = 55;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -982,14 +983,17 @@
       { id: 'kamome', title: '10/17 10:30　かもめ92号に乗車中', t: '2026-10-17T10:30', go: '#/' },
       { id: 'hakata', title: '10/17 12:05　博多で乗り換え', t: '2026-10-17T12:05', go: '#/trip/1' },
       { id: 'nozomi28', title: '10/17 13:37　のぞみ28号・福山の手前', t: '2026-10-17T13:37', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28' } },
-      { id: 'nara', title: '10/18 14:40　奈良公園', t: '2026-10-18T14:40', go: '#/trip/2' },
-      { id: 'loop', title: '10/18 17:12　環状線ドライブ', t: '2026-10-18T17:12', go: '#/trip/2' },
+      { id: 'am18', title: '10/18 8:20　ホテルでピックアップ', t: '2026-10-18T08:20', go: '#/trip/2' },
+      { id: 'nara', title: '10/18 10:30　奈良公園', t: '2026-10-18T10:30', go: '#/trip/2' },
+      { id: 'lunch18', title: '10/18 12:00　まるかつ天理店でお昼', t: '2026-10-18T12:00', go: '#/trip/2' },
+      { id: 'hosp', title: '10/18 14:10　天理よろづ相談所病院（面会のとき）', t: '2026-10-18T14:10', go: '#/trip/2' },
+      { id: 'loop', title: '10/18 16:15　環状線ドライブ', t: '2026-10-18T16:15', go: '#/trip/2' },
       { id: 'dotonbori', title: '10/19 9:50　道頓堀', t: '2026-10-19T09:50', go: '#/trip/3' },
       { id: 'nozomi17', title: '10/20 11:24　のぞみ17号・姫路の手前', t: '2026-10-20T11:24', go: '#/ride/live/nozomi17', pos: { track: 'nozomi17' } },
       { id: 'after', title: '10/20 18:00　旅行のあと', t: '2026-10-20T18:00', go: '#/' },
       /* 思い出モード：おためし中だけの仮のスタンプ（3か所）を置いて開く。本当の記録（localStorage の stamps）は使わない */
       { id: 'memories', title: '10/21 思い出モード', text: '表紙が「おかえりなさい」に変わり、旅のまとめ（移動した距離・旅の数字・行った場所）が出ます。スタンプは、おためし用に3か所押した状態です。', t: '2026-10-21T10:00', go: '#/',
-        stamps: { deer: '2026-10-18T14:52:00+09:00', todaiji: '2026-10-18T15:20:00+09:00', dotonbori: '2026-10-19T09:58:00+09:00' } }
+        stamps: { deer: '2026-10-18T10:02:00+09:00', todaiji: '2026-10-18T10:40:00+09:00', dotonbori: '2026-10-19T09:58:00+09:00' } }
     ]],
     ['雨の日の表示（降水確率を仮に80%にする）', [
       { id: 'rain2', title: '10/18（日）8:00　雨の予報の日（奈良）', text: '日程の見出しの下に「雨の日はこちら」が出ます。押すと屋内の候補の一覧です。', t: '2026-10-18T08:00', go: '#/trip/2', rain: 80 },
@@ -1545,7 +1549,7 @@
       ${leg || it.train ? `<div class="acts">${leg ? actB(`data-tt="${leg.id}"`, 'clock', '時刻表', 'pri') : ''}${it.train && T.liveLine[it.train] ? actA(`#/ride/live/${it.train}`, 'train', 'いまどのへん？', 'pri') : ''}${it.train ? actA(`#/ride/${it.train}`, 'seat', '指定席券') : ''}${it.mode === 'metro' || it.mode === 'jr' ? moveExt(d, e.i) : ''}</div>` : ''}</section>`;
   }
   /* 旅行前だけ：いまどのへん？とおためしモードの紹介（1枚にまとめる） */
-  const TRY = [['nara', '奈良公園の午後', '10/18 14:40'], ['tt-d3', '道頓堀から地下鉄へ', '10/19 10:00']];
+  const TRY = [['nara', '奈良公園のさんぽ', '10/18 10:30'], ['tt-d3', '道頓堀から地下鉄へ', '10/19 10:00']];
   function introCard() {
     return `<section class="intro" aria-label="いまどのへん？と、おためしモードのご紹介">
       <div class="intro-h"><span class="intro-k">新幹線の車内で</span><h2>いまどのへん？</h2></div>
@@ -1744,6 +1748,7 @@
       <ol class="dm-legs">${d.drives.map((v, k) => `<li data-drive="${v.id}"><span class="dm-n num">${k + 1}</span><div><b>${esc(v.label)}</b><small class="num">${esc(v.when)}</small><p>${esc(v.via)}</p>
         <div class="acts">${actX(driveUrl(v), 'out', 'Googleマップで開く', `Googleマップ：${v.label}（経由地入り）`).replace('ext-s', 'ext-s dm-go')}</div>${v.id === 'eve' ? '<p class="small muted dm-warn">Googleマップでは一般道に寄ることがあります。道順はしおりの赤線が正しいです（ナビアプリでは高速優先で）。</p>' : ''}</div></li>`).join('')}</ol>
       <p class="note">Googleマップには、経由地を予定の順に入れて、予定の道筋に近づけています。経由地の間で別の道が出ることや、スマホのアプリでは経由地の数が限られることがあります（Google側の都合です）。運転中の案内はGoogleマップにお任せください。この地図は、予定の確認用です。</p>
+      <p class="note">まるかつ天理店 → 天理よろづ相談所病院 → 宝来ランプの間は、位置と道筋のデータを確かめられていないため、線を描いていません。Googleマップの道順をご覧ください。</p>
       <p class="note">地図の下地は、電波がないときは一度表示した所だけ出ます。道筋の線は、電波がなくても出ます。地図：地理院タイル（国土地理院）。道筋：国土地理院の道路中心線から作成。</p></div>`;
   }
   let dmMap = null;
@@ -1752,14 +1757,14 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=54').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=55').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
     const lines = { type: 'FeatureCollection', features: geo.features.filter(f => f.geometry.type === 'LineString') };
     const pts = geo.features.filter(f => f.properties.name), arrows = geo.features.filter(f => 'arrow' in f.properties);
     let w = 180, s = 90, e = -180, n = -90; lines.features.forEach(f => f.geometry.coordinates.forEach(([x, y]) => { w = Math.min(w, x); e = Math.max(e, x); s = Math.min(s, y); n = Math.max(n, y); }));
-    const MAIN = ['ホテル', '親戚の家', 'まるかつ天理店', '奈良公園近くの駐車場'];
+    const MAIN = ['ホテル', 'まるかつ天理店', '奈良公園近くの駐車場'];
     let map;
     try {
       map = new ml.Map({
@@ -2061,7 +2066,7 @@
     return `<span class="seat-inline">${f ? famName() : '6席'} ${tr.car}号車 <b>${s.join('・')}</b></span>`;
   }
   const MODE = { shinkansen: 'train', train: 'train', jr: 'train', metro: 'metro', walk: 'walk', car: 'car', highway: 'road' };
-  const TYPE_LABEL = { hotel: 'ホテル', spot: 'おでかけ', food: 'ごはん', car: 'レンタカー', parking: '駐車場', visit: '訪問' };
+  const TYPE_LABEL = { hotel: 'ホテル', spot: 'おでかけ', food: 'ごはん', car: 'レンタカー', parking: '駐車場', visit: '面会' };
 
   /* 行程表のボタンは3段階にそろえ、どの行も同じ並び（1段目→2段目→3段目）で本文の下に置く。同じ行き先のボタンは1つの行に1つだけ。
      1段目 pri：その地点・区間で使う主な機能（3D乗換・時刻表・いまどのへん？・チェックインQR）
@@ -2877,8 +2882,8 @@
         ${s.fees ? `<h3 class="sub">拝観料</h3>${infoList(s.fees)}` : ''}
         <div class="btns">${s.map ? ext(gmap(s.map), '地図') : ''}${s.url ? ext(s.url, '公式の情報') : ''}${(s.urls || []).map(([l, u]) => ext(u, `${esc(l)}（公式）`)).join('')}${(s.links || []).map(([l, u]) => ext(u, l)).join('')}${s.id === 'todaiji' ? '<a class="btn quiet" href="#/sos/parking">駐車場の候補</a>' : ''}</div>
         ${s.maps ? `<h3 class="sub">公式の案内図</h3><div class="btns omap-btns">${s.maps.map(([l, u]) => ext(u, esc(l))).join('')}</div>` : ''}</section>
-      ${s.trivia ? `<section class="sec">${secH('知ってから歩くと、景色が変わる', 'Trivia')}${s.trivia.map(triviaBlock).join('')}<div class="btns"><a class="more" href="#/trivia/${['sakurai', 'todaiji'].includes(s.id) ? 'nara' : 'osaka'}">出典つきで、トリビアのページで読む →</a></div></section>`
-        : `<section class="sec">${secH('トリビア', 'Trivia')}<div class="btns"><a class="more" href="#/trivia/${['sakurai', 'todaiji'].includes(s.id) ? 'nara' : 'osaka'}">${['sakurai', 'todaiji'].includes(s.id) ? '桜井・奈良' : '大阪'}のトリビアを読む →</a></div></section>`}
+      ${s.id === 'hospital' ? '' : s.trivia ? `<section class="sec">${secH('知ってから歩くと、景色が変わる', 'Trivia')}${s.trivia.map(triviaBlock).join('')}<div class="btns"><a class="more" href="#/trivia/${s.id === 'todaiji' ? 'nara' : 'osaka'}">出典つきで、トリビアのページで読む →</a></div></section>`
+        : `<section class="sec">${secH('トリビア', 'Trivia')}<div class="btns"><a class="more" href="#/trivia/${s.id === 'todaiji' ? 'nara' : 'osaka'}">${s.id === 'todaiji' ? '奈良' : '大阪'}のトリビアを読む →</a></div></section>`}
       <div class="btns" style="justify-content:space-between;margin-top:36px">${prev ? `<a class="btn quiet" href="#/spot/${prev.id}">← ${esc(prev.name)}</a>` : '<span></span>'}${next ? `<a class="btn quiet" href="#/spot/${next.id}">${esc(next.name)} →</a>` : ''}</div></div>`;
   }
 
@@ -2886,10 +2891,10 @@
   function carMeter() {
     const t = now(), out = new Date(T.car.out), back = new Date(T.car.back);
     const planned = jst('2026-10-18', T.car.plannedBack);
-    if (t < out) return `<div class="meter"><div class="small muted">受け取り</div><div class="big num">${T.car.outLabel}</div><div class="small">返却の予定は17:50（予約は20:00まで）</div></div>`;
+    if (t < out) return `<div class="meter"><div class="small muted">受け取り</div><div class="big num">${T.car.outLabel}</div><div class="small">返却の予定は${T.car.plannedBack}（予約は20:00まで）</div></div>`;
     if (t >= back) return `<div class="meter"><div class="small muted">レンタカー</div><div class="big">返却ずみ</div></div>`;
     const m = Math.max(0, Math.round((planned - t) / 6e4)), mm = Math.max(0, Math.round((back - t) / 6e4));
-    return `<div class="meter"><div class="small muted">返却の予定（17:50）まで</div><div class="big num">${Math.floor(m / 60)}時間${m % 60}分</div><div class="small">予約の終わり（20:00）まで ${Math.floor(mm / 60)}時間${mm % 60}分。ガソリンは満タンで返します。</div></div>`;
+    return `<div class="meter"><div class="small muted">返却の予定（${T.car.plannedBack}）まで</div><div class="big num">${Math.floor(m / 60)}時間${m % 60}分</div><div class="small">予約の終わり（20:00）まで ${Math.floor(mm / 60)}時間${mm % 60}分。ガソリンは満タンで返します。</div></div>`;
   }
   function viewStay() {
     const H = T.hotel, C = T.car, f = fam();
@@ -2915,7 +2920,7 @@
       <section class="sec" id="car">${secH('レンタカー　10/18（日）', 'Rent-a-car')}
         ${carMeter()}
         <p class="small muted" style="margin-top:14px">予約番号</p><p>予約メールをご確認ください</p>
-        ${infoList([['お店', esc(C.shop)], ['クラス', `${esc(C.klass)}<br><span class="small muted">${esc(C.klassNote)}</span>`], ['受け取り', C.outLabel], ['返却', `${C.backLabel}（予定は17:50）`], ['住所', esc(C.address)], ['電話', `<a href="${tel(C.tel)}">${C.tel}</a>`], ['行き方', C.access]])}
+        ${infoList([['お店', esc(C.shop)], ['クラス', `${esc(C.klass)}<br><span class="small muted">${esc(C.klassNote)}</span>`], ['受け取り', C.outLabel], ['返却', `${C.backLabel}（予定は${T.car.plannedBack}）`], ['住所', esc(C.address)], ['電話', `<a href="${tel(C.tel)}">${C.tel}</a>`], ['行き方', C.access]])}
         <h3 class="sub">料金</h3>${C.lines.map(([k, v]) => `<div class="price-line"><span>${k}</span><span class="num">${v === 0 ? '¥0' : yen(v)}</span></div>`).join('')}<div class="price-line total"><span>合計（税込）</span><span class="num">${yen(C.total)}</span></div>
         <div class="tags" style="margin-top:10px">${C.included.map(x => `<span class="tag">${x}</span>`).join('')}</div>
         <p class="note">${esc(C.pay)}</p>
@@ -3312,7 +3317,7 @@
      のりもの・おでかけにあるトリビアと、このページで加えたものを、分類ごとにまとめる（T.triviaCats）。
      最初は、今日の行程に関係する分類だけを開く。旅行前と旅行のあとは、すべて閉じて分類名と件数だけを見せる。
      どの項目にも出典（公式サイト・自治体・博物館・鉄道会社など）のリンクを付ける。リンクの無いものは載せない */
-  const TV_SPOT = { rail: [], kyushu: [], nara: ['sakurai1', 'sakurai2', 'nara1', 'nara2'], osaka: ['osaka'], line: [] };
+  const TV_SPOT = { rail: [], kyushu: [], nara: ['nara1', 'nara2'], osaka: ['osaka'], line: [] };
   function triviaItems(cat) {
     const src = T.triviaSrc || {}, out = [];
     if (cat === 'rail') {

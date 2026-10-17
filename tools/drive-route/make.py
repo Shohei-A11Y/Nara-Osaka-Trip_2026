@@ -1,4 +1,5 @@
-"""10/18 のドライブの予定の道筋（assets/drive-route.json）を作る。
+"""【2026-10-17】10/18 の行程が変わったため、assets/drive-route.json は、下の LEGS ではなく、前の線の向きを入れ替え・切り出して組み替えてある（am＝前の am の南森町〜東大阪線の合流点＋前の eve の逆向き、noon＝前の noon のまるかつ〜駐車場の逆向き、eve＝宝来ランプから先。病院まわりは描いていない）。下は前の版の LEGS。
+10/18 のドライブの予定の道筋（assets/drive-route.json）を作る。
 道路：国土地理院 最適化ベクトルタイル（optimal_bvmap-v1、z14 の RdCL）。高速道路（vt_motorway=1）と一般道に分けて、
 PDFしおりの行程表・環状線の略図の矢印の順に置いた目印のあいだを最短でつなぐ（一般道は道幅の広い道を優先）。
 使い方：pip install mapbox-vector-tile pillow のあと、このフォルダで python3 make.py → routes.json、
