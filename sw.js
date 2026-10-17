@@ -1,22 +1,22 @@
 /* 電波が弱い場所でも見られるように、しおり本体を端末に保存する */
-const CACHE = 'shiori-v55';
+const CACHE = 'shiori-v56';
 const TILES = 'shiori-tiles';     // 地図タイル：見た分だけ保存（地図の種類は分けず、全体でおよそ300枚まで。古いものから消す。航空写真は保存しない）
 const TILE_MAX = 300;
 const ML = 'assets/vendor/maplibre-gl/';
 const TH = 'assets/vendor/three/';      // 駅の乗り換え（3D）だけで使う。ページを開いたときだけ読み込むが、電波がなくても開けるように保存しておく
 const MAN = 'assets/manual/';          // 使い方ページの写真（電波がなくても見られるように保存）
 const INTRO = 'assets/intro/';         // 機能紹介の動画と、止まった1コマ（電波がなくても再生できるように保存）
-const GAME = ['', 'index.html', 'style.css?v=55', 'quiz.js?v=55', 'quiz.json?v=55'];   // 新幹線クイズ（別ページ）：電波がなくても遊べるように保存。地図当ての線路は上の line-*.json を使う
+const GAME = ['', 'index.html', 'style.css?v=56', 'quiz.js?v=56', 'quiz.json?v=56'];   // 新幹線クイズ（別ページ）：電波がなくても遊べるように保存。地図当ての線路は上の line-*.json を使う
 const BUDGET = 'assets/budget.json';     // 予算：管理ページから公開側を直接直すので、?v= を付けずにいつも最新を取りに行く
 const SHARED = 'assets/shared.json';     // 全員で共有する状態（いまここ・別の便・雨の日・食事・連絡・スタンプ）：予算と同じ扱い
 const LIVE = [BUDGET, SHARED];
-const FILES = ['./', 'index.html', 'assets/style.css?v=55', 'assets/sim.js?v=55', 'assets/data.js?v=55', 'assets/timetable.js?v=55', 'assets/timetable-data.js?v=55', 'assets/line-data.js?v=55', 'assets/guide.js?v=55', 'assets/omiyage.js?v=55', 'assets/news.js?v=55', 'assets/latest.js?v=55', 'assets/budget.js?v=55', 'assets/shared.js?v=55', 'assets/livemap.js?v=55', 'assets/app.js?v=55', 'assets/line-sanyo.json?v=55', 'assets/line-relay.json?v=55', 'assets/roads.json?v=55', 'assets/area.json?v=55', 'assets/drive-route.json?v=55', BUDGET, SHARED,   // roads.json：道路（いまどのへん？の地図に重ねる高速・国道・主要地方道。電波がなくても出す）
+const FILES = ['./', 'index.html', 'assets/style.css?v=56', 'assets/sim.js?v=56', 'assets/data.js?v=56', 'assets/timetable.js?v=56', 'assets/timetable-data.js?v=56', 'assets/line-data.js?v=56', 'assets/guide.js?v=56', 'assets/omiyage.js?v=56', 'assets/news.js?v=56', 'assets/latest.js?v=56', 'assets/budget.js?v=56', 'assets/shared.js?v=56', 'assets/livemap.js?v=56', 'assets/app.js?v=56', 'assets/line-sanyo.json?v=56', 'assets/line-relay.json?v=56', 'assets/roads.json?v=56', 'assets/area.json?v=56', 'assets/drive-route.json?v=56', BUDGET, SHARED,   // roads.json：道路（いまどのへん？の地図に重ねる高速・国道・主要地方道。電波がなくても出す）
   ML + 'maplibre-gl.mjs', ML + 'maplibre-gl-shared.mjs', ML + 'maplibre-gl-worker.mjs', ML + 'maplibre-gl.css',
-  'transfer.html', TH + 'three.module.min.js?v=55', TH + 'addons/controls/OrbitControls.js', TH + 'addons/renderers/CSS2DRenderer.js', TH + 'addons/utils/BufferGeometryUtils.js',
+  'transfer.html', TH + 'three.module.min.js?v=56', TH + 'addons/controls/OrbitControls.js', TH + 'addons/renderers/CSS2DRenderer.js', TH + 'addons/utils/BufferGeometryUtils.js',
   TH + 'addons/lines/Line2.js', TH + 'addons/lines/LineMaterial.js', TH + 'addons/lines/LineGeometry.js', TH + 'addons/lines/LineSegments2.js', TH + 'addons/lines/LineSegmentsGeometry.js',
-  'assets/train-sprite.webp?v=55', 'assets/train-787.webp?v=55',   // いまどのへん？の列車の印（36方向。のぞみ・リレーかもめ）
-  MAN + 'marks.json?v=55', ...['top', 'today', 'shift', 'search', 'ride', 'xfer', 'live', 'sim', 'qr', 'a2hs', 'fs', 'offline', 'news', 'intro', 'xhelp', 'memories'].map(k => MAN + k + '.webp?v=55'),
-  ...['live', 'xfer'].flatMap(k => [INTRO + k + '.mp4?v=55', INTRO + k + '.webp?v=55']),
+  'assets/train-sprite.webp?v=56', 'assets/train-787.webp?v=56',   // いまどのへん？の列車の印（36方向。のぞみ・リレーかもめ）
+  MAN + 'marks.json?v=56', ...['top', 'today', 'shift', 'search', 'ride', 'xfer', 'live', 'sim', 'qr', 'a2hs', 'fs', 'offline', 'news', 'intro', 'xhelp', 'memories'].map(k => MAN + k + '.webp?v=56'),
+  ...['live', 'xfer'].flatMap(k => [INTRO + k + '.mp4?v=56', INTRO + k + '.webp?v=56']),
   'assets/icon.svg', 'assets/icon-192.png', 'assets/icon-512.png', 'manifest.webmanifest',
   ...GAME.map(f => 'game/' + f)];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });

@@ -874,7 +874,7 @@
       { m: 1, t: '「閉じる」で、いつでも案内を終えられます。' },
       { m: 1, t: '右上の「？」から、もう一度見られます。' }] }
   ];
-  const MAN_V = 55;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
+  const MAN_V = 56;   // 使い方の写真と吹き出しの位置。sw.js の ?v= と同じ番号にする（電波がなくても、保存した写真を使えるように）
   let manMarks = null;
   const loadMarks = () => manMarks || (manMarks = fetch(`assets/manual/marks.json?v=${MAN_V}`).then(r => r.ok ? r.json() : {}).catch(() => { manMarks = null; return {}; }));
   function viewHelp(id) {
@@ -983,9 +983,9 @@
       { id: 'kamome', title: '10/17 10:30　かもめ92号に乗車中', t: '2026-10-17T10:30', go: '#/' },
       { id: 'hakata', title: '10/17 12:05　博多で乗り換え', t: '2026-10-17T12:05', go: '#/trip/1' },
       { id: 'nozomi28', title: '10/17 13:37　のぞみ28号・福山の手前', t: '2026-10-17T13:37', go: '#/ride/live/nozomi28', pos: { track: 'nozomi28' } },
-      { id: 'am18', title: '10/18 8:20　ホテルでピックアップ', t: '2026-10-18T08:20', go: '#/trip/2' },
-      { id: 'nara', title: '10/18 10:30　奈良公園', t: '2026-10-18T10:30', go: '#/trip/2' },
-      { id: 'lunch18', title: '10/18 12:00　まるかつ天理店でお昼', t: '2026-10-18T12:00', go: '#/trip/2' },
+      { id: 'am18', title: '10/18 9:20　ホテルでピックアップ', t: '2026-10-18T09:20', go: '#/trip/2' },
+      { id: 'nara', title: '10/18 11:00　奈良公園', t: '2026-10-18T11:00', go: '#/trip/2' },
+      { id: 'lunch18', title: '10/18 12:30　まるかつ天理店でお昼', t: '2026-10-18T12:30', go: '#/trip/2' },
       { id: 'hosp', title: '10/18 14:10　天理よろづ相談所病院（面会のとき）', t: '2026-10-18T14:10', go: '#/trip/2' },
       { id: 'loop', title: '10/18 16:15　環状線ドライブ', t: '2026-10-18T16:15', go: '#/trip/2' },
       { id: 'dotonbori', title: '10/19 9:50　道頓堀', t: '2026-10-19T09:50', go: '#/trip/3' },
@@ -993,7 +993,7 @@
       { id: 'after', title: '10/20 18:00　旅行のあと', t: '2026-10-20T18:00', go: '#/' },
       /* 思い出モード：おためし中だけの仮のスタンプ（3か所）を置いて開く。本当の記録（localStorage の stamps）は使わない */
       { id: 'memories', title: '10/21 思い出モード', text: '表紙が「おかえりなさい」に変わり、旅のまとめ（移動した距離・旅の数字・行った場所）が出ます。スタンプは、おためし用に3か所押した状態です。', t: '2026-10-21T10:00', go: '#/',
-        stamps: { deer: '2026-10-18T10:02:00+09:00', todaiji: '2026-10-18T10:40:00+09:00', dotonbori: '2026-10-19T09:58:00+09:00' } }
+        stamps: { deer: '2026-10-18T11:02:00+09:00', todaiji: '2026-10-18T11:20:00+09:00', dotonbori: '2026-10-19T09:58:00+09:00' } }
     ]],
     ['雨の日の表示（降水確率を仮に80%にする）', [
       { id: 'rain2', title: '10/18（日）8:00　雨の予報の日（奈良）', text: '日程の見出しの下に「雨の日はこちら」が出ます。押すと屋内の候補の一覧です。', t: '2026-10-18T08:00', go: '#/trip/2', rain: 80 },
@@ -1549,7 +1549,7 @@
       ${leg || it.train ? `<div class="acts">${leg ? actB(`data-tt="${leg.id}"`, 'clock', '時刻表', 'pri') : ''}${it.train && T.liveLine[it.train] ? actA(`#/ride/live/${it.train}`, 'train', 'いまどのへん？', 'pri') : ''}${it.train ? actA(`#/ride/${it.train}`, 'seat', '指定席券') : ''}${it.mode === 'metro' || it.mode === 'jr' ? moveExt(d, e.i) : ''}</div>` : ''}</section>`;
   }
   /* 旅行前だけ：いまどのへん？とおためしモードの紹介（1枚にまとめる） */
-  const TRY = [['nara', '奈良公園のさんぽ', '10/18 10:30'], ['tt-d3', '道頓堀から地下鉄へ', '10/19 10:00']];
+  const TRY = [['nara', '奈良公園のさんぽ', '10/18 11:00'], ['tt-d3', '道頓堀から地下鉄へ', '10/19 10:00']];
   function introCard() {
     return `<section class="intro" aria-label="いまどのへん？と、おためしモードのご紹介">
       <div class="intro-h"><span class="intro-k">新幹線の車内で</span><h2>いまどのへん？</h2></div>
@@ -1757,7 +1757,7 @@
     const fail = () => { const e = $('.dm-err'); if (e) e.hidden = false; box.classList.add('off'); };
     if (!$('link[data-maplibre]')) { const lk = document.createElement('link'); lk.rel = 'stylesheet'; lk.href = 'assets/vendor/maplibre-gl/maplibre-gl.css'; lk.dataset.maplibre = '1'; document.head.appendChild(lk); }
     let ml, geo;
-    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=55').then(r => r.json())]); } catch (e) { return fail(); }
+    try { [ml, geo] = await Promise.all([import(new URL('assets/vendor/maplibre-gl/maplibre-gl.mjs', document.baseURI).href), fetch('assets/drive-route.json?v=56').then(r => r.json())]); } catch (e) { return fail(); }
     if (!box.isConnected || dmMap) return;
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim() || '#888';
