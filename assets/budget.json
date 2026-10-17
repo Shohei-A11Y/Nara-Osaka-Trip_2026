@@ -1,7 +1,7 @@
 {
   "v": 1,
-  "rev": 4,
-  "updated": "2026-10-18T00:00:21+09:00",
+  "rev": 5,
+  "updated": "2026-10-18T00:01:33+09:00",
   "people": {
     "iizuka": {
       "大人": 2,
@@ -226,20 +226,6 @@
           "split": "half"
         },
         {
-          "id": "food-4",
-          "name": "2日目 夕食",
-          "split": "half",
-          "calc": {
-            "parts": [
-              {
-                "who": "",
-                "n": 4,
-                "unit": 2000
-              }
-            ]
-          }
-        },
-        {
           "id": "r-mvciuqkc096",
           "name": "1日目 夕食",
           "split": "half",
@@ -256,6 +242,20 @@
           "payer": "iizuka"
         },
         {
+          "id": "food-4",
+          "name": "2日目 夕食",
+          "split": "half",
+          "calc": {
+            "parts": [
+              {
+                "who": "",
+                "n": 4,
+                "unit": 2000
+              }
+            ]
+          }
+        },
+        {
           "id": "food-5",
           "name": "3日目 夕食",
           "calc": {
@@ -268,6 +268,22 @@
             ]
           },
           "split": "half"
+        },
+        {
+          "id": "r-mvcixnt10cq",
+          "name": "1日目 夕食",
+          "split": "half",
+          "calc": {
+            "parts": [
+              {
+                "who": "大人",
+                "n": 4,
+                "unit": 2000
+              }
+            ]
+          },
+          "actual": 1880,
+          "payer": "iizuka"
         }
       ]
     },
